@@ -43,7 +43,7 @@ import jax
 
 from evojax.task.slimevolley import SlimeVolley
 from evojax.policy.mlp import MLPPolicy
-from evojax.algo import PGPE, CMA
+from evojax.algo import CMA
 from evojax import Trainer
 from evojax import util
 
@@ -65,7 +65,7 @@ def parse_args():
     parser.add_argument(
         '--log-interval', type=int, default=10, help='Logging interval.')
     parser.add_argument(
-        '--seed', type=int, default=42, help='Random seed for training.')
+        '--seed', type=int, default=123, help='Random seed for training.')
     parser.add_argument(
         '--init-std', type=float, default=0.5, help='Initial std.')
     parser.add_argument(
@@ -142,8 +142,8 @@ def main(config):
         screens.append(SlimeVolley.render(task_state))
 
     gif_file = os.path.join(log_dir, 'slimevolley.gif')
-    screens[0].save(
-        gif_file, save_all=True, append_images=screens[1:], duration=40, loop=0)
+    screens[0].save(gif_file, save_all=True, append_images=screens[1:],
+                    duration=40, loop=0)
     logger.info('GIF saved to {}.'.format(gif_file))
 
 
