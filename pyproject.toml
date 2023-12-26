@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "evojax"
+version = "0.1.0"
+description = ""
+authors = ["mnuppnau <hi6094@wayne.edu>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+flax = "*"
+numpy = "*"
+opencv-python = "*"
+matplotlib = "*"
+scikit-learn = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

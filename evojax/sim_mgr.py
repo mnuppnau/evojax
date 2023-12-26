@@ -176,7 +176,7 @@ class SimManager(object):
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
             actions, policy_state = policy_net.get_actions(
-                task_state, params, policy_state)
+                task_state, params, policy_state, train=False)
             if task.multi_agent_training:
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape(
@@ -192,6 +192,35 @@ class SimManager(object):
             return ((task_state, policy_state, params, obs_params,
                      accumulated_reward, valid_mask),
                     (org_obs, valid_mask))
+
+        def step_once_train(carry, input_data, task):
+            (task_state, policy_state, params, obs_params,
+             accumulated_reward, valid_mask) = carry
+            if task.multi_agent_training:
+                num_tasks, num_agents = task_state.obs.shape[:2]
+                task_state = task_state.replace(
+                    obs=task_state.obs.reshape((-1, *task_state.obs.shape[2:])))
+            org_obs = task_state.obs
+            normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
+            task_state = task_state.replace(obs=normed_obs)
+            actions, policy_state = policy_net.get_actions(
+                task_state, params, policy_state, train=True)
+            if task.multi_agent_training:
+                task_state = task_state.replace(
+                    obs=task_state.obs.reshape(
+                        (num_tasks, num_agents, *task_state.obs.shape[1:])))
+                actions = actions.reshape(
+                    (num_tasks, num_agents, *actions.shape[1:]))
+            task_state, reward, done = task.step(task_state, actions)
+            if task.multi_agent_training:
+                reward = reward.ravel()
+                done = jnp.repeat(done, num_agents, axis=0)
+            accumulated_reward = accumulated_reward + reward * valid_mask
+            valid_mask = valid_mask * (1 - done.ravel())
+            return ((task_state, policy_state, params, obs_params,
+                     accumulated_reward, valid_mask),
+                    (org_obs, valid_mask))
+
 
         def rollout(task_states, policy_states, params, obs_params,
                     step_once_fn, max_steps):
@@ -223,7 +252,7 @@ class SimManager(object):
         self._train_max_steps = train_vec_task.max_steps
         self._train_rollout_fn = partial(
             rollout,
-            step_once_fn=partial(step_once, task=train_vec_task),
+            step_once_fn=partial(step_once_train, task=train_vec_task),
             max_steps=train_vec_task.max_steps)
         if self._num_device > 1:
             self._train_rollout_fn = jax.jit(jax.pmap(

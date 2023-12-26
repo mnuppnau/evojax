@@ -1,0 +1,207 @@
+CheXpert: 2023-12-24 16:09:48,664 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 16:09:48,664 [INFO] ==============================
+CheXpert: 2023-12-24 16:10:08,312 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 16:40:00,881 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 16:40:00,881 [INFO] ==============================
+CheXpert: 2023-12-24 16:40:19,446 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 16:42:38,465 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 16:42:38,465 [INFO] ==============================
+CheXpert: 2023-12-24 16:42:57,154 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 16:45:13,682 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 16:45:13,682 [INFO] ==============================
+CheXpert: 2023-12-24 16:45:32,250 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 16:46:58,216 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 16:46:58,216 [INFO] ==============================
+CheXpert: 2023-12-24 16:47:16,039 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 16:53:25,897 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 16:53:25,897 [INFO] ==============================
+CheXpert: 2023-12-24 16:53:42,742 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 16:55:15,709 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 16:55:15,709 [INFO] ==============================
+CheXpert: 2023-12-24 16:55:34,884 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 16:56:29,113 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 16:56:29,113 [INFO] ==============================
+CheXpert: 2023-12-24 16:56:46,994 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 16:57:17,534 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 16:57:17,534 [INFO] ==============================
+CheXpert: 2023-12-24 16:57:35,573 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 16:58:23,177 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 16:58:23,177 [INFO] ==============================
+CheXpert: 2023-12-24 16:58:39,922 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 17:03:52,205 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 17:03:52,205 [INFO] ==============================
+CheXpert: 2023-12-24 17:04:09,224 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 17:05:54,560 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 17:05:54,560 [INFO] ==============================
+CheXpert: 2023-12-24 17:06:11,380 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 17:26:22,426 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 17:26:22,426 [INFO] ==============================
+CheXpert: 2023-12-24 17:26:40,117 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 17:40:34,057 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 17:40:34,058 [INFO] ==============================
+CheXpert: 2023-12-24 17:40:52,670 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 18:52:52,939 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 18:52:52,939 [INFO] ==============================
+CheXpert: 2023-12-24 18:53:12,499 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 18:55:27,837 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 18:55:27,837 [INFO] ==============================
+CheXpert: 2023-12-24 18:55:46,183 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 18:57:58,826 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 18:57:58,826 [INFO] ==============================
+CheXpert: 2023-12-24 18:58:17,771 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 18:59:47,233 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 18:59:47,233 [INFO] ==============================
+CheXpert: 2023-12-24 19:00:06,330 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 19:07:25,283 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 19:07:25,283 [INFO] ==============================
+CheXpert: 2023-12-24 19:07:45,180 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 19:10:20,811 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 19:10:20,811 [INFO] ==============================
+CheXpert: 2023-12-24 19:10:38,773 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 19:16:02,811 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 19:16:02,811 [INFO] ==============================
+CheXpert: 2023-12-24 19:16:21,029 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 19:16:22,158 [INFO] use_for_loop=False
+CheXpert: 2023-12-24 19:16:22,183 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-24 19:17:20,248 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 19:17:20,248 [INFO] ==============================
+CheXpert: 2023-12-24 19:17:37,458 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 19:17:38,642 [INFO] use_for_loop=False
+CheXpert: 2023-12-24 19:17:38,666 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-24 19:18:04,404 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 19:18:04,404 [INFO] ==============================
+CheXpert: 2023-12-24 19:18:22,300 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 19:18:23,921 [INFO] use_for_loop=False
+CheXpert: 2023-12-24 19:18:23,994 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-24 19:19:57,735 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 19:19:57,735 [INFO] ==============================
+CheXpert: 2023-12-24 19:20:16,936 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 19:20:18,582 [INFO] use_for_loop=False
+CheXpert: 2023-12-24 19:20:18,691 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-24 19:56:17,197 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 19:56:17,197 [INFO] ==============================
+CheXpert: 2023-12-24 19:56:36,765 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 19:56:38,446 [INFO] use_for_loop=False
+CheXpert: 2023-12-24 19:56:38,516 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-24 19:58:37,112 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 19:58:37,112 [INFO] ==============================
+CheXpert: 2023-12-24 19:58:55,296 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 19:58:56,962 [INFO] use_for_loop=False
+CheXpert: 2023-12-24 19:58:57,034 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-24 21:15:44,536 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 21:15:44,536 [INFO] ==============================
+CheXpert: 2023-12-24 21:16:02,894 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 21:16:04,511 [INFO] use_for_loop=False
+CheXpert: 2023-12-24 21:16:04,581 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-24 21:17:58,779 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 21:17:58,779 [INFO] ==============================
+CheXpert: 2023-12-24 21:18:18,443 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 21:18:20,175 [INFO] use_for_loop=False
+CheXpert: 2023-12-24 21:18:20,245 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-24 21:36:20,348 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-24 21:36:20,349 [INFO] ==============================
+CheXpert: 2023-12-24 21:36:37,782 [INFO] DenseNetPolicy.num_params = 245565
+CheXpert: 2023-12-24 21:36:39,444 [INFO] use_for_loop=False
+CheXpert: 2023-12-24 21:36:39,517 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-25 08:54:12,768 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 08:54:12,769 [INFO] ==============================
+CheXpert: 2023-12-25 08:54:42,727 [INFO] DenseNetPolicy.num_params = 246141
+CheXpert: 2023-12-25 08:54:42,990 [INFO] use_for_loop=False
+CheXpert: 2023-12-25 08:54:43,014 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-25 08:57:09,946 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 08:57:09,946 [INFO] ==============================
+CheXpert: 2023-12-25 08:57:38,743 [INFO] DenseNetPolicy.num_params = 246141
+CheXpert: 2023-12-25 08:57:39,010 [INFO] use_for_loop=False
+CheXpert: 2023-12-25 08:57:39,035 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-25 08:58:38,913 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 08:58:38,914 [INFO] ==============================
+CheXpert: 2023-12-25 08:59:06,765 [INFO] DenseNetPolicy.num_params = 246141
+CheXpert: 2023-12-25 08:59:07,031 [INFO] use_for_loop=False
+CheXpert: 2023-12-25 08:59:07,056 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-25 09:02:48,016 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 09:02:48,016 [INFO] ==============================
+CheXpert: 2023-12-25 09:03:15,563 [INFO] DenseNetPolicy.num_params = 246141
+CheXpert: 2023-12-25 09:03:15,830 [INFO] use_for_loop=False
+CheXpert: 2023-12-25 09:03:15,855 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-25 09:05:09,478 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 09:05:09,478 [INFO] ==============================
+CheXpert: 2023-12-25 09:05:30,531 [INFO] DenseNetPolicy.num_params = 254493
+CheXpert: 2023-12-25 09:05:30,795 [INFO] use_for_loop=False
+CheXpert: 2023-12-25 09:05:30,820 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-25 09:18:28,153 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 09:18:28,153 [INFO] ==============================
+CheXpert: 2023-12-25 09:18:49,318 [INFO] DenseNetPolicy.num_params = 254493
+CheXpert: 2023-12-25 09:18:51,949 [INFO] use_for_loop=False
+CheXpert: 2023-12-25 09:18:51,979 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-25 09:24:04,614 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 09:24:04,614 [INFO] ==============================
+CheXpert: 2023-12-25 09:24:23,190 [INFO] DenseNetPolicy.num_params = 254493
+CheXpert: 2023-12-25 09:24:25,667 [INFO] use_for_loop=False
+CheXpert: 2023-12-25 09:24:25,693 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-25 09:26:08,817 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 09:26:08,817 [INFO] ==============================
+CheXpert: 2023-12-25 09:26:24,081 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 09:26:26,447 [INFO] use_for_loop=False
+CheXpert: 2023-12-25 09:26:26,472 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-25 10:58:18,132 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 10:58:18,132 [INFO] ==============================
+CheXpert: 2023-12-25 10:58:34,673 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 15:56:24,272 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 15:56:24,272 [INFO] ==============================
+CheXpert: 2023-12-25 15:56:39,139 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 15:56:41,859 [INFO] use_for_loop=False
+CheXpert: 2023-12-25 15:56:41,883 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-25 16:29:36,880 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 16:29:36,880 [INFO] ==============================
+CheXpert: 2023-12-25 16:29:52,187 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 16:33:11,024 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 16:33:11,024 [INFO] ==============================
+CheXpert: 2023-12-25 16:33:28,154 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 16:34:00,681 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 16:34:00,681 [INFO] ==============================
+CheXpert: 2023-12-25 16:34:16,070 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 16:35:49,729 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 16:35:49,729 [INFO] ==============================
+CheXpert: 2023-12-25 16:36:06,167 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 16:41:56,894 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 16:41:56,894 [INFO] ==============================
+CheXpert: 2023-12-25 16:42:11,836 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 16:42:43,448 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 16:42:43,448 [INFO] ==============================
+CheXpert: 2023-12-25 16:42:59,801 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 18:25:16,934 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 18:25:16,934 [INFO] ==============================
+CheXpert: 2023-12-25 18:25:33,699 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 18:27:12,560 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 18:27:12,560 [INFO] ==============================
+CheXpert: 2023-12-25 18:27:27,217 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 18:30:51,458 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 18:30:51,458 [INFO] ==============================
+CheXpert: 2023-12-25 18:31:06,816 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 18:38:16,199 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 18:38:16,200 [INFO] ==============================
+CheXpert: 2023-12-25 18:38:32,993 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 18:38:36,269 [INFO] use_for_loop=False
+CheXpert: 2023-12-25 18:38:36,295 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-25 22:29:50,736 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 22:29:50,736 [INFO] ==============================
+CheXpert: 2023-12-25 22:30:07,540 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 22:30:35,549 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 22:30:35,549 [INFO] ==============================
+CheXpert: 2023-12-25 22:30:51,710 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-25 22:41:04,175 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-25 22:41:04,175 [INFO] ==============================
+CheXpert: 2023-12-25 22:41:20,349 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-26 11:48:14,933 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-26 11:48:14,933 [INFO] ==============================
+CheXpert: 2023-12-26 11:48:32,123 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-26 11:53:00,729 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-26 11:53:00,729 [INFO] ==============================
+CheXpert: 2023-12-26 11:53:17,417 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-26 11:53:20,429 [INFO] use_for_loop=False
+CheXpert: 2023-12-26 11:53:20,454 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-26 15:32:35,709 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-26 15:32:35,709 [INFO] ==============================
+CheXpert: 2023-12-26 15:32:51,345 [INFO] DenseNetPolicy.num_params = 337437
+CheXpert: 2023-12-26 15:32:54,118 [INFO] use_for_loop=False
+CheXpert: 2023-12-26 15:32:54,142 [INFO] Start to train for 1000 iterations.
