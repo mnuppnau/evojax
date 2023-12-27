@@ -66,6 +66,13 @@ def main(config):
     logger.info('=' * 30)
 
     policy = ConvNetPolicy(logger=logger)
+    
+    #attributes = vars(policy)
+    #for attr_name, attr_value in attributes.items():
+    #    print(f"{attr_name}: {attr_value}")
+
+    print('policy batch stats : ', policy.num_params)
+
     train_task = MNIST(batch_size=config.batch_size, test=False)
     test_task = MNIST(batch_size=config.batch_size, test=True)
     solver = PGPE(

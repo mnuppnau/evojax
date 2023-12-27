@@ -76,6 +76,7 @@ class MNIST(VectorizedTask):
         labels = dataset.targets.numpy()
 
         def reset_fn(key):
+            print('In reset_fn : ')
             if test:
                 batch_data, batch_labels = data, labels
             else:
@@ -85,6 +86,7 @@ class MNIST(VectorizedTask):
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
         def step_fn(state, action):
+            print('In step_fn : ')
             if test:
                 reward = accuracy(action, state.labels)
             else:

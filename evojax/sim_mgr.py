@@ -166,6 +166,7 @@ class SimManager(object):
                     self._n_evaluations, self._num_device))
 
         def step_once(carry, input_data, task):
+            print('In step_once')
             (task_state, policy_state, params, obs_params,
              accumulated_reward, valid_mask) = carry
             if task.multi_agent_training:
@@ -195,6 +196,7 @@ class SimManager(object):
 
         def rollout(task_states, policy_states, params, obs_params,
                     step_once_fn, max_steps):
+            print('In rollout : ')
             accumulated_rewards = jnp.zeros(params.shape[0])
             valid_masks = jnp.ones(params.shape[0])
             ((task_states, policy_states, params, obs_params,
@@ -221,6 +223,7 @@ class SimManager(object):
         self._train_reset_fn = train_vec_task.reset
         self._train_step_fn = train_vec_task.step
         self._train_max_steps = train_vec_task.max_steps
+        print('Setting up training functions : ')
         self._train_rollout_fn = partial(
             rollout,
             step_once_fn=partial(step_once, task=train_vec_task),
@@ -233,6 +236,7 @@ class SimManager(object):
         self._valid_reset_fn = valid_vec_task.reset
         self._valid_step_fn = valid_vec_task.step
         self._valid_max_steps = valid_vec_task.max_steps
+        print('Setting up validation functions : ')
         self._valid_rollout_fn = partial(
             rollout,
             step_once_fn=partial(step_once, task=valid_vec_task),
