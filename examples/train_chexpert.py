@@ -43,8 +43,9 @@ def main(config):
     # Adjust the number of classes as per CheXpert's requirement
     num_classes = 5  # Update as needed based on CheXpert's classes
     policy = DenseNetPolicy(num_classes=num_classes, logger=logger)
-    train_task = CheXpert(config, test=False)
-    test_task = CheXpert(config, test=True)
+    init_batch_stats = policy.init_batch_stats
+    train_task = CheXpert(config, test=False, batch_stats=init_batch_stats)
+    test_task = CheXpert(config, test=True, batch_stats=init_batch_stats)
     
     solver = PGPE(
         pop_size=config.pop_size,

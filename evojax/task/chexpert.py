@@ -3,6 +3,7 @@ import sys
 import jax
 import zipfile
 import jax.numpy as jnp
+import optax
 import torch
 import torchvision.transforms as T
 import pandas as pd
@@ -187,27 +188,54 @@ def sample_batch(key: jnp.ndarray,
     return (jnp.take(data, indices=ix, axis=0),
             jnp.take(labels, indices=ix, axis=0))
 
-def loss(params, batch_stats, batch, train):
-    imgs, labels = batch
-    # Run model. During training, we need to update the BatchNorm statistics.
-    outs = self.model.apply({'params': params, 'batch_stats': batch_stats},
-                            imgs,
-                            train=train,
-                            mutable=['batch_stats'] if train else False)
-    logits, new_model_state = outs if train else (outs, None)
-    loss = optax.softmax_cross_entropy_with_integer_labels(logits, labels).mean()
-    acc = (logits.argmax(axis=-1) == labels).mean()
-    return loss, (acc, new_model_state)
+#def loss(params, batch_stats, batch, train):
+#    imgs, labels = batch
+#    # Run model. During training, we need to update the BatchNorm statistics.
+#    outs = self.model.apply({'params': params, 'batch_stats': batch_stats},
+#                            imgs,
+#                            train=train,
+#                            mutable=['batch_stats'] if train else False)
+#    logits, new_model_state = outs if train else (outs, None)
+#    loss = optax.softmax_cross_entropy_with_integer_labels(logits, labels).mean()
+#    acc = (logits.argmax(axis=-1) == labels).mean()
+#    return loss, (acc, new_model_state)
+
+def loss(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
+    if prediction.ndim == 3:
+        prediction = prediction.reshape(-1, prediction.shape[-1])
+    if target.ndim == 3:
+        target = target.reshape(-1, target.shape[-1])
+
+    prediction_sigmoid = jax.nn.sigmoid(prediction)
+
+    loss = optax.sigmoid_binary_cross_entropy(prediction_sigmoid, target)
+    return jnp.mean(loss)
 
 def accuracy(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
+    # Reshape if necessary
+    if prediction.ndim == 3:
+        prediction = prediction.reshape(-1, prediction.shape[-1])
+    if target.ndim == 3:
+        target = target.reshape(-1, target.shape[-1])
+
+    # Find the predicted class
     predicted_class = jnp.argmax(prediction, axis=1)
-    return jnp.mean(predicted_class == target)
+
+    # If target is one-hot encoded, convert it to class labels
+    if target.shape[1] > 1:
+        target_class = jnp.argmax(target, axis=1)
+    else:
+        target_class = target
+
+    # Calculate accuracy
+    return jnp.mean(predicted_class == target_class)
 
 class CheXpert(VectorizedTask):
     """CheXpert classification task using PyTorch DataLoader."""
 
-    def __init__(self, args, test: bool = False):
+    def __init__(self, args, batch_stats: dict, test: bool = False):
         self.max_steps = 1
+        self.init_batch_stats = batch_stats
         #self.batch_size = args.batch_size
         # Define observation and action shapes appropriately
         self.obs_shape = tuple([3 ,320, 320])
@@ -241,16 +269,20 @@ class CheXpert(VectorizedTask):
             else:
                 batch_data, batch_labels, idx = next(iter(self.train_generator))
 
-            return CheXpertState(obs=batch_data, labels=batch_labels, batch_stats=batch_stats)
+            return CheXpertState(obs=batch_data, labels=batch_labels, batch_stats=self.init_batch_stats)
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
         def step_fn(state, action):
-            if self.test:
+            if test:
                 reward = accuracy(action, state.labels)
             else:
+                print('action : ',action)
+                print('state labels : ', state.labels)
                 reward = -loss(action, state.labels)
             return state, reward, jnp.ones(())
+
+        self._step_fn = jax.jit(jax.vmap(step_fn))
 
     def reset(self, key: jnp.ndarray) -> CheXpertState:
         return self._reset_fn(key)
