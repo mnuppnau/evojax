@@ -93,6 +93,7 @@ class DenseNet(nn.Module):
         x = self.act_fn(x)
         x = x.mean(axis=(1, 2))
         x = nn.Dense(self.num_classes)(x)
+        x = nn.sigmoid(x)
         return x
 
 class DenseNetPolicy(PolicyNetwork):
@@ -105,7 +106,7 @@ class DenseNetPolicy(PolicyNetwork):
             self._logger = logger
 
         model = DenseNet(num_classes=num_classes)
-        params = model.init(jax.random.PRNGKey(0), jnp.zeros([32, 3, 320, 320]), train=False)  # Example input shape
+        params = model.init(jax.random.PRNGKey(0), jnp.zeros([1, 3, 320, 320]), train=False)  # Example input shape
         self.init_params, self.init_batch_stats = params['params'], params['batch_stats']
         self.num_params, format_params_fn = get_params_format_fn(self.init_params)
         self._logger.info('DenseNetPolicy.num_params = {}'.format(self.num_params))
@@ -116,7 +117,7 @@ class DenseNetPolicy(PolicyNetwork):
         def forward_fn_train(p, o, batch_stats):
             logits, updates = model.apply(
                 {'params': p, 'batch_stats': batch_stats},
-                jnp.zeros([32,3,320,320]),
+                o,
                 train=True, mutable=['batch_stats']
             )
             return logits, updates['batch_stats']
@@ -125,7 +126,7 @@ class DenseNetPolicy(PolicyNetwork):
         def forward_fn(p, o):
             logits = model.apply(
                 {'params': p, 'batch_stats': self.init_batch_stats},
-                jnp.zeros([32,3,320,320]),
+                o,
                 train=False
             )
             return logits

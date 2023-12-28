@@ -69,7 +69,7 @@ class ObsNormalizer(object):
 
     def __init__(self,
                  obs_shape: Tuple,
-                 clip_value: float = 5.,
+                 clip_value: float = 1.,
                  std_min_value: float = 1e-6,
                  std_max_value: float = 1e6,
                  dummy: bool = False):

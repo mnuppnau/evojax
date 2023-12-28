@@ -202,13 +202,14 @@ class SimManager(object):
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape((-1, *task_state.obs.shape[2:])))
             org_obs = task_state.obs
-            normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
-            task_state = task_state.replace(obs=normed_obs)
-            print('batch_stats before get_actions : ', task_state.batch_stats)
+            #normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
+            #task_state = task_state.replace(obs=normed_obs)
+            print('obs before get_actions : ', task_state.obs)
+            #jax.debug.print('obs before get_actions : {}', task_state.obs)
             actions, batch_stats, policy_state = policy_net.get_actions(
                 task_state, params, policy_state, train=True)
             task_state = task_state.replace(batch_stats=batch_stats)
-            print('batch_stats after get_actions : ', task_state.batch_stats)
+            #jax.debug.print('actions : {}', actions)
             if task.multi_agent_training:
                 print('Inside multi_agent_training 2 : ')
                 task_state = task_state.replace(

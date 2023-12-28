@@ -200,17 +200,28 @@ def sample_batch(key: jnp.ndarray,
 #    acc = (logits.argmax(axis=-1) == labels).mean()
 #    return loss, (acc, new_model_state)
 
-def loss(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
-    if prediction.ndim == 3:
-        prediction = prediction.reshape(-1, prediction.shape[-1])
-    if target.ndim == 3:
-        target = target.reshape(-1, target.shape[-1])
+#def loss(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
+#    if prediction.ndim == 3:
+#        prediction = prediction.reshape(-1, prediction.shape[-1])
+#    if target.ndim == 3:
+#        target = target.reshape(-1, target.shape[-1])
+#
+#    prediction_sigmoid = jax.nn.sigmoid(prediction)
+#
+#    loss = optax.sigmoid_binary_cross_entropy(prediction_sigmoid, target)
+#    print('loss : ', loss)
+#    return jnp.mean(loss)
 
-    prediction_sigmoid = jax.nn.sigmoid(prediction)
+#def loss(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
+#    loss = optax.sigmoid_binary_cross_entropy(prediction, target)
+#    print('loss : ', loss)
+#    return jnp.mean(loss)
 
-    loss = optax.sigmoid_binary_cross_entropy(prediction_sigmoid, target)
-    print('loss : ', jnp.mean(loss))
-    return jnp.mean(loss)
+def loss(predictions: jnp.ndarray, targets: jnp.ndarray) -> jnp.float32:
+    #jax.debug.print('targets : {}',targets)
+    epsilon = 1e-7  # small constant to prevent log(0)
+    clipped_predictions = jnp.clip(predictions, epsilon, 1 - epsilon)
+    return -jnp.mean(targets * jnp.log(clipped_predictions) + (1 - targets) * jnp.log(1 - clipped_predictions))
 
 def accuracy(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
     # Reshape if necessary
@@ -231,6 +242,11 @@ def accuracy(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
     # Calculate accuracy
     return jnp.mean(predicted_class == target_class)
 
+def numpy_callback(x):
+  # Need to forward-declare the shape & dtype of the expected output.
+  result_shape = jax.core.ShapedArray(x.shape, x.dtype)
+  return jax.pure_callback(np.sin, result_shape, x)
+
 class CheXpert(VectorizedTask):
     """CheXpert classification task using PyTorch DataLoader."""
 
@@ -239,7 +255,7 @@ class CheXpert(VectorizedTask):
         self.init_batch_stats = batch_stats
         #self.batch_size = args.batch_size
         # Define observation and action shapes appropriately
-        self.obs_shape = tuple([3 ,320, 320])
+        self.obs_shape = tuple([3, 320, 320])
         self.act_shape = tuple([5,])
 
         # Initialize PyTorch DataLoader
@@ -262,7 +278,6 @@ class CheXpert(VectorizedTask):
             print("Shape of valid labels:", labels.shape)
             # Optionally, break after the first batch to avoid printing shapes for all batches
             break
-
        
         def reset_fn(key):
             if test:
@@ -278,8 +293,6 @@ class CheXpert(VectorizedTask):
             if test:
                 reward = accuracy(action, state.labels)
             else:
-                print('action : ',action)
-                print('state labels : ', state.labels)
                 reward = -loss(action, state.labels)
             return state, reward, jnp.ones(())
 
