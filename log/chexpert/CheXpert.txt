@@ -1944,3 +1944,26 @@ CheXpert: 2023-12-28 10:20:52,558 [INFO] Iter=10, size=64, max=nan, avg=nan, min
 CheXpert: 2023-12-28 10:20:55,292 [INFO] Iter=20, size=64, max=nan, avg=nan, min=nan, std=nan
 CheXpert: 2023-12-28 10:20:58,017 [INFO] Iter=30, size=64, max=nan, avg=nan, min=nan, std=nan
 CheXpert: 2023-12-28 10:21:00,755 [INFO] Iter=40, size=64, max=nan, avg=nan, min=nan, std=nan
+CheXpert: 2023-12-28 10:58:10,011 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-28 10:58:10,011 [INFO] ==============================
+CheXpert: 2023-12-28 10:58:19,750 [INFO] DenseNetPolicy.num_params = 329517
+CheXpert: 2023-12-28 10:58:21,980 [INFO] use_for_loop=False
+CheXpert: 2023-12-28 10:58:22,005 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-28 10:58:40,013 [INFO] Iter=10, size=64, max=nan, avg=nan, min=nan, std=nan
+CheXpert: 2023-12-28 10:58:42,762 [INFO] Iter=20, size=64, max=nan, avg=nan, min=nan, std=nan
+CheXpert: 2023-12-28 11:01:17,950 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-28 11:01:17,950 [INFO] ==============================
+CheXpert: 2023-12-28 11:01:30,799 [INFO] DenseNetPolicy.num_params = 329517
+CheXpert: 2023-12-28 11:01:33,693 [INFO] use_for_loop=False
+CheXpert: 2023-12-28 11:01:33,718 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-28 11:10:41,657 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-28 11:10:41,657 [INFO] ==============================
+CheXpert: 2023-12-28 11:10:51,557 [INFO] DenseNetPolicy.num_params = 329517
+CheXpert: 2023-12-28 11:10:53,713 [INFO] use_for_loop=False
+CheXpert: 2023-12-28 11:10:53,738 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-28 11:13:07,744 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-28 11:13:07,744 [INFO] ==============================
+CheXpert: 2023-12-28 11:13:20,416 [INFO] DenseNetPolicy.num_params = 329517
+CheXpert: 2023-12-28 11:13:22,757 [INFO] use_for_loop=False
+CheXpert: 2023-12-28 11:13:22,782 [INFO] Start to train for 1000 iterations.
+CheXpert: 2023-12-28 11:13:43,129 [INFO] Iter=10, size=64, max=nan, avg=nan, min=nan, std=nan

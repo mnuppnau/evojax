@@ -120,6 +120,7 @@ class DenseNetPolicy(PolicyNetwork):
                 o,
                 train=True, mutable=['batch_stats']
             )
+            jax.debug.print('logits : {}, ',logits)
             return logits, updates['batch_stats']
         self._forward_fn_train = jax.vmap(forward_fn_train)
 
