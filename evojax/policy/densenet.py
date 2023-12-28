@@ -105,7 +105,7 @@ class DenseNetPolicy(PolicyNetwork):
             self._logger = logger
 
         model = DenseNet(num_classes=num_classes)
-        params = model.init(jax.random.PRNGKey(0), jnp.zeros([32, 3, 320, 320]))  # Example input shape
+        params = model.init(jax.random.PRNGKey(0), jnp.zeros([32, 3, 320, 320]), train=False)  # Example input shape
         self.init_params, self.init_batch_stats = params['params'], params['batch_stats']
         self.num_params, format_params_fn = get_params_format_fn(self.init_params)
         self._logger.info('DenseNetPolicy.num_params = {}'.format(self.num_params))
@@ -113,9 +113,9 @@ class DenseNetPolicy(PolicyNetwork):
         #self._forward_fn, updates = model.apply({'params': params, 'batch_stats': self.init_batch_stats},jnp.zeros([32,3,320,320]),train=True, mutable=['batch_stats'])
         #self._forward_fn = jax.vmap(model.apply)
 
-        def forward_fn_train(p, o):
+        def forward_fn_train(p, o, batch_stats):
             logits, updates = model.apply(
-                {'params': p, 'batch_stats': self.init_batch_stats},
+                {'params': p, 'batch_stats': batch_stats},
                 jnp.zeros([32,3,320,320]),
                 train=True, mutable=['batch_stats']
             )
@@ -123,12 +123,12 @@ class DenseNetPolicy(PolicyNetwork):
         self._forward_fn_train = jax.vmap(forward_fn_train)
 
         def forward_fn(p, o):
-            logits, updates = model.apply(
+            logits = model.apply(
                 {'params': p, 'batch_stats': self.init_batch_stats},
                 jnp.zeros([32,3,320,320]),
-                train=False, mutable=['batch_stats']
+                train=False
             )
-            return logits, updates['batch_stats']
+            return logits
         self._forward_fn = jax.vmap(forward_fn)
 
     def get_actions(self, t_states: TaskState, params: jnp.ndarray, p_states: PolicyState, train: bool) -> Tuple[jnp.ndarray, PolicyState]:
@@ -136,7 +136,8 @@ class DenseNetPolicy(PolicyNetwork):
         params = self._format_params_fn(params)
         print('params after: ',params)
         if train:
-            logits, batch_stats = self._forward_fn_train(params, t_states.obs)
+            logits, batch_stats = self._forward_fn_train(params, t_states.obs, t_states.batch_stats)
+            return logits, batch_stats, p_states
         else:
-            logits, batch_stats = self._forward_fn(params, t_states.obs)
-        return logits, batch_stats, p_states
+            logits = self._forward_fn(params, t_states.obs)
+            return logits, p_states

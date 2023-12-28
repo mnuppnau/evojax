@@ -175,7 +175,7 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            actions, batch_stats, policy_state = policy_net.get_actions(
+            actions, policy_state = policy_net.get_actions(
                 task_state, params, policy_state, train=False)
             if task.multi_agent_training:
                 task_state = task_state.replace(
@@ -197,16 +197,20 @@ class SimManager(object):
             (task_state, policy_state, params, obs_params,
              accumulated_reward, valid_mask) = carry
             if task.multi_agent_training:
+                print('Inside multi_agent_training 1 : ')
                 num_tasks, num_agents = task_state.obs.shape[:2]
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape((-1, *task_state.obs.shape[2:])))
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            print('Inside step_once_train, params : ', params)
+            print('batch_stats before get_actions : ', task_state.batch_stats)
             actions, batch_stats, policy_state = policy_net.get_actions(
                 task_state, params, policy_state, train=True)
+            task_state = task_state.replace(batch_stats=batch_stats)
+            print('batch_stats after get_actions : ', task_state.batch_stats)
             if task.multi_agent_training:
+                print('Inside multi_agent_training 2 : ')
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape(
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
@@ -227,7 +231,7 @@ class SimManager(object):
                     step_once_fn, max_steps):
             accumulated_rewards = jnp.zeros(params.shape[0])
             valid_masks = jnp.ones(params.shape[0])
-            print('params inside rollout : ', params)
+            #print('params inside rollout : ', params)
             ((task_states, policy_states, params, obs_params,
               accumulated_rewards, valid_masks),
              (obs_set, obs_mask)) = jax.lax.scan(
@@ -341,7 +345,7 @@ class SimManager(object):
                         params: jnp.ndarray,
                         test: bool) -> Tuple[jnp.ndarray, TaskState]:
         """Rollout using jax.lax.scan."""
-        print('Inside scan loop : ')
+        #print('Inside scan loop : ')
         policy_reset_func = self._policy_reset_fn
         if test:
             n_repeats = self._test_n_repeats
@@ -369,9 +373,9 @@ class SimManager(object):
         #   b1, b2, ..., bn  (individual 2 params)
         #   b1, b2, ..., bn  (individual 2 params)
         #   b1, b2, ..., bn  (individual 2 params)
-        print('params before duplicate_params : ', params)
+        #print('params before duplicate_params : ', params)
         params = duplicate_params(params, n_repeats, self._ma_training)
-        print('params after duplicate_params : ', params)
+        #print('params after duplicate_params : ', params)
         self._key, reset_keys = get_task_reset_keys(
             self._key, test, self._pop_size, self._n_evaluations, n_repeats,
             self._ma_training)
@@ -384,7 +388,7 @@ class SimManager(object):
             task_state = split_states_for_pmap(task_state)
             policy_state = split_states_for_pmap(policy_state)
         
-        print('obs_params : ', self.obs_params)
+        #print('obs_params : ', self.obs_params)
         # Do the rollouts.
         scores, all_obs, masks, final_states = rollout_func(
             task_state, policy_state, params, self.obs_params)

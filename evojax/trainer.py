@@ -143,13 +143,14 @@ class Trainer(object):
             best_score = -float('Inf')
 
             for i in range(self._max_iter):
+                print('i : ',i)
                 start_time = time.perf_counter()
                 params = self.solver.ask()
                 self._logger.debug('solver.ask time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
                 start_time = time.perf_counter()
-                print('paramas : ', params)
+                #print('paramas : ', params)
                 scores, bds = self.sim_mgr.eval_params(
                     params=params, test=False)
                 self._logger.debug('sim_mgr.eval_params time: {0:.4f}s'.format(

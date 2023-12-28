@@ -209,6 +209,7 @@ def loss(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
     prediction_sigmoid = jax.nn.sigmoid(prediction)
 
     loss = optax.sigmoid_binary_cross_entropy(prediction_sigmoid, target)
+    print('loss : ', jnp.mean(loss))
     return jnp.mean(loss)
 
 def accuracy(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
