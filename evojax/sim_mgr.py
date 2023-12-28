@@ -175,6 +175,8 @@ class SimManager(object):
                     obs=task_state.obs.reshape((-1, *task_state.obs.shape[2:])))
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
+            print('task state obs : ', task_state.obs)
+            #jax.debug.print('normed_obs : {}', normed_obs)
             task_state = task_state.replace(obs=normed_obs)
             actions, policy_state = policy_net.get_actions(
                 task_state, params, policy_state)

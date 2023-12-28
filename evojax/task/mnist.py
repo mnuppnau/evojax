@@ -42,8 +42,8 @@ def sample_batch(key: jnp.ndarray,
 
 
 def loss(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
+    jax.debug.print('target : {}',target)
     target = jax.nn.one_hot(target, 10)
-    print('loss : ',-jnp.mean(jnp.sum(prediction * target, axis=1)))
     return -jnp.mean(jnp.sum(prediction * target, axis=1))
 
 

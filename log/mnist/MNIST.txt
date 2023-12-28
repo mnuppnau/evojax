@@ -473,3 +473,29 @@ MNIST: 2023-12-27 20:42:05,763 [INFO] ConvNetPolicy.num_params = 11274
 MNIST: 2023-12-27 20:42:06,793 [INFO] use_for_loop=False
 MNIST: 2023-12-27 20:42:06,819 [INFO] Start to train for 5000 iterations.
 MNIST: 2023-12-27 20:42:16,710 [INFO] Iter=100, size=64, max=-0.8509, avg=-1.0054, min=-1.3299, std=0.1081
+MNIST: 2023-12-28 10:26:56,372 [INFO] EvoJAX MNIST Demo
+MNIST: 2023-12-28 10:26:56,372 [INFO] ==============================
+MNIST: 2023-12-28 10:26:59,225 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2023-12-28 10:27:00,254 [INFO] use_for_loop=False
+MNIST: 2023-12-28 10:27:00,280 [INFO] Start to train for 5000 iterations.
+MNIST: 2023-12-28 10:27:13,164 [INFO] Iter=100, size=64, max=-0.8509, avg=-1.0054, min=-1.3299, std=0.1081
+MNIST: 2023-12-28 10:27:19,540 [INFO] Iter=200, size=64, max=-0.5166, avg=-0.6473, min=-1.1943, std=0.1035
+MNIST: 2023-12-28 10:27:26,045 [INFO] Iter=300, size=64, max=-0.3898, avg=-0.4688, min=-0.6169, std=0.0451
+MNIST: 2023-12-28 10:27:32,460 [INFO] Iter=400, size=64, max=-0.3207, avg=-0.3802, min=-0.4843, std=0.0366
+MNIST: 2023-12-28 10:27:38,841 [INFO] Iter=500, size=64, max=-0.2660, avg=-0.3136, min=-0.4521, std=0.0279
+MNIST: 2023-12-28 10:27:45,245 [INFO] Iter=600, size=64, max=-0.1874, avg=-0.2349, min=-0.3122, std=0.0237
+MNIST: 2023-12-28 10:29:14,410 [INFO] EvoJAX MNIST Demo
+MNIST: 2023-12-28 10:29:14,410 [INFO] ==============================
+MNIST: 2023-12-28 10:29:16,946 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2023-12-28 10:29:17,981 [INFO] use_for_loop=False
+MNIST: 2023-12-28 10:29:18,007 [INFO] Start to train for 5000 iterations.
+MNIST: 2023-12-28 10:31:28,556 [INFO] EvoJAX MNIST Demo
+MNIST: 2023-12-28 10:31:28,556 [INFO] ==============================
+MNIST: 2023-12-28 10:31:31,559 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2023-12-28 10:31:32,597 [INFO] use_for_loop=False
+MNIST: 2023-12-28 10:31:32,623 [INFO] Start to train for 5000 iterations.
+MNIST: 2023-12-28 10:32:21,763 [INFO] EvoJAX MNIST Demo
+MNIST: 2023-12-28 10:32:21,763 [INFO] ==============================
+MNIST: 2023-12-28 10:32:26,060 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2023-12-28 10:32:27,092 [INFO] use_for_loop=False
+MNIST: 2023-12-28 10:32:27,118 [INFO] Start to train for 5000 iterations.
