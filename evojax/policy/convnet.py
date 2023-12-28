@@ -68,5 +68,4 @@ class ConvNetPolicy(PolicyNetwork):
                     params: jnp.ndarray,
                     p_states: PolicyState) -> Tuple[jnp.ndarray, PolicyState]:
         params = self._format_params_fn(params)
-        print('In get_actions : ')
         return self._forward_fn(params, t_states.obs), p_states
