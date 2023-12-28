@@ -314,6 +314,7 @@ class SimManager(object):
                         params: jnp.ndarray,
                         test: bool) -> Tuple[jnp.ndarray, TaskState]:
         """Rollout using jax.lax.scan."""
+        print('In scan_loop_eval : ')
         policy_reset_func = self._policy_reset_fn
         if test:
             n_repeats = self._test_n_repeats

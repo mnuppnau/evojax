@@ -149,6 +149,7 @@ class Trainer(object):
                     time.perf_counter() - start_time))
 
                 start_time = time.perf_counter()
+                print('iteration : ',i)
                 scores, bds = self.sim_mgr.eval_params(
                     params=params, test=False)
                 self._logger.debug('sim_mgr.eval_params time: {0:.4f}s'.format(

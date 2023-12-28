@@ -374,3 +374,102 @@ MNIST: 2023-12-27 11:48:26,082 [INFO] Training done, best_score=0.9825
 MNIST: 2023-12-27 11:48:26,083 [INFO] Loaded model parameters from ./log/mnist.
 MNIST: 2023-12-27 11:48:26,083 [INFO] Start to test the parameters.
 MNIST: 2023-12-27 11:48:26,315 [INFO] [TEST] #tests=2, max=0.9825, avg=0.9825, min=0.9825, std=0.0000
+MNIST: 2023-12-27 20:29:53,219 [INFO] EvoJAX MNIST Demo
+MNIST: 2023-12-27 20:29:53,219 [INFO] ==============================
+MNIST: 2023-12-27 20:29:54,687 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2023-12-27 20:29:55,725 [INFO] use_for_loop=False
+MNIST: 2023-12-27 20:29:55,750 [INFO] Start to train for 5000 iterations.
+MNIST: 2023-12-27 20:30:05,624 [INFO] Iter=100, size=64, max=-0.8509, avg=-1.0054, min=-1.3299, std=0.1081
+MNIST: 2023-12-27 20:30:09,199 [INFO] Iter=200, size=64, max=-0.5166, avg=-0.6473, min=-1.1943, std=0.1035
+MNIST: 2023-12-27 20:30:12,760 [INFO] Iter=300, size=64, max=-0.3898, avg=-0.4688, min=-0.6169, std=0.0451
+MNIST: 2023-12-27 20:30:16,323 [INFO] Iter=400, size=64, max=-0.3207, avg=-0.3802, min=-0.4843, std=0.0366
+MNIST: 2023-12-27 20:30:19,900 [INFO] Iter=500, size=64, max=-0.2660, avg=-0.3136, min=-0.4521, std=0.0279
+MNIST: 2023-12-27 20:30:23,463 [INFO] Iter=600, size=64, max=-0.1874, avg=-0.2349, min=-0.3122, std=0.0237
+MNIST: 2023-12-27 20:30:27,012 [INFO] Iter=700, size=64, max=-0.1740, avg=-0.2103, min=-0.3124, std=0.0245
+MNIST: 2023-12-27 20:30:30,568 [INFO] Iter=800, size=64, max=-0.1702, avg=-0.2038, min=-0.2581, std=0.0210
+MNIST: 2023-12-27 20:30:34,145 [INFO] Iter=900, size=64, max=-0.1831, avg=-0.2298, min=-0.3914, std=0.0302
+MNIST: 2023-12-27 20:30:37,708 [INFO] Iter=1000, size=64, max=-0.1384, avg=-0.1705, min=-0.2256, std=0.0191
+MNIST: 2023-12-27 20:30:39,145 [INFO] [TEST] Iter=1000, #tests=2, max=0.9643, avg=0.9643, min=0.9643, std=0.0000
+MNIST: 2023-12-27 20:30:42,752 [INFO] Iter=1100, size=64, max=-0.1128, avg=-0.1402, min=-0.1801, std=0.0147
+MNIST: 2023-12-27 20:30:46,337 [INFO] Iter=1200, size=64, max=-0.1289, avg=-0.1565, min=-0.2056, std=0.0167
+MNIST: 2023-12-27 20:30:49,919 [INFO] Iter=1300, size=64, max=-0.1348, avg=-0.1567, min=-0.1988, std=0.0134
+MNIST: 2023-12-27 20:30:53,488 [INFO] Iter=1400, size=64, max=-0.1291, avg=-0.1509, min=-0.1945, std=0.0149
+MNIST: 2023-12-27 20:30:57,063 [INFO] Iter=1500, size=64, max=-0.1636, avg=-0.2077, min=-0.2518, std=0.0156
+MNIST: 2023-12-27 20:31:00,643 [INFO] Iter=1600, size=64, max=-0.1024, avg=-0.1314, min=-0.2477, std=0.0227
+MNIST: 2023-12-27 20:32:14,781 [INFO] EvoJAX MNIST Demo
+MNIST: 2023-12-27 20:32:14,781 [INFO] ==============================
+MNIST: 2023-12-27 20:32:19,100 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2023-12-27 20:32:20,143 [INFO] use_for_loop=False
+MNIST: 2023-12-27 20:32:20,170 [INFO] Start to train for 5000 iterations.
+MNIST: 2023-12-27 20:32:30,139 [INFO] Iter=100, size=64, max=-0.8509, avg=-1.0054, min=-1.3299, std=0.1081
+MNIST: 2023-12-27 20:32:33,693 [INFO] Iter=200, size=64, max=-0.5166, avg=-0.6473, min=-1.1943, std=0.1035
+MNIST: 2023-12-27 20:32:37,260 [INFO] Iter=300, size=64, max=-0.3898, avg=-0.4688, min=-0.6169, std=0.0451
+MNIST: 2023-12-27 20:32:40,811 [INFO] Iter=400, size=64, max=-0.3207, avg=-0.3802, min=-0.4843, std=0.0366
+MNIST: 2023-12-27 20:32:44,383 [INFO] Iter=500, size=64, max=-0.2660, avg=-0.3136, min=-0.4521, std=0.0279
+MNIST: 2023-12-27 20:32:47,980 [INFO] Iter=600, size=64, max=-0.1874, avg=-0.2349, min=-0.3122, std=0.0237
+MNIST: 2023-12-27 20:32:51,543 [INFO] Iter=700, size=64, max=-0.1740, avg=-0.2103, min=-0.3124, std=0.0245
+MNIST: 2023-12-27 20:32:55,118 [INFO] Iter=800, size=64, max=-0.1702, avg=-0.2038, min=-0.2581, std=0.0210
+MNIST: 2023-12-27 20:32:58,704 [INFO] Iter=900, size=64, max=-0.1831, avg=-0.2298, min=-0.3914, std=0.0302
+MNIST: 2023-12-27 20:33:02,296 [INFO] Iter=1000, size=64, max=-0.1384, avg=-0.1705, min=-0.2256, std=0.0191
+MNIST: 2023-12-27 20:33:03,729 [INFO] [TEST] Iter=1000, #tests=2, max=0.9643, avg=0.9643, min=0.9643, std=0.0000
+MNIST: 2023-12-27 20:33:07,338 [INFO] Iter=1100, size=64, max=-0.1128, avg=-0.1402, min=-0.1801, std=0.0147
+MNIST: 2023-12-27 20:33:10,915 [INFO] Iter=1200, size=64, max=-0.1289, avg=-0.1565, min=-0.2056, std=0.0167
+MNIST: 2023-12-27 20:33:14,491 [INFO] Iter=1300, size=64, max=-0.1348, avg=-0.1567, min=-0.1988, std=0.0134
+MNIST: 2023-12-27 20:33:18,082 [INFO] Iter=1400, size=64, max=-0.1291, avg=-0.1509, min=-0.1945, std=0.0149
+MNIST: 2023-12-27 20:33:21,660 [INFO] Iter=1500, size=64, max=-0.1636, avg=-0.2077, min=-0.2518, std=0.0156
+MNIST: 2023-12-27 20:33:25,256 [INFO] Iter=1600, size=64, max=-0.1024, avg=-0.1314, min=-0.2477, std=0.0227
+MNIST: 2023-12-27 20:33:28,854 [INFO] Iter=1700, size=64, max=-0.0866, avg=-0.1131, min=-0.1557, std=0.0130
+MNIST: 2023-12-27 20:33:32,451 [INFO] Iter=1800, size=64, max=-0.0785, avg=-0.1007, min=-0.1496, std=0.0141
+MNIST: 2023-12-27 20:33:36,040 [INFO] Iter=1900, size=64, max=-0.0943, avg=-0.1249, min=-0.1559, std=0.0138
+MNIST: 2023-12-27 20:33:39,637 [INFO] Iter=2000, size=64, max=-0.1169, avg=-0.1416, min=-0.1962, std=0.0153
+MNIST: 2023-12-27 20:33:39,648 [INFO] [TEST] Iter=2000, #tests=2, max=0.9738, avg=0.9738, min=0.9738, std=0.0000
+MNIST: 2023-12-27 20:33:43,273 [INFO] Iter=2100, size=64, max=-0.1013, avg=-0.1232, min=-0.1493, std=0.0106
+MNIST: 2023-12-27 20:33:46,880 [INFO] Iter=2200, size=64, max=-0.1065, avg=-0.1271, min=-0.1747, std=0.0138
+MNIST: 2023-12-27 20:33:50,469 [INFO] Iter=2300, size=64, max=-0.1080, avg=-0.1289, min=-0.1746, std=0.0130
+MNIST: 2023-12-27 20:33:54,082 [INFO] Iter=2400, size=64, max=-0.1060, avg=-0.1268, min=-0.1746, std=0.0137
+MNIST: 2023-12-27 20:33:57,709 [INFO] Iter=2500, size=64, max=-0.0798, avg=-0.0961, min=-0.1299, std=0.0108
+MNIST: 2023-12-27 20:34:01,332 [INFO] Iter=2600, size=64, max=-0.1236, avg=-0.1446, min=-0.1746, std=0.0112
+MNIST: 2023-12-27 20:34:04,957 [INFO] Iter=2700, size=64, max=-0.0757, avg=-0.0972, min=-0.1284, std=0.0095
+MNIST: 2023-12-27 20:34:08,575 [INFO] Iter=2800, size=64, max=-0.0828, avg=-0.1015, min=-0.1478, std=0.0104
+MNIST: 2023-12-27 20:34:12,220 [INFO] Iter=2900, size=64, max=-0.0616, avg=-0.0788, min=-0.1073, std=0.0086
+MNIST: 2023-12-27 20:34:15,870 [INFO] Iter=3000, size=64, max=-0.0779, avg=-0.0993, min=-0.1301, std=0.0109
+MNIST: 2023-12-27 20:34:15,880 [INFO] [TEST] Iter=3000, #tests=2, max=0.9783, avg=0.9783, min=0.9783, std=0.0000
+MNIST: 2023-12-27 20:34:19,513 [INFO] Iter=3100, size=64, max=-0.0841, avg=-0.0995, min=-0.1234, std=0.0086
+MNIST: 2023-12-27 20:34:23,125 [INFO] Iter=3200, size=64, max=-0.0701, avg=-0.0873, min=-0.1223, std=0.0116
+MNIST: 2023-12-27 20:34:26,759 [INFO] Iter=3300, size=64, max=-0.0853, avg=-0.1067, min=-0.1255, std=0.0088
+MNIST: 2023-12-27 20:34:30,378 [INFO] Iter=3400, size=64, max=-0.0575, avg=-0.0700, min=-0.0879, std=0.0077
+MNIST: 2023-12-27 20:34:33,994 [INFO] Iter=3500, size=64, max=-0.0616, avg=-0.0777, min=-0.0996, std=0.0077
+MNIST: 2023-12-27 20:34:37,609 [INFO] Iter=3600, size=64, max=-0.0527, avg=-0.0663, min=-0.0979, std=0.0077
+MNIST: 2023-12-27 20:34:41,206 [INFO] Iter=3700, size=64, max=-0.0849, avg=-0.0970, min=-0.1450, std=0.0091
+MNIST: 2023-12-27 20:34:44,833 [INFO] Iter=3800, size=64, max=-0.0534, avg=-0.0654, min=-0.0815, std=0.0059
+MNIST: 2023-12-27 20:34:48,445 [INFO] Iter=3900, size=64, max=-0.0926, avg=-0.1132, min=-0.1341, std=0.0096
+MNIST: 2023-12-27 20:34:52,051 [INFO] Iter=4000, size=64, max=-0.0820, avg=-0.0986, min=-0.1294, std=0.0108
+MNIST: 2023-12-27 20:34:52,062 [INFO] [TEST] Iter=4000, #tests=2, max=0.9803, avg=0.9803, min=0.9803, std=0.0000
+MNIST: 2023-12-27 20:34:55,679 [INFO] Iter=4100, size=64, max=-0.0722, avg=-0.0867, min=-0.1024, std=0.0073
+MNIST: 2023-12-27 20:34:59,294 [INFO] Iter=4200, size=64, max=-0.0763, avg=-0.0882, min=-0.1249, std=0.0084
+MNIST: 2023-12-27 20:35:02,935 [INFO] Iter=4300, size=64, max=-0.0674, avg=-0.0911, min=-0.1186, std=0.0099
+MNIST: 2023-12-27 20:35:06,564 [INFO] Iter=4400, size=64, max=-0.0780, avg=-0.0977, min=-0.1318, std=0.0099
+MNIST: 2023-12-27 20:35:10,197 [INFO] Iter=4500, size=64, max=-0.0767, avg=-0.0921, min=-0.1167, std=0.0084
+MNIST: 2023-12-27 20:35:13,809 [INFO] Iter=4600, size=64, max=-0.0638, avg=-0.0790, min=-0.1031, std=0.0076
+MNIST: 2023-12-27 20:35:17,434 [INFO] Iter=4700, size=64, max=-0.0749, avg=-0.0881, min=-0.1227, std=0.0100
+MNIST: 2023-12-27 20:35:21,057 [INFO] Iter=4800, size=64, max=-0.0638, avg=-0.0785, min=-0.0969, std=0.0079
+MNIST: 2023-12-27 20:35:24,684 [INFO] Iter=4900, size=64, max=-0.0598, avg=-0.0699, min=-0.1017, std=0.0065
+MNIST: 2023-12-27 20:35:28,264 [INFO] [TEST] Iter=5000, #tests=2, max=0.9825, avg=0.9825, min=0.9825, std=0.0000
+MNIST: 2023-12-27 20:35:28,265 [INFO] Training done, best_score=0.9825
+MNIST: 2023-12-27 20:35:28,266 [INFO] Loaded model parameters from ./log/mnist.
+MNIST: 2023-12-27 20:35:28,266 [INFO] Start to test the parameters.
+MNIST: 2023-12-27 20:35:28,492 [INFO] [TEST] #tests=2, max=0.9825, avg=0.9825, min=0.9825, std=0.0000
+MNIST: 2023-12-27 20:40:09,045 [INFO] EvoJAX MNIST Demo
+MNIST: 2023-12-27 20:40:09,045 [INFO] ==============================
+MNIST: 2023-12-27 20:40:11,143 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2023-12-27 20:40:12,178 [INFO] use_for_loop=False
+MNIST: 2023-12-27 20:40:12,204 [INFO] Start to train for 5000 iterations.
+MNIST: 2023-12-27 20:40:22,107 [INFO] Iter=100, size=64, max=-0.8509, avg=-1.0054, min=-1.3299, std=0.1081
+MNIST: 2023-12-27 20:40:25,667 [INFO] Iter=200, size=64, max=-0.5166, avg=-0.6473, min=-1.1943, std=0.1035
+MNIST: 2023-12-27 20:40:29,212 [INFO] Iter=300, size=64, max=-0.3898, avg=-0.4688, min=-0.6169, std=0.0451
+MNIST: 2023-12-27 20:42:02,127 [INFO] EvoJAX MNIST Demo
+MNIST: 2023-12-27 20:42:02,127 [INFO] ==============================
+MNIST: 2023-12-27 20:42:05,763 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2023-12-27 20:42:06,793 [INFO] use_for_loop=False
+MNIST: 2023-12-27 20:42:06,819 [INFO] Start to train for 5000 iterations.
+MNIST: 2023-12-27 20:42:16,710 [INFO] Iter=100, size=64, max=-0.8509, avg=-1.0054, min=-1.3299, std=0.1081
