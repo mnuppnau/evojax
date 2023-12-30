@@ -4,6 +4,7 @@ import jax
 import zipfile
 import jax.numpy as jnp
 import optax
+import random
 import torch
 import torchvision.transforms as T
 import pandas as pd
@@ -156,20 +157,23 @@ class ChexpertSmall(Dataset):
 
         return train_df
 
+
 def fetch_dataloader(args, mode):
     assert mode in ['train', 'valid']
 
     transforms = T.Compose([
         T.Resize(args.resize) if args.resize else T.Lambda(lambda x: x),
         T.CenterCrop(320 if not args.resize else args.resize),
-        lambda x: torch.from_numpy(np.array(x, copy=True)).float().div(255).unsqueeze(0),   # tensor in [0,1]
-        T.Normalize(mean=[0.5330], std=[0.0349]),                                           # whiten with dataset mean and std
-        lambda x: x.expand(3,-1,-1)])                                                       # expand to 3 channels
+        lambda x: torch.from_numpy(np.array(x, copy=True)).float().div(255).unsqueeze(0),
+        T.Normalize(mean=[0.5330], std=[0.0349]),
+        lambda x: x.expand(3, -1, -1),
+        T.Lambda(lambda x: x.permute(1, 2, 0))  # Permute dimensions to change to channels last format
+    ])
 
     dataset = ChexpertSmall(args.data_path, mode, transforms, mini_data=args.mini_data)
 
     return NumpyLoader(dataset, args.batch_size, shuffle=(mode=='train'), pin_memory=(args.device.type=='cuda'),
-                      num_workers=0 if mode=='valid' else 16)  # since evaluating the valid_dataloader is called inside the
+                       num_workers=0 if mode=='valid' else 16)  # since evaluating the valid_dataloader is called inside the
                                                               # train_dataloader loop, 0 workers for valid_dataloader avoids
                                                               # forking (cf torch dataloader docs); else memory sharing gets clunky
 
@@ -187,6 +191,26 @@ def sample_batch(key: jnp.ndarray,
         key=key, a=data.shape[0], shape=(batch_size,), replace=False)
     return (jnp.take(data, indices=ix, axis=0),
             jnp.take(labels, indices=ix, axis=0))
+
+def get_random_batches(data_loader, num_batches):
+    batch_data_list = []
+    batch_labels_list = []
+    count = 0
+
+    while count < num_batches:
+        for batch_data, batch_labels,idx in data_loader:
+            if count < num_batches and random.random() < (num_batches / len(data_loader)):
+                batch_data_list.append(batch_data)
+                batch_labels_list.append(batch_labels)
+                count += 1
+            if count >= num_batches:
+                break
+
+    # Concatenate all batches using NumPy
+    batch_data_concat = np.concatenate(batch_data_list, axis=0)
+    batch_labels_concat = np.concatenate(batch_labels_list, axis=0)
+
+    return batch_data_concat, batch_labels_concat
 
 #def loss(params, batch_stats, batch, train):
 #    imgs, labels = batch
@@ -223,24 +247,16 @@ def loss(predictions: jnp.ndarray, targets: jnp.ndarray) -> jnp.float32:
     clipped_predictions = jnp.clip(predictions, epsilon, 1 - epsilon)
     return -jnp.mean(targets * jnp.log(clipped_predictions) + (1 - targets) * jnp.log(1 - clipped_predictions))
 
-def accuracy(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
-    # Reshape if necessary
-    if prediction.ndim == 3:
-        prediction = prediction.reshape(-1, prediction.shape[-1])
-    if target.ndim == 3:
-        target = target.reshape(-1, target.shape[-1])
+def accuracy(prediction: jnp.ndarray, target: jnp.ndarray, threshold: float = 0.5) -> jnp.float32:
+    # Assuming prediction is a probability or has passed through a sigmoid function
+    # Threshold the predictions to get binary outputs
+    predicted_classes = prediction > threshold
 
-    # Find the predicted class
-    predicted_class = jnp.argmax(prediction, axis=1)
+    # Compare the predicted classes with the targets
+    correct_predictions = predicted_classes == target
 
-    # If target is one-hot encoded, convert it to class labels
-    if target.shape[1] > 1:
-        target_class = jnp.argmax(target, axis=1)
-    else:
-        target_class = target
-
-    # Calculate accuracy
-    return jnp.mean(predicted_class == target_class)
+    # Calculate accuracy as the mean of correct predictions
+    return jnp.mean(correct_predictions)
 
 def numpy_callback(x):
   # Need to forward-declare the shape & dtype of the expected output.
@@ -252,10 +268,11 @@ class CheXpert(VectorizedTask):
 
     def __init__(self, args, batch_stats: dict, test: bool = False):
         self.max_steps = 1
+        self.num_batches = 10
         self.init_batch_stats = batch_stats
         #self.batch_size = args.batch_size
         # Define observation and action shapes appropriately
-        self.obs_shape = tuple([3, 320, 320])
+        self.obs_shape = tuple([320, 320, 3])
         self.act_shape = tuple([5,])
 
         # Initialize PyTorch DataLoader
@@ -281,7 +298,9 @@ class CheXpert(VectorizedTask):
        
         def reset_fn(key):
             if test:
-                batch_data, batch_labels, idx = next(iter(self.valid_generator))
+                batch_data, batch_labels = get_random_batches(self.valid_generator, self.num_batches)
+                jax.debug.print('batch_data reset : {}', batch_data)
+                jax.debug.print('batch_labels reset : {}', batch_labels)
             else:
                 batch_data, batch_labels, idx = next(iter(self.train_generator))
 
@@ -291,6 +310,8 @@ class CheXpert(VectorizedTask):
 
         def step_fn(state, action):
             if test:
+                jax.debug.print('action : {}', action)
+                jax.debug.print('labels : {}', state.labels)
                 reward = accuracy(action, state.labels)
             else:
                 reward = -loss(action, state.labels)

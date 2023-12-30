@@ -66,7 +66,7 @@ class TransitionLayer(nn.Module):
 class DenseNet(nn.Module):
     num_classes : int
     act_fn : callable = nn.relu
-    num_layers : tuple = (6, 6, 6, 6)
+    num_layers : tuple = (4, 6, 6, 4)
     bn_size : int = 2
     growth_rate : int = 16
 
@@ -106,7 +106,7 @@ class DenseNetPolicy(PolicyNetwork):
             self._logger = logger
 
         model = DenseNet(num_classes=num_classes)
-        params = model.init(jax.random.PRNGKey(0), jnp.zeros([1, 3, 320, 320]), train=False)  # Example input shape
+        params = model.init(jax.random.PRNGKey(0), jnp.zeros([1,320, 320,3]), train=False)  # Example input shape
         self.init_params, self.init_batch_stats = params['params'], params['batch_stats']
         self.num_params, format_params_fn = get_params_format_fn(self.init_params)
         self._logger.info('DenseNetPolicy.num_params = {}'.format(self.num_params))
@@ -120,7 +120,7 @@ class DenseNetPolicy(PolicyNetwork):
                 o,
                 train=True, mutable=['batch_stats']
             )
-            jax.debug.print('logits : {}, ',logits)
+            #jax.debug.print('logits : {}, ',logits)
             return logits, updates['batch_stats']
         self._forward_fn_train = jax.vmap(forward_fn_train)
 
@@ -130,6 +130,7 @@ class DenseNetPolicy(PolicyNetwork):
                 o,
                 train=False
             )
+            jax.debug.print('logits testing : {}',logits)
             return logits
         self._forward_fn = jax.vmap(forward_fn)
 
