@@ -124,9 +124,9 @@ class DenseNetPolicy(PolicyNetwork):
             return logits, updates['batch_stats']
         self._forward_fn_train = jax.vmap(forward_fn_train)
 
-        def forward_fn(p, o):
+        def forward_fn(p, o, batch_stats):
             logits = model.apply(
-                {'params': p, 'batch_stats': self.init_batch_stats},
+                {'params': p, 'batch_stats': batch_stats},
                 o,
                 train=False
             )
@@ -142,5 +142,5 @@ class DenseNetPolicy(PolicyNetwork):
             logits, batch_stats = self._forward_fn_train(params, t_states.obs, t_states.batch_stats)
             return logits, batch_stats, p_states
         else:
-            logits = self._forward_fn(params, t_states.obs)
+            logits = self._forward_fn(params, t_states.obs, t_states.batch_stats)
             return logits, p_states

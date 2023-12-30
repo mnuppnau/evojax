@@ -224,11 +224,24 @@ class SimManager(object):
             accumulated_reward = accumulated_reward + reward * valid_mask
             valid_mask = valid_mask * (1 - done.ravel())
             return ((task_state, policy_state, params, obs_params,
-                     accumulated_reward, valid_mask),
+                     accumulated_reward, valid_mask, batch_stats),
                     (org_obs, valid_mask))
 
 
-        def rollout(task_states, policy_states, params, obs_params,
+        def rollout_train(task_states, policy_states, params, obs_params,
+                    step_once_fn, max_steps):
+            accumulated_rewards = jnp.zeros(params.shape[0])
+            valid_masks = jnp.ones(params.shape[0])
+            #print('params inside rollout : ', params)
+            ((task_states, policy_states, params, obs_params,
+              accumulated_rewards, valid_masks, batch_stats),
+             (obs_set, obs_mask)) = jax.lax.scan(
+                step_once_fn,
+                (task_states, policy_states, params, obs_params,
+                 accumulated_rewards, valid_masks), (), max_steps)
+            return accumulated_rewards, obs_set, obs_mask, task_states, batch_stats
+
+        def rollout_val(task_states, policy_states, params, obs_params,
                     step_once_fn, max_steps):
             accumulated_rewards = jnp.zeros(params.shape[0])
             valid_masks = jnp.ones(params.shape[0])
@@ -240,6 +253,7 @@ class SimManager(object):
                 (task_states, policy_states, params, obs_params,
                  accumulated_rewards, valid_masks), (), max_steps)
             return accumulated_rewards, obs_set, obs_mask, task_states
+
 
         self._policy_reset_fn = jax.jit(policy_net.reset)
         self._policy_act_fn = jax.jit(policy_net.get_actions)
@@ -258,7 +272,7 @@ class SimManager(object):
         self._train_step_fn = train_vec_task.step
         self._train_max_steps = train_vec_task.max_steps
         self._train_rollout_fn = partial(
-            rollout,
+            rollout_train,
             step_once_fn=partial(step_once_train, task=train_vec_task),
             max_steps=train_vec_task.max_steps)
         if self._num_device > 1:
@@ -270,7 +284,7 @@ class SimManager(object):
         self._valid_step_fn = valid_vec_task.step
         self._valid_max_steps = valid_vec_task.max_steps
         self._valid_rollout_fn = partial(
-            rollout,
+            rollout_val,
             step_once_fn=partial(step_once, task=valid_vec_task),
             max_steps=valid_vec_task.max_steps)
         if self._num_device > 1:
@@ -279,7 +293,8 @@ class SimManager(object):
 
     def eval_params(self,
                     params: jnp.ndarray,
-                    test: bool) -> Tuple[jnp.ndarray, TaskState]:
+                    test: bool,
+                    batch_stats: jnp.ndarray = None) -> Tuple[jnp.ndarray, TaskState, jnp.ndarray]:
         """Evaluate population parameters or test the best parameter.
 
         Args:
@@ -289,13 +304,14 @@ class SimManager(object):
             An array of fitness scores.
         """
         if self._use_for_loop:
-            return self._for_loop_eval(params, test)
+            return self._for_loop_eval(params, test, batch_stats)
         else:
-            return self._scan_loop_eval(params, test)
+            return self._scan_loop_eval(params, test, batch_stats)
 
     def _for_loop_eval(self,
                        params: jnp.ndarray,
-                       test: bool) -> Tuple[jnp.ndarray, TaskState]:
+                       test: bool,
+                       batch_stats: jnp.ndarray = None) -> Tuple[jnp.ndarray, TaskState]:
         """Rollout using for loop (no multi-device or ma_training yet)."""
         policy_reset_func = self._policy_reset_fn
         policy_act_func = self._policy_act_fn
@@ -344,7 +360,8 @@ class SimManager(object):
 
     def _scan_loop_eval(self,
                         params: jnp.ndarray,
-                        test: bool) -> Tuple[jnp.ndarray, TaskState]:
+                        test: bool,
+                        batch_stats: jnp.ndarray = None) -> Tuple[jnp.ndarray, TaskState, jnp.ndarray]:
         """Rollout using jax.lax.scan."""
         #print('Inside scan loop : ')
         policy_reset_func = self._policy_reset_fn
@@ -381,8 +398,14 @@ class SimManager(object):
             self._key, test, self._pop_size, self._n_evaluations, n_repeats,
             self._ma_training)
 
-        # Reset the tasks and the policy.
-        task_state = task_reset_func(reset_keys)
+        if test:
+            #batch_stats = task_state.batch_stats
+            # Reset the tasks and the policy.
+            task_state = task_reset_func(reset_keys)
+            task_state = task_state.replace(batch_stats=batch_stats)
+        else:
+            task_state = task_reset_func(reset_keys)
+
         policy_state = policy_reset_func(task_state)
         if self._num_device > 1:
             params = split_params_for_pmap(params)
@@ -391,7 +414,12 @@ class SimManager(object):
         
         #print('obs_params : ', self.obs_params)
         # Do the rollouts.
-        scores, all_obs, masks, final_states = rollout_func(
+        if test:
+            scores, all_obs, masks, final_states = rollout_func(
+            task_state, policy_state, params, self.obs_params)
+            batch_stats_updated = None
+        else:
+            scores, all_obs, masks, final_states, batch_stats_updated = rollout_func(
             task_state, policy_state, params, self.obs_params)
         if self._num_device > 1:
             all_obs = reshape_data_from_pmap(all_obs)
@@ -420,4 +448,4 @@ class SimManager(object):
                 lambda x: x.reshape((scores.shape[0], n_repeats, *x.shape[1:])),
                 final_states)
 
-        return scores, self._bd_summarize_fn(final_states)
+        return scores, self._bd_summarize_fn(final_states), batch_stats_updated

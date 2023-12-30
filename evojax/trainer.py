@@ -151,7 +151,7 @@ class Trainer(object):
 
                 start_time = time.perf_counter()
                 #print('paramas : ', params.shape)
-                scores, bds = self.sim_mgr.eval_params(
+                scores, bds, batch_stats = self.sim_mgr.eval_params(
                     params=params, test=False)
                 self._logger.debug('sim_mgr.eval_params time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
@@ -175,7 +175,7 @@ class Trainer(object):
                 if i > 0 and i % self._test_interval == 0:
                     best_params = self.solver.best_params
                     test_scores, _ = self.sim_mgr.eval_params(
-                        params=best_params, test=True)
+                        params=best_params, test=True, batch_stats=batch_stats)
                     self._logger.info(
                         '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
                         'min={4:.4f}, std={5:.4f}'.format(
@@ -196,7 +196,7 @@ class Trainer(object):
             # Test and save the final model.
             best_params = self.solver.best_params
             test_scores, _ = self.sim_mgr.eval_params(
-                params=best_params, test=True)
+                params=best_params, test=True, batch_stats=batch_stats)
             self._logger.info(
                 '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
                 'min={4:.4f}, std={5:.4f}'.format(

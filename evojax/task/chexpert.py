@@ -299,8 +299,9 @@ class CheXpert(VectorizedTask):
         def reset_fn(key):
             if test:
                 batch_data, batch_labels = get_random_batches(self.valid_generator, self.num_batches)
-                jax.debug.print('batch_data reset : {}', batch_data)
-                jax.debug.print('batch_labels reset : {}', batch_labels)
+                #batch_data, batch_labels, idx = next(iter(self.valid_generator))
+                #jax.debug.print('batch_data reset : {}', batch_data)
+                #jax.debug.print('batch_labels reset : {}', batch_labels)
             else:
                 batch_data, batch_labels, idx = next(iter(self.train_generator))
 
