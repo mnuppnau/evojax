@@ -178,7 +178,7 @@ class SimManager(object):
             task_state = task_state.replace(obs=normed_obs)
             actions, policy_state = policy_net.get_actions(
                 task_state, params, policy_state)
-            jax.debug.print('actions : {}', actions)
+            #jax.debug.print('actions : {}', actions)
             if task.multi_agent_training:
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape(

@@ -504,3 +504,13 @@ MNIST: 2023-12-28 11:16:34,260 [INFO] ==============================
 MNIST: 2023-12-28 11:16:37,062 [INFO] ConvNetPolicy.num_params = 11274
 MNIST: 2023-12-28 11:16:38,095 [INFO] use_for_loop=False
 MNIST: 2023-12-28 11:16:38,121 [INFO] Start to train for 5000 iterations.
+MNIST: 2023-12-29 10:02:26,551 [INFO] EvoJAX MNIST Demo
+MNIST: 2023-12-29 10:02:26,551 [INFO] ==============================
+MNIST: 2023-12-29 10:02:31,324 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2023-12-29 10:02:32,348 [INFO] use_for_loop=False
+MNIST: 2023-12-29 10:02:32,374 [INFO] Start to train for 5000 iterations.
+MNIST: 2023-12-29 10:06:58,601 [INFO] EvoJAX MNIST Demo
+MNIST: 2023-12-29 10:06:58,601 [INFO] ==============================
+MNIST: 2023-12-29 10:07:02,271 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2023-12-29 10:07:03,305 [INFO] use_for_loop=False
+MNIST: 2023-12-29 10:07:03,331 [INFO] Start to train for 5000 iterations.
