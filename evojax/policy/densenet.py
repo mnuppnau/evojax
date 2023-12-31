@@ -106,7 +106,7 @@ class DenseNetPolicy(PolicyNetwork):
             self._logger = logger
 
         model = DenseNet(num_classes=num_classes)
-        params = model.init(jax.random.PRNGKey(0), jnp.zeros([4,320, 320,3]), train=False)  # Example input shape
+        params = model.init(jax.random.PRNGKey(0), jnp.ones([1,320, 320,3]), train=False)  # Example input shape
         self.init_params, self.init_batch_stats = params['params'], params['batch_stats']
         self.num_params, format_params_fn = get_params_format_fn(self.init_params)
         self._logger.info('DenseNetPolicy.num_params = {}'.format(self.num_params))

@@ -212,7 +212,7 @@ class SimManager(object):
             #normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             #task_state = task_state.replace(obs=normed_obs)
             #print('obs before get_actions : ', task_state.obs)
-            #jax.debug.print('obs before get_actions : {}', task_state.obs)
+            #jax.debug.print('labels before get_actions : {}', task_state.labels)
             actions, batch_stats_updated, policy_state = policy_net.get_actions(
                 task_state, params, policy_state, train=True)
             #print_batch_stats_shapes(batch_stats)
@@ -428,6 +428,7 @@ class SimManager(object):
             #print_batch_stats_shapes(task_state.batch_stats)
             #print('init batch stats ^^^^^^')
 
+        #jax.debug.print('labels in scan loop : {}',task_state.labels)
         batch_stats_testing = task_state.batch_stats
         policy_state = policy_reset_func(task_state)
         if self._num_device > 1:

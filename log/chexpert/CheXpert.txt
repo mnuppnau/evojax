@@ -4476,3 +4476,369 @@ CheXpert: 2023-12-31 00:15:41,134 [INFO] [TEST] Iter=5000, #tests=2, max=0.5968,
 CheXpert: 2023-12-31 00:15:41,138 [INFO] Training done, best_score=0.7129
 CheXpert: 2023-12-31 00:15:41,142 [INFO] Loaded model parameters from ./log/chexpert.
 CheXpert: 2023-12-31 00:15:41,142 [INFO] Start to test the parameters.
+CheXpert: 2023-12-31 09:28:04,261 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 09:28:04,261 [INFO] ==============================
+CheXpert: 2023-12-31 09:28:17,194 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 09:28:18,506 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 09:28:18,530 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 09:28:59,712 [INFO] Iter=10, size=64, max=-0.6718, avg=-0.6797, min=-0.6874, std=0.0035
+CheXpert: 2023-12-31 09:29:05,821 [INFO] Iter=20, size=64, max=-0.6542, avg=-0.6609, min=-0.6682, std=0.0033
+CheXpert: 2023-12-31 09:29:11,913 [INFO] Iter=30, size=64, max=-0.6319, avg=-0.6389, min=-0.6478, std=0.0030
+CheXpert: 2023-12-31 09:29:18,067 [INFO] Iter=40, size=64, max=-0.6099, avg=-0.6171, min=-0.6274, std=0.0031
+CheXpert: 2023-12-31 09:29:24,322 [INFO] Iter=50, size=64, max=-0.5884, avg=-0.5952, min=-0.6044, std=0.0032
+CheXpert: 2023-12-31 09:36:09,223 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 09:36:09,223 [INFO] ==============================
+CheXpert: 2023-12-31 09:36:23,751 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 09:36:25,025 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 09:36:25,049 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 09:37:06,776 [INFO] Iter=10, size=64, max=-0.6899, avg=-0.6907, min=-0.6916, std=0.0003
+CheXpert: 2023-12-31 09:37:12,916 [INFO] Iter=20, size=64, max=-0.6872, avg=-0.6879, min=-0.6886, std=0.0003
+CheXpert: 2023-12-31 09:37:19,114 [INFO] Iter=30, size=64, max=-0.6843, avg=-0.6854, min=-0.6864, std=0.0003
+CheXpert: 2023-12-31 09:37:25,291 [INFO] Iter=40, size=64, max=-0.6821, avg=-0.6830, min=-0.6840, std=0.0004
+CheXpert: 2023-12-31 09:37:31,500 [INFO] Iter=50, size=64, max=-0.6801, avg=-0.6809, min=-0.6817, std=0.0003
+CheXpert: 2023-12-31 09:37:37,652 [INFO] Iter=60, size=64, max=-0.6782, avg=-0.6789, min=-0.6797, std=0.0003
+CheXpert: 2023-12-31 09:38:22,124 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 09:38:22,124 [INFO] ==============================
+CheXpert: 2023-12-31 09:38:34,434 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 09:38:35,734 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 09:38:35,759 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 09:39:17,102 [INFO] Iter=10, size=64, max=-0.3303, avg=-0.3470, min=-0.3691, std=0.0079
+CheXpert: 2023-12-31 09:44:06,435 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 09:44:06,435 [INFO] ==============================
+CheXpert: 2023-12-31 09:44:21,069 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 09:44:22,391 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 09:44:22,415 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 09:45:03,796 [INFO] Iter=10, size=64, max=-0.3340, avg=-0.3544, min=-0.3812, std=0.0098
+CheXpert: 2023-12-31 09:45:10,099 [INFO] Iter=20, size=64, max=-0.2821, avg=-0.3306, min=-0.3725, std=0.0203
+CheXpert: 2023-12-31 09:45:16,309 [INFO] Iter=30, size=64, max=-0.1858, avg=-0.2210, min=-0.2656, std=0.0192
+CheXpert: 2023-12-31 09:45:22,569 [INFO] Iter=40, size=64, max=-0.1074, avg=-0.1423, min=-0.2095, std=0.0235
+CheXpert: 2023-12-31 09:45:28,733 [INFO] Iter=50, size=64, max=-0.0608, avg=-0.0826, min=-0.1355, std=0.0148
+CheXpert: 2023-12-31 09:45:34,895 [INFO] Iter=60, size=64, max=-0.0295, avg=-0.0445, min=-0.0635, std=0.0080
+CheXpert: 2023-12-31 09:45:41,098 [INFO] Iter=70, size=64, max=-0.0160, avg=-0.0302, min=-0.0633, std=0.0085
+CheXpert: 2023-12-31 09:45:47,274 [INFO] Iter=80, size=64, max=-0.0079, avg=-0.0167, min=-0.0491, std=0.0070
+CheXpert: 2023-12-31 09:45:53,506 [INFO] Iter=90, size=64, max=-0.0039, avg=-0.0097, min=-0.0523, std=0.0079
+CheXpert: 2023-12-31 09:45:59,757 [INFO] Iter=100, size=64, max=-0.0015, avg=-0.0056, min=-0.0541, std=0.0073
+CheXpert: 2023-12-31 09:46:19,810 [INFO] [TEST] Iter=100, #tests=2, max=0.4188, avg=0.4188, min=0.4188, std=0.0000
+CheXpert: 2023-12-31 09:46:26,087 [INFO] Iter=110, size=64, max=-0.0006, avg=-0.0025, min=-0.0274, std=0.0034
+CheXpert: 2023-12-31 09:46:32,320 [INFO] Iter=120, size=64, max=-0.0005, avg=-0.0021, min=-0.0196, std=0.0029
+CheXpert: 2023-12-31 09:46:38,542 [INFO] Iter=130, size=64, max=-0.0001, avg=-0.0006, min=-0.0072, std=0.0009
+CheXpert: 2023-12-31 09:46:44,758 [INFO] Iter=140, size=64, max=-0.0000, avg=-0.0002, min=-0.0013, std=0.0002
+CheXpert: 2023-12-31 09:46:50,994 [INFO] Iter=150, size=64, max=-0.0000, avg=-0.0001, min=-0.0014, std=0.0002
+CheXpert: 2023-12-31 09:46:57,241 [INFO] Iter=160, size=64, max=-0.0000, avg=-0.0002, min=-0.0058, std=0.0007
+CheXpert: 2023-12-31 09:47:03,496 [INFO] Iter=170, size=64, max=-0.0000, avg=-0.0000, min=-0.0009, std=0.0001
+CheXpert: 2023-12-31 09:47:09,775 [INFO] Iter=180, size=64, max=-0.0000, avg=-0.0002, min=-0.0077, std=0.0010
+CheXpert: 2023-12-31 09:47:15,999 [INFO] Iter=190, size=64, max=-0.0000, avg=-0.0000, min=-0.0002, std=0.0000
+CheXpert: 2023-12-31 09:47:22,189 [INFO] Iter=200, size=64, max=-0.0000, avg=-0.0000, min=-0.0002, std=0.0000
+CheXpert: 2023-12-31 09:47:22,332 [INFO] [TEST] Iter=200, #tests=2, max=0.5125, avg=0.5125, min=0.5125, std=0.0000
+CheXpert: 2023-12-31 09:47:28,588 [INFO] Iter=210, size=64, max=-0.0000, avg=-0.0031, min=-0.1990, std=0.0247
+CheXpert: 2023-12-31 09:47:34,809 [INFO] Iter=220, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:47:41,017 [INFO] Iter=230, size=64, max=-0.0000, avg=-0.0006, min=-0.0178, std=0.0031
+CheXpert: 2023-12-31 09:47:47,272 [INFO] Iter=240, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:47:53,486 [INFO] Iter=250, size=64, max=-0.0000, avg=-0.0000, min=-0.0001, std=0.0000
+CheXpert: 2023-12-31 09:47:59,763 [INFO] Iter=260, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:48:06,032 [INFO] Iter=270, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:48:12,343 [INFO] Iter=280, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:48:18,581 [INFO] Iter=290, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:48:24,850 [INFO] Iter=300, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:48:24,992 [INFO] [TEST] Iter=300, #tests=2, max=0.4906, avg=0.4906, min=0.4906, std=0.0000
+CheXpert: 2023-12-31 09:48:31,277 [INFO] Iter=310, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:48:37,555 [INFO] Iter=320, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:48:43,803 [INFO] Iter=330, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:48:50,059 [INFO] Iter=340, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:48:56,349 [INFO] Iter=350, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:49:02,770 [INFO] Iter=360, size=64, max=-0.0000, avg=-0.0000, min=-0.0008, std=0.0001
+CheXpert: 2023-12-31 09:49:09,073 [INFO] Iter=370, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:49:15,330 [INFO] Iter=380, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:49:21,570 [INFO] Iter=390, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:49:27,826 [INFO] Iter=400, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:49:27,968 [INFO] [TEST] Iter=400, #tests=2, max=0.5781, avg=0.5781, min=0.5781, std=0.0000
+CheXpert: 2023-12-31 09:49:34,353 [INFO] Iter=410, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:49:40,642 [INFO] Iter=420, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:49:46,944 [INFO] Iter=430, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:49:53,192 [INFO] Iter=440, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:49:59,458 [INFO] Iter=450, size=64, max=-0.0000, avg=-0.0000, min=-0.0000, std=0.0000
+CheXpert: 2023-12-31 09:51:50,383 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 09:51:50,383 [INFO] ==============================
+CheXpert: 2023-12-31 09:52:03,676 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 09:52:04,952 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 09:52:04,976 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 09:54:05,279 [INFO] Iter=10, size=64, max=-0.4432, avg=-0.4630, min=-0.4937, std=0.0104
+CheXpert: 2023-12-31 09:54:11,459 [INFO] Iter=20, size=64, max=-0.4165, avg=-0.4451, min=-0.4909, std=0.0159
+CheXpert: 2023-12-31 10:00:32,692 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:00:32,692 [INFO] ==============================
+CheXpert: 2023-12-31 10:00:47,580 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:00:48,824 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:00:48,848 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 10:02:07,545 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:02:07,545 [INFO] ==============================
+CheXpert: 2023-12-31 10:02:20,263 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:02:21,525 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:02:21,549 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 10:09:08,033 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:09:08,033 [INFO] ==============================
+CheXpert: 2023-12-31 10:09:21,322 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:09:22,570 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:09:22,594 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 10:09:45,706 [INFO] Iter=10, size=64, max=-0.1147, avg=-0.2048, min=-0.3195, std=0.0384
+CheXpert: 2023-12-31 10:09:48,414 [INFO] Iter=20, size=64, max=-1.8115, avg=-2.3203, min=-2.8972, std=0.1590
+CheXpert: 2023-12-31 10:09:51,155 [INFO] Iter=30, size=64, max=-1.7788, avg=-2.1130, min=-2.4348, std=0.1541
+CheXpert: 2023-12-31 10:09:53,790 [INFO] Iter=40, size=64, max=-0.4405, avg=-0.6922, min=-0.9879, std=0.1245
+CheXpert: 2023-12-31 10:09:56,417 [INFO] Iter=50, size=64, max=-0.4914, avg=-0.8580, min=-1.3729, std=0.1848
+CheXpert: 2023-12-31 10:09:59,072 [INFO] Iter=60, size=64, max=-0.2241, avg=-0.4838, min=-0.7898, std=0.1145
+CheXpert: 2023-12-31 10:10:01,731 [INFO] Iter=70, size=64, max=-0.0247, avg=-0.0908, min=-0.2429, std=0.0445
+CheXpert: 2023-12-31 10:10:04,452 [INFO] Iter=80, size=64, max=-1.5073, avg=-2.1068, min=-2.6810, std=0.2515
+CheXpert: 2023-12-31 10:10:07,203 [INFO] Iter=90, size=64, max=-0.0736, avg=-0.1973, min=-0.4826, std=0.0832
+CheXpert: 2023-12-31 10:10:09,865 [INFO] Iter=100, size=64, max=-0.1048, avg=-0.3237, min=-0.6579, std=0.1163
+CheXpert: 2023-12-31 10:15:44,361 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:15:44,361 [INFO] ==============================
+CheXpert: 2023-12-31 10:15:58,749 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:16:00,010 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:16:00,034 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 10:16:23,005 [INFO] Iter=10, size=64, max=-0.6880, avg=-0.6907, min=-0.6934, std=0.0011
+CheXpert: 2023-12-31 10:16:25,657 [INFO] Iter=20, size=64, max=-0.6871, avg=-0.6898, min=-0.6924, std=0.0012
+CheXpert: 2023-12-31 10:16:28,345 [INFO] Iter=30, size=64, max=-0.6855, avg=-0.6873, min=-0.6892, std=0.0008
+CheXpert: 2023-12-31 10:16:31,052 [INFO] Iter=40, size=64, max=-0.6864, avg=-0.6886, min=-0.6907, std=0.0010
+CheXpert: 2023-12-31 10:16:33,685 [INFO] Iter=50, size=64, max=-0.6853, avg=-0.6890, min=-0.6927, std=0.0011
+CheXpert: 2023-12-31 10:16:36,333 [INFO] Iter=60, size=64, max=-0.6650, avg=-0.6679, min=-0.6706, std=0.0012
+CheXpert: 2023-12-31 10:16:39,032 [INFO] Iter=70, size=64, max=-0.6621, avg=-0.6645, min=-0.6671, std=0.0010
+CheXpert: 2023-12-31 10:16:41,658 [INFO] Iter=80, size=64, max=-0.6719, avg=-0.6738, min=-0.6758, std=0.0011
+CheXpert: 2023-12-31 10:16:44,298 [INFO] Iter=90, size=64, max=-0.6548, avg=-0.6578, min=-0.6608, std=0.0012
+CheXpert: 2023-12-31 10:16:47,019 [INFO] Iter=100, size=64, max=-0.6878, avg=-0.6902, min=-0.6926, std=0.0012
+CheXpert: 2023-12-31 10:16:51,770 [INFO] [TEST] Iter=100, #tests=2, max=0.6000, avg=0.6000, min=0.6000, std=0.0000
+CheXpert: 2023-12-31 10:16:54,498 [INFO] Iter=110, size=64, max=-0.6501, avg=-0.6519, min=-0.6539, std=0.0010
+CheXpert: 2023-12-31 10:16:57,235 [INFO] Iter=120, size=64, max=-0.6497, avg=-0.6521, min=-0.6544, std=0.0011
+CheXpert: 2023-12-31 10:17:00,014 [INFO] Iter=130, size=64, max=-0.6452, avg=-0.6475, min=-0.6498, std=0.0009
+CheXpert: 2023-12-31 10:17:02,629 [INFO] Iter=140, size=64, max=-0.6612, avg=-0.6642, min=-0.6671, std=0.0012
+CheXpert: 2023-12-31 10:17:05,304 [INFO] Iter=150, size=64, max=-0.6425, avg=-0.6444, min=-0.6463, std=0.0008
+CheXpert: 2023-12-31 10:17:07,964 [INFO] Iter=160, size=64, max=-0.6874, avg=-0.6900, min=-0.6925, std=0.0012
+CheXpert: 2023-12-31 10:17:10,634 [INFO] Iter=170, size=64, max=-0.6363, avg=-0.6404, min=-0.6445, std=0.0012
+CheXpert: 2023-12-31 10:17:13,333 [INFO] Iter=180, size=64, max=-0.6371, avg=-0.6395, min=-0.6420, std=0.0011
+CheXpert: 2023-12-31 10:17:16,002 [INFO] Iter=190, size=64, max=-0.6547, avg=-0.6580, min=-0.6613, std=0.0012
+CheXpert: 2023-12-31 10:17:18,662 [INFO] Iter=200, size=64, max=-0.6860, avg=-0.6888, min=-0.6917, std=0.0012
+CheXpert: 2023-12-31 10:17:18,687 [INFO] [TEST] Iter=200, #tests=2, max=0.6000, avg=0.6000, min=0.6000, std=0.0000
+CheXpert: 2023-12-31 10:17:21,432 [INFO] Iter=210, size=64, max=-0.6524, avg=-0.6545, min=-0.6568, std=0.0011
+CheXpert: 2023-12-31 10:17:24,113 [INFO] Iter=220, size=64, max=-0.6503, avg=-0.6530, min=-0.6556, std=0.0012
+CheXpert: 2023-12-31 10:17:26,774 [INFO] Iter=230, size=64, max=-0.6263, avg=-0.6299, min=-0.6333, std=0.0013
+CheXpert: 2023-12-31 10:17:29,429 [INFO] Iter=240, size=64, max=-0.6248, avg=-0.6272, min=-0.6295, std=0.0010
+CheXpert: 2023-12-31 10:17:32,078 [INFO] Iter=250, size=64, max=-0.6226, avg=-0.6253, min=-0.6280, std=0.0011
+CheXpert: 2023-12-31 10:17:34,765 [INFO] Iter=260, size=64, max=-0.6217, avg=-0.6242, min=-0.6268, std=0.0010
+CheXpert: 2023-12-31 10:17:37,469 [INFO] Iter=270, size=64, max=-0.6190, avg=-0.6220, min=-0.6251, std=0.0011
+CheXpert: 2023-12-31 10:17:40,176 [INFO] Iter=280, size=64, max=-0.6869, avg=-0.6897, min=-0.6926, std=0.0011
+CheXpert: 2023-12-31 10:17:42,866 [INFO] Iter=290, size=64, max=-0.6438, avg=-0.6464, min=-0.6489, std=0.0011
+CheXpert: 2023-12-31 10:17:45,569 [INFO] Iter=300, size=64, max=-0.6162, avg=-0.6189, min=-0.6216, std=0.0012
+CheXpert: 2023-12-31 10:17:45,594 [INFO] [TEST] Iter=300, #tests=2, max=0.6000, avg=0.5000, min=0.4000, std=0.1000
+CheXpert: 2023-12-31 10:17:48,277 [INFO] Iter=310, size=64, max=-0.6136, avg=-0.6162, min=-0.6188, std=0.0012
+CheXpert: 2023-12-31 10:17:50,949 [INFO] Iter=320, size=64, max=-0.6123, avg=-0.6146, min=-0.6170, std=0.0011
+CheXpert: 2023-12-31 10:17:53,578 [INFO] Iter=330, size=64, max=-0.6846, avg=-0.6879, min=-0.6914, std=0.0012
+CheXpert: 2023-12-31 10:17:56,319 [INFO] Iter=340, size=64, max=-0.6097, avg=-0.6123, min=-0.6151, std=0.0012
+CheXpert: 2023-12-31 10:17:59,087 [INFO] Iter=350, size=64, max=-0.6844, avg=-0.6873, min=-0.6903, std=0.0010
+CheXpert: 2023-12-31 10:26:32,859 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:26:32,859 [INFO] ==============================
+CheXpert: 2023-12-31 10:26:44,700 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:26:45,996 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:26:46,020 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 10:30:26,775 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:30:26,775 [INFO] ==============================
+CheXpert: 2023-12-31 10:30:39,843 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:30:41,093 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:30:41,117 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 10:35:08,329 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:35:08,329 [INFO] ==============================
+CheXpert: 2023-12-31 10:35:22,900 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:35:24,220 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:35:24,244 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 10:36:12,241 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:36:12,241 [INFO] ==============================
+CheXpert: 2023-12-31 10:36:27,333 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:36:28,617 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:36:28,641 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 10:36:51,709 [INFO] Iter=10, size=64, max=-0.6847, avg=-0.6876, min=-0.6907, std=0.0012
+CheXpert: 2023-12-31 10:36:54,466 [INFO] Iter=20, size=64, max=-0.6947, avg=-0.6979, min=-0.7011, std=0.0012
+CheXpert: 2023-12-31 10:36:57,097 [INFO] Iter=30, size=64, max=-0.6963, avg=-0.7003, min=-0.7042, std=0.0013
+CheXpert: 2023-12-31 10:46:52,750 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:46:52,750 [INFO] ==============================
+CheXpert: 2023-12-31 10:47:07,018 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:47:08,258 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:47:08,282 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 10:47:31,227 [INFO] Iter=10, size=64, max=-0.6868, avg=-0.6892, min=-0.6916, std=0.0012
+CheXpert: 2023-12-31 10:47:33,862 [INFO] Iter=20, size=64, max=-0.6844, avg=-0.6868, min=-0.6892, std=0.0012
+CheXpert: 2023-12-31 10:51:53,748 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:51:53,748 [INFO] ==============================
+CheXpert: 2023-12-31 10:52:08,146 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:52:09,398 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:52:09,422 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 10:56:41,403 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:56:41,403 [INFO] ==============================
+CheXpert: 2023-12-31 10:56:56,006 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:56:57,327 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:56:57,352 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 10:57:19,257 [INFO] Iter=10, size=64, max=-0.6866, avg=-0.6894, min=-0.6921, std=0.0013
+CheXpert: 2023-12-31 10:59:45,998 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 10:59:45,998 [INFO] ==============================
+CheXpert: 2023-12-31 10:59:58,387 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 10:59:59,623 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 10:59:59,647 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 11:12:22,822 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 11:12:22,822 [INFO] ==============================
+CheXpert: 2023-12-31 11:12:36,888 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 11:12:38,152 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 11:12:38,177 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 11:13:49,696 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 11:13:49,696 [INFO] ==============================
+CheXpert: 2023-12-31 11:14:02,584 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 11:14:03,852 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 11:14:03,876 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 11:14:23,143 [INFO] Iter=10, size=64, max=-0.6861, avg=-0.6889, min=-0.6915, std=0.0011
+CheXpert: 2023-12-31 11:15:01,068 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 11:15:01,068 [INFO] ==============================
+CheXpert: 2023-12-31 11:15:13,732 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 11:15:14,947 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 11:15:14,971 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 11:24:35,400 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 11:24:35,400 [INFO] ==============================
+CheXpert: 2023-12-31 11:24:48,299 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 11:24:49,530 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 11:24:49,555 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 11:26:07,275 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 11:26:07,275 [INFO] ==============================
+CheXpert: 2023-12-31 11:26:21,245 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 11:26:22,485 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 11:26:22,509 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 11:27:11,270 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 11:27:11,270 [INFO] ==============================
+CheXpert: 2023-12-31 11:27:25,122 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 11:27:26,332 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 11:27:26,356 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 11:38:01,094 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 11:38:01,094 [INFO] ==============================
+CheXpert: 2023-12-31 11:38:13,759 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 11:51:54,575 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 11:51:54,575 [INFO] ==============================
+CheXpert: 2023-12-31 11:52:08,423 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 11:52:10,372 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 11:52:10,398 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 11:52:47,749 [INFO] Iter=10, size=64, max=-0.6850, avg=-0.6874, min=-0.6899, std=0.0009
+CheXpert: 2023-12-31 11:52:53,800 [INFO] Iter=20, size=64, max=-0.6786, avg=-0.6806, min=-0.6826, std=0.0010
+CheXpert: 2023-12-31 11:53:00,015 [INFO] Iter=30, size=64, max=-0.6722, avg=-0.6743, min=-0.6764, std=0.0009
+CheXpert: 2023-12-31 11:53:06,269 [INFO] Iter=40, size=64, max=-0.6665, avg=-0.6688, min=-0.6711, std=0.0009
+CheXpert: 2023-12-31 11:53:12,558 [INFO] Iter=50, size=64, max=-0.6616, avg=-0.6636, min=-0.6656, std=0.0010
+CheXpert: 2023-12-31 11:53:18,936 [INFO] Iter=60, size=64, max=-0.6573, avg=-0.6591, min=-0.6607, std=0.0009
+CheXpert: 2023-12-31 11:54:33,710 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 11:54:33,710 [INFO] ==============================
+CheXpert: 2023-12-31 11:54:47,697 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 11:54:49,668 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 11:54:49,694 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 11:55:06,271 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 11:55:06,271 [INFO] ==============================
+CheXpert: 2023-12-31 11:55:18,307 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 11:55:20,312 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 11:55:20,338 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 12:03:17,839 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 12:03:17,839 [INFO] ==============================
+CheXpert: 2023-12-31 12:03:31,964 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 12:03:33,964 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 12:03:33,988 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 13:01:04,413 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 13:01:04,413 [INFO] ==============================
+CheXpert: 2023-12-31 13:01:18,257 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 13:01:20,285 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 13:01:20,310 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 13:18:41,708 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 13:18:41,708 [INFO] ==============================
+CheXpert: 2023-12-31 13:18:55,862 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 13:20:00,987 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 13:20:00,987 [INFO] ==============================
+CheXpert: 2023-12-31 13:20:15,509 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 13:20:17,525 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 13:20:17,550 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 13:52:12,093 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 13:52:12,093 [INFO] ==============================
+CheXpert: 2023-12-31 13:52:25,767 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 13:52:27,754 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 13:52:27,779 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 13:57:15,044 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 13:57:15,044 [INFO] ==============================
+CheXpert: 2023-12-31 13:57:28,976 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 13:57:30,987 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 13:57:31,012 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 13:59:21,786 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 13:59:21,786 [INFO] ==============================
+CheXpert: 2023-12-31 13:59:34,685 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 13:59:36,694 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 13:59:36,720 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 14:00:05,693 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:00:05,693 [INFO] ==============================
+CheXpert: 2023-12-31 14:00:20,829 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:00:22,832 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 14:00:22,857 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 14:14:44,052 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:14:44,052 [INFO] ==============================
+CheXpert: 2023-12-31 14:14:56,440 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:15:37,987 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:15:37,987 [INFO] ==============================
+CheXpert: 2023-12-31 14:15:52,418 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:15:54,406 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 14:15:54,431 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 14:17:07,580 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:17:07,580 [INFO] ==============================
+CheXpert: 2023-12-31 14:17:21,959 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:17:23,947 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 14:17:23,971 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 14:18:07,355 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:18:07,355 [INFO] ==============================
+CheXpert: 2023-12-31 14:18:19,952 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:18:21,961 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 14:18:21,985 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 14:25:43,838 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:25:43,838 [INFO] ==============================
+CheXpert: 2023-12-31 14:25:56,847 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:26:27,863 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:26:27,864 [INFO] ==============================
+CheXpert: 2023-12-31 14:26:40,892 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:27:09,716 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 14:27:09,740 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 14:30:11,550 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:30:11,550 [INFO] ==============================
+CheXpert: 2023-12-31 14:30:23,867 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:30:39,549 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 14:30:39,573 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 14:35:49,881 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:35:49,881 [INFO] ==============================
+CheXpert: 2023-12-31 14:36:03,701 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:36:10,296 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 14:36:10,322 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 14:39:09,848 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:39:09,848 [INFO] ==============================
+CheXpert: 2023-12-31 14:39:24,762 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:39:31,296 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 14:39:31,320 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 14:41:07,420 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:41:07,420 [INFO] ==============================
+CheXpert: 2023-12-31 14:41:20,215 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:41:25,869 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 14:41:25,893 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 14:42:12,524 [INFO] Iter=10, size=64, max=-0.6866, avg=-0.6883, min=-0.6899, std=0.0008
+CheXpert: 2023-12-31 14:42:18,776 [INFO] Iter=20, size=64, max=-0.6839, avg=-0.6853, min=-0.6870, std=0.0007
+CheXpert: 2023-12-31 14:42:24,938 [INFO] Iter=30, size=64, max=-0.6836, avg=-0.6855, min=-0.6873, std=0.0008
+CheXpert: 2023-12-31 14:42:31,057 [INFO] Iter=40, size=64, max=-0.6759, avg=-0.6783, min=-0.6806, std=0.0009
+CheXpert: 2023-12-31 14:42:37,313 [INFO] Iter=50, size=64, max=-0.6704, avg=-0.6722, min=-0.6740, std=0.0008
+CheXpert: 2023-12-31 14:42:43,499 [INFO] Iter=60, size=64, max=-0.6722, avg=-0.6743, min=-0.6765, std=0.0009
+CheXpert: 2023-12-31 14:42:49,596 [INFO] Iter=70, size=64, max=-0.6668, avg=-0.6690, min=-0.6712, std=0.0009
+CheXpert: 2023-12-31 14:42:55,750 [INFO] Iter=80, size=64, max=-0.6704, avg=-0.6719, min=-0.6733, std=0.0006
+CheXpert: 2023-12-31 14:43:01,938 [INFO] Iter=90, size=64, max=-0.6595, avg=-0.6614, min=-0.6633, std=0.0008
+CheXpert: 2023-12-31 14:43:08,070 [INFO] Iter=100, size=64, max=-0.6704, avg=-0.6717, min=-0.6729, std=0.0005
+CheXpert: 2023-12-31 14:47:22,914 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2023-12-31 14:47:22,914 [INFO] ==============================
+CheXpert: 2023-12-31 14:47:36,729 [INFO] DenseNetPolicy.num_params = 188385
+CheXpert: 2023-12-31 14:47:42,415 [INFO] use_for_loop=False
+CheXpert: 2023-12-31 14:47:42,440 [INFO] Start to train for 5000 iterations.
+CheXpert: 2023-12-31 14:48:30,414 [INFO] Iter=10, size=64, max=-0.6906, avg=-0.6922, min=-0.6937, std=0.0006
+CheXpert: 2023-12-31 14:48:36,550 [INFO] Iter=20, size=64, max=-0.6882, avg=-0.6895, min=-0.6907, std=0.0006
+CheXpert: 2023-12-31 14:48:42,726 [INFO] Iter=30, size=64, max=-0.6796, avg=-0.6823, min=-0.6851, std=0.0009
+CheXpert: 2023-12-31 14:48:48,894 [INFO] Iter=40, size=64, max=-0.6880, avg=-0.6891, min=-0.6904, std=0.0006
+CheXpert: 2023-12-31 14:48:55,047 [INFO] Iter=50, size=64, max=-0.6683, avg=-0.6707, min=-0.6730, std=0.0010
+CheXpert: 2023-12-31 14:49:01,255 [INFO] Iter=60, size=64, max=-0.6720, avg=-0.6739, min=-0.6759, std=0.0009
+CheXpert: 2023-12-31 14:49:07,498 [INFO] Iter=70, size=64, max=-0.6841, avg=-0.6855, min=-0.6869, std=0.0006
+CheXpert: 2023-12-31 14:49:13,760 [INFO] Iter=80, size=64, max=-0.6903, avg=-0.6908, min=-0.6913, std=0.0002
+CheXpert: 2023-12-31 14:49:20,224 [INFO] Iter=90, size=64, max=-0.6632, avg=-0.6652, min=-0.6671, std=0.0008
+CheXpert: 2023-12-31 14:49:26,486 [INFO] Iter=100, size=64, max=-0.6717, avg=-0.6732, min=-0.6746, std=0.0006
