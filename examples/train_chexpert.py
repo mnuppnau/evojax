@@ -21,10 +21,10 @@ def parse_args():
     parser.add_argument('--log-interval', type=int, default=10, help='Logging interval.')
     parser.add_argument('--restore', type=str, help='Path to a single model checkpoint to restore or folder of checkpoints to ensemble.')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for training.')
-    parser.add_argument('--center-lr', type=float, default=0.001, help='Center learning rate.')  # Adjust as needed
+    parser.add_argument('--center-lr', type=float, default=0.05, help='Center learning rate.')  # Adjust as needed
     parser.add_argument('--mini_data', type=int, help='Truncate dataset to this number of examples.')
-    parser.add_argument('--std-lr', type=float, default=0.0025, help='Std learning rate.')  # Adjust as needed
-    parser.add_argument('--init-std', type=float, default=0.005, help='Initial std.')  # Adjust as needed
+    parser.add_argument('--std-lr', type=float, default=0.025, help='Std learning rate.')  # Adjust as needed
+    parser.add_argument('--init-std', type=float, default=0.08, help='Initial std.')  # Adjust as needed
     parser.add_argument('--cuda', type=int, help='Which cuda device to use.')
     parser.add_argument('--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument('--debug', action='store_true', help='Debug mode.')

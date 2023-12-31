@@ -284,7 +284,7 @@ class CheXpert(VectorizedTask):
         args.device = torch.device('cuda:{}'.format(args.cuda) if args.cuda is not None and torch.cuda.is_available() else 'cpu')
         
         self.train_generator = fetch_dataloader(args, mode='train')
-        num_records_to_load = 2000
+        num_records_to_load = 1400
         train_images, train_labels, train_idxs = load_subset_of_data(self.train_generator, num_records_to_load)
 
         print('train gen size : ', train_images.shape)
