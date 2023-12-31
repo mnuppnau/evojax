@@ -268,7 +268,7 @@ class CheXpert(VectorizedTask):
 
     def __init__(self, args, batch_stats: dict, test: bool = False):
         self.max_steps = 1
-        self.num_batches = 10
+        self.num_batches = 16
         self.init_batch_stats = batch_stats
         #self.batch_size = args.batch_size
         # Define observation and action shapes appropriately
