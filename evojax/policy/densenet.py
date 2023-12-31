@@ -18,7 +18,7 @@ class DenseLayer(nn.Module):
     act_fn : callable  # Activation function
 
     @nn.compact
-    def __call__(self, x, train=True):
+    def __call__(self, x, train=False):
         z = nn.BatchNorm()(x, use_running_average=not train)
         z = self.act_fn(z)
         z = nn.Conv(self.bn_size * self.growth_rate,
@@ -41,7 +41,7 @@ class DenseBlock(nn.Module):
     act_fn : callable  # Activation function to use in the dense layers
 
     @nn.compact
-    def __call__(self, x, train=True):
+    def __call__(self, x, train=False):
         for _ in range(self.num_layers):
             x = DenseLayer(bn_size=self.bn_size,
                            growth_rate=self.growth_rate,
@@ -53,7 +53,7 @@ class TransitionLayer(nn.Module):
     act_fn : callable  # Activation function
 
     @nn.compact
-    def __call__(self, x, train=True):
+    def __call__(self, x, train=False):
         x = nn.BatchNorm()(x, use_running_average=not train)
         x = self.act_fn(x)
         x = nn.Conv(self.c_out,
@@ -71,7 +71,7 @@ class DenseNet(nn.Module):
     growth_rate : int = 16
 
     @nn.compact
-    def __call__(self, x, train=True):
+    def __call__(self, x, train=False):
         c_hidden = self.growth_rate * self.bn_size  # The start number of hidden channels
 
         x = nn.Conv(c_hidden,
@@ -106,7 +106,7 @@ class DenseNetPolicy(PolicyNetwork):
             self._logger = logger
 
         model = DenseNet(num_classes=num_classes)
-        params = model.init(jax.random.PRNGKey(0), jnp.zeros([1,320, 320,3]), train=False)  # Example input shape
+        params = model.init(jax.random.PRNGKey(0), jnp.zeros([4,320, 320,3]), train=False)  # Example input shape
         self.init_params, self.init_batch_stats = params['params'], params['batch_stats']
         self.num_params, format_params_fn = get_params_format_fn(self.init_params)
         self._logger.info('DenseNetPolicy.num_params = {}'.format(self.num_params))

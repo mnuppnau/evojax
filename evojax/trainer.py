@@ -112,6 +112,61 @@ class Trainer(object):
 
     def run(self, demo_mode: bool = False) -> float:
         """Start the training / test process."""
+        def print_batch_stats_shapes(batch_stats, parent_key=''):
+            for key, value in batch_stats.items():
+                full_key = f"{parent_key}.{key}" if parent_key else key
+                if isinstance(value, dict):
+                    print_batch_stats_shapes(value, full_key)
+                else:
+                    print(f"Key: {full_key}, Shape: {value.shape}")
+
+        def reshape_batch_stats(batch_stats):
+            def reshape_stats_recursive(stats):
+                if isinstance(stats, dict):
+                    return {k: reshape_stats_recursive(v) for k, v in stats.items()}
+                elif isinstance(stats, jnp.ndarray):
+                    # Assuming the array has at least 3 dimensions for the reshape [m, n, x] to [m*n, x]
+                    if stats.ndim >= 3:
+                        m, n = stats.shape[:2]
+                        return stats.reshape(m * n, *stats.shape[2:])
+                    else:
+                        return stats
+                else:
+                    raise ValueError(f"Unsupported type: {type(stats)}")
+            return reshape_stats_recursive(batch_stats)
+
+        def average_batch_stats_half(batch_stats):
+            def average_stats_recursive(stats):
+                if isinstance(stats, dict):
+                    return {k: average_stats_recursive(v) for k, v in stats.items()}
+                elif isinstance(stats, jnp.ndarray):
+                    # Check if the array has the expected number of dimensions
+                    if stats.ndim >= 2:
+                        # Split the first dimension (population) into two halves and average each
+                        first_half_mean = stats[:stats.shape[0] // 2].mean(axis=0, keepdims=True)
+                        second_half_mean = stats[stats.shape[0] // 2:].mean(axis=0, keepdims=True)
+                        return jnp.concatenate([first_half_mean, second_half_mean], axis=0)
+                    else:
+                        return stats
+                else:
+                    raise ValueError(f"Unsupported type: {type(stats)}")
+            return average_stats_recursive(batch_stats)
+
+
+        def average_batch_stats(batch_stats):
+            def average_stats_recursive(stats):
+                if isinstance(stats, dict):
+                    return {k: average_stats_recursive(v) for k, v in stats.items()}
+                elif isinstance(stats, jnp.ndarray):
+                    # Average across the first dimension
+                    # This assumes the array has at least 2 dimensions [64, X]
+                    if stats.ndim >= 2:
+                        return stats.mean(axis=0, keepdims=True)
+                    else:
+                        return stats
+                else:
+                    raise ValueError(f"Unsupported type: {type(stats)}")
+            return average_stats_recursive(batch_stats)
 
         if self.model_dir is not None:
             params, obs_params = load_model(model_dir=self.model_dir)
@@ -153,6 +208,14 @@ class Trainer(object):
                 #print('paramas : ', params.shape)
                 scores, bds, batch_stats = self.sim_mgr.eval_params(
                     params=params, test=False)
+                
+                batch_stats = average_batch_stats_half(batch_stats)
+                #print_batch_stats_shapes(batch_stats)                
+                #print('batch_stats shapes in trainer ^^^^^ : ')
+                #for key, value in batch_stats.items():
+                #    shape_str = str(value.shape) if hasattr(value, 'shape') else 'Not an array'
+                #    print(f"Key: {key}, Shape: {shape_str}")
+                #print('batch stats dtype : ',batch_stats.dtype)
                 self._logger.debug('sim_mgr.eval_params time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
@@ -163,6 +226,8 @@ class Trainer(object):
                 self._logger.debug('solver.tell time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
+                #best_params = jnp.tile(self.solver.best_params,(32,1))
+                
                 if i > 0 and i % self._log_interval == 0:
                     scores = np.array(scores)
                     self._logger.info(
@@ -174,7 +239,7 @@ class Trainer(object):
 
                 if i > 0 and i % self._test_interval == 0:
                     best_params = self.solver.best_params
-                    test_scores, _ = self.sim_mgr.eval_params(
+                    test_scores, _, _ = self.sim_mgr.eval_params(
                         params=best_params, test=True, batch_stats=batch_stats)
                     self._logger.info(
                         '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
@@ -195,7 +260,7 @@ class Trainer(object):
 
             # Test and save the final model.
             best_params = self.solver.best_params
-            test_scores, _ = self.sim_mgr.eval_params(
+            test_scores, _, _ = self.sim_mgr.eval_params(
                 params=best_params, test=True, batch_stats=batch_stats)
             self._logger.info(
                 '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
