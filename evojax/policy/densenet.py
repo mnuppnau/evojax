@@ -66,7 +66,7 @@ class TransitionLayer(nn.Module):
 class DenseNet(nn.Module):
     num_classes : int
     act_fn : callable = nn.relu
-    num_layers : tuple = (4, 6, 6, 4)
+    num_layers : tuple = (6, 8, 10, 6)
     bn_size : int = 2
     growth_rate : int = 16
 

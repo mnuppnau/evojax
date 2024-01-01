@@ -336,8 +336,8 @@ class CheXpert(VectorizedTask):
                 #jax.debug.print('labels : {}', state.labels)
                 reward = accuracy(action, state.labels)
             else:
-                #jax.debug.print('action : {}', action)
-                #jax.debug.print('labels : {}', state.labels)
+                jax.debug.print('action : {}', action)
+                jax.debug.print('labels : {}', state.labels)
                 reward = -loss(action, state.labels)
             return state, reward, jnp.ones(())
 
