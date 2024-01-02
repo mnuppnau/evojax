@@ -198,24 +198,16 @@ class Trainer(object):
             best_score = -float('Inf')
 
             for i in range(self._max_iter):
-                print('i : ',i)
                 start_time = time.perf_counter()
                 params = self.solver.ask()
                 self._logger.debug('solver.ask time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
                 start_time = time.perf_counter()
-                #print('paramas : ', params.shape)
                 scores, bds, batch_stats = self.sim_mgr.eval_params(
                     params=params, test=False)
                 
                 batch_stats = average_batch_stats_half(batch_stats)
-                #print_batch_stats_shapes(batch_stats)                
-                #print('batch_stats shapes in trainer ^^^^^ : ')
-                #for key, value in batch_stats.items():
-                #    shape_str = str(value.shape) if hasattr(value, 'shape') else 'Not an array'
-                #    print(f"Key: {key}, Shape: {shape_str}")
-                #print('batch stats dtype : ',batch_stats.dtype)
                 self._logger.debug('sim_mgr.eval_params time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
@@ -226,8 +218,6 @@ class Trainer(object):
                 self._logger.debug('solver.tell time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
-                #best_params = jnp.tile(self.solver.best_params,(32,1))
-                
                 if i > 0 and i % self._log_interval == 0:
                     scores = np.array(scores)
                     self._logger.info(

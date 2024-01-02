@@ -287,11 +287,6 @@ class CheXpert(VectorizedTask):
         num_records_to_load = 1400
         train_images, train_labels, train_idxs = load_subset_of_data(self.train_generator, num_records_to_load)
 
-        print('train gen size : ', train_images.shape)
-        #all_train_data, all_train_labels = accumulate_data(self.train_generator)
-        #key = random.PRNGKey(0)  # Initialize a random key
-        #random_train_generator = random_skipping_generator(self.train_generator, key)        
-        
         for images, labels, idx in self.train_generator:
             # Print the shape of images and labels
             print("Shape of train images:", images.shape)
@@ -301,7 +296,6 @@ class CheXpert(VectorizedTask):
 
         self.valid_generator = fetch_dataloader(args, mode='valid')
         all_valid_data, all_valid_labels = accumulate_data(self.valid_generator,self.num_batches)
-        print('valid gen size : ', all_valid_labels.shape)
         
         for images, labels, idx in self.valid_generator:
             # Print the shape of images and labels
@@ -313,32 +307,18 @@ class CheXpert(VectorizedTask):
         def reset_fn(key):
             if test:
                 batch_data, batch_labels = all_valid_data, all_valid_labels
-                #batch_data, batch_labels = sample_batch_generator(key, self.valid_generator, self.num_batches, advance_generator)
-                #batch_data, batch_labels, idx = next(iter(self.valid_generator))
-                #jax.debug.print('batch_data reset : {}', batch_data)
-                #jax.debug.print('batch_labels reset : {}', batch_labels)
             else:
-                #batch_data, batch_labels = sample_batch(key, all_train_data, all_train_labels, batch_size)
-                #batch_data, batch_labels = sample_batch_generator(key, self.train_generator, self.num_batches, advance_generator)
-                #(batch_data, batch_labels, _), key = next(random_train_generator)
                 batch_data, batch_labels = sample_batch(key,train_images,train_labels,self.batch_size)
                
-                #jax.debug.print('batch_data reset : {}', batch_data)
-                #jax.debug.print('batch_labels reset : {}', batch_labels)
-
             return CheXpertState(obs=batch_data, labels=batch_labels, batch_stats=self.init_batch_stats)
        
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
         def step_fn(state, action):
             if test:
-                #jax.debug.print('action : {}', action)
-                #jax.debug.print('labels : {}', state.labels)
                 reward = accuracy(action, state.labels)
             else:
-                jax.debug.print('action : {}', action)
-                jax.debug.print('labels : {}', state.labels)
-                reward = -loss(action, state.labels)
+                reward = loss(action, state.labels)
             return state, reward, jnp.ones(())
 
         self._step_fn = jax.jit(jax.vmap(step_fn))

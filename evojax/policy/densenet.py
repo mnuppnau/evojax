@@ -111,8 +111,6 @@ class DenseNetPolicy(PolicyNetwork):
         self.num_params, format_params_fn = get_params_format_fn(self.init_params)
         self._logger.info('DenseNetPolicy.num_params = {}'.format(self.num_params))
         self._format_params_fn = jax.vmap(format_params_fn)
-        #self._forward_fn, updates = model.apply({'params': params, 'batch_stats': self.init_batch_stats},jnp.zeros([32,3,320,320]),train=True, mutable=['batch_stats'])
-        #self._forward_fn = jax.vmap(model.apply)
 
         def forward_fn_train(p, o, batch_stats):
             logits, updates = model.apply(
@@ -120,7 +118,6 @@ class DenseNetPolicy(PolicyNetwork):
                 o,
                 train=True, mutable=['batch_stats']
             )
-            #jax.debug.print('logits : {}, ',logits)
             return logits, updates['batch_stats']
         self._forward_fn_train = jax.vmap(forward_fn_train)
 
@@ -130,14 +127,11 @@ class DenseNetPolicy(PolicyNetwork):
                 o,
                 train=False
             )
-            jax.debug.print('logits testing : {}',logits)
             return logits
         self._forward_fn = jax.vmap(forward_fn)
 
     def get_actions(self, t_states: TaskState, params: jnp.ndarray, p_states: PolicyState, train: bool) -> Tuple[jnp.ndarray, PolicyState]:
-        print('params before: ',params)
         params = self._format_params_fn(params)
-        print('params after: ',params)
         if train:
             logits, batch_stats = self._forward_fn_train(params, t_states.obs, t_states.batch_stats)
             return logits, batch_stats, p_states

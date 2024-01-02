@@ -90,18 +90,9 @@ def update_score_and_mask(score, reward, mask, done):
     new_mask = mask * (1 - done.ravel())
     return new_score, new_mask
 
-def print_batch_stats_shapes(batch_stats, parent_key=''):
-    for key, value in batch_stats.items():
-        full_key = f"{parent_key}.{key}" if parent_key else key
-        if isinstance(value, dict):
-            print_batch_stats_shapes(value, full_key)
-        else:
-            print(f"Key: {full_key}, Shape: {value.shape}")
-
 @partial(jax.jit, static_argnums=(1,))
 def report_score(scores, n_repeats):
     return jnp.mean(scores.ravel().reshape((-1, n_repeats)), axis=-1)
-
 
 @jax.jit
 def all_done(masks):
@@ -204,23 +195,16 @@ class SimManager(object):
             (task_state, policy_state, params, obs_params,
              accumulated_reward, valid_mask, batch_stats) = carry
             if task.multi_agent_training:
-                print('Inside multi_agent_training 1 : ')
                 num_tasks, num_agents = task_state.obs.shape[:2]
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape((-1, *task_state.obs.shape[2:])))
             org_obs = task_state.obs
             #normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             #task_state = task_state.replace(obs=normed_obs)
-            #print('obs before get_actions : ', task_state.obs)
-            #jax.debug.print('labels before get_actions : {}', task_state.labels)
             actions, batch_stats_updated, policy_state = policy_net.get_actions(
                 task_state, params, policy_state, train=True)
-            #print_batch_stats_shapes(batch_stats)
-            #print('batch stats in step one fn ^^^^^^^^ ')
             task_state = task_state.replace(batch_stats=batch_stats_updated)
-            #jax.debug.print('actions : {}', actions)
             if task.multi_agent_training:
-                print('Inside multi_agent_training 2 : ')
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape(
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
@@ -241,22 +225,18 @@ class SimManager(object):
                     step_once_fn, max_steps):
             accumulated_rewards = jnp.zeros(params.shape[0])
             valid_masks = jnp.ones(params.shape[0])
-            #print('params inside rollout : ', params)
             ((task_states, policy_states, params, obs_params,
               accumulated_rewards, valid_masks, batch_stats),
              (obs_set, obs_mask)) = jax.lax.scan(
                 step_once_fn,
                 (task_states, policy_states, params, obs_params,
                  accumulated_rewards, valid_masks, task_states.batch_stats), (), max_steps)
-            #print_batch_stats_shapes(batch_stats)
-            #print('batch stats in rollout train ^^^^^ ')
             return accumulated_rewards, obs_set, obs_mask, task_states, batch_stats
 
         def rollout_val(task_states, policy_states, params, obs_params,
                     step_once_fn, max_steps):
             accumulated_rewards = jnp.zeros(params.shape[0])
             valid_masks = jnp.ones(params.shape[0])
-            #print('params inside rollout : ', params)
             ((task_states, policy_states, params, obs_params,
               accumulated_rewards, valid_masks),
              (obs_set, obs_mask)) = jax.lax.scan(
@@ -374,7 +354,6 @@ class SimManager(object):
                         test: bool,
                         batch_stats: dict = None) -> Tuple[jnp.ndarray, TaskState, dict]:
         """Rollout using jax.lax.scan."""
-        #print('Inside scan loop : ')
         self.batch_stats = batch_stats
         policy_reset_func = self._policy_reset_fn
         if test:
@@ -403,32 +382,15 @@ class SimManager(object):
         #   b1, b2, ..., bn  (individual 2 params)
         #   b1, b2, ..., bn  (individual 2 params)
         #   b1, b2, ..., bn  (individual 2 params)
-        #print('params before duplicate_params : ', params)
         params = duplicate_params(params, n_repeats, self._ma_training)
-        #print('params after duplicate_params : ', params.shape)
         self._key, reset_keys = get_task_reset_keys(
             self._key, test, self._pop_size, self._n_evaluations, n_repeats,
             self._ma_training)
 
-        if test:
-            #batch_stats = task_state.batch_stats
-            # Reset the tasks and the policy.
-            task_state = task_reset_func(reset_keys)
+        # Reset the tasks and the policy.
+        task_state = task_reset_func(reset_keys)
+        task_state = task_state.replace(batch_stats=self.batch_stats)
 
-            print_batch_stats_shapes(task_state.batch_stats)
-            print('init batch stats ^^^^^^')
-            print_batch_stats_shapes(self.batch_stats) 
-            print('previous batch stats ^^^^^^ ')
-            task_state = task_state.replace(batch_stats=self.batch_stats)
-        else:
-            task_state = task_reset_func(reset_keys)
-            #if self.batch_stats:
-                #print_batch_stats_shapes(self.batch_stats) 
-                #print('previous batch stats ^^^^^^ ')
-            #print_batch_stats_shapes(task_state.batch_stats)
-            #print('init batch stats ^^^^^^')
-
-        #jax.debug.print('labels in scan loop : {}',task_state.labels)
         batch_stats_testing = task_state.batch_stats
         policy_state = policy_reset_func(task_state)
         if self._num_device > 1:
@@ -436,7 +398,6 @@ class SimManager(object):
             task_state = split_states_for_pmap(task_state)
             policy_state = split_states_for_pmap(policy_state)
         
-        #print('obs_params : ', self.obs_params)
         # Do the rollouts.
         if test:
             scores, all_obs, masks, final_states = rollout_func(
@@ -449,15 +410,10 @@ class SimManager(object):
         # If batch_stats is updated to have an extra leading dimension
         #batch_stats_updated = {k: v.squeeze(0) for k, v in batch_stats_updated.items()}
 
-        #print_batch_stats_shapes(final_states.batch_stats)
-        #print('batch stats updated ^^^^^^^^^')
         if self._num_device > 1:
-            #print('Inside num device : ')
             all_obs = reshape_data_from_pmap(all_obs)
             masks = reshape_data_from_pmap(masks)
             final_states = merge_state_from_pmap(final_states)
-        #print_batch_stats_shapes(final_states.batch_stats)
-        #print('batch stats updated ^^^^^^^^^')
         batch_stats_updated = final_states.batch_stats
         if not test and not self.obs_normalizer.is_dummy:
             self.obs_params = self.obs_normalizer.update_normalization_params(
@@ -465,7 +421,6 @@ class SimManager(object):
 
         if self._ma_training:
             if not test:
-                print('Inside ma training : ')
                 # In training, each agent has different parameters.
                 scores = jnp.mean(
                     scores.ravel().reshape((n_repeats, -1)), axis=0)
