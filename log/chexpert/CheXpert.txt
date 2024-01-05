@@ -349,3 +349,1528 @@ CheXpert: 2023-12-29 13:08:11,381 [INFO] Training done, best_score=0.8125
 CheXpert: 2023-12-29 13:08:11,389 [INFO] Loaded model parameters from ./log/chexpert.
 CheXpert: 2023-12-29 13:08:11,389 [INFO] Start to test the parameters.
 CheXpert: 2023-12-29 13:08:11,718 [INFO] [TEST] #tests=2, max=0.8125, avg=0.8125, min=0.8125, std=0.0000
+CheXpert: 2024-01-01 19:40:31,148 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 19:40:31,148 [INFO] ==============================
+CheXpert: 2024-01-01 19:40:40,843 [INFO] DenseNetPolicy.num_params = 322981
+CheXpert: 2024-01-01 19:40:48,657 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 19:40:48,682 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 19:42:24,253 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 19:42:24,253 [INFO] ==============================
+CheXpert: 2024-01-01 19:42:34,628 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 19:42:42,304 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 19:42:42,329 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 19:44:00,305 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 19:44:00,305 [INFO] ==============================
+CheXpert: 2024-01-01 19:44:08,802 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 19:44:15,849 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 19:44:15,873 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 19:44:56,402 [INFO] Iter=10, size=64, max=0.6983, avg=0.6971, min=0.6959, std=0.0005
+CheXpert: 2024-01-01 19:45:00,363 [INFO] Iter=20, size=64, max=0.7024, avg=0.7015, min=0.7005, std=0.0004
+CheXpert: 2024-01-01 19:45:04,336 [INFO] Iter=30, size=64, max=0.7041, avg=0.7029, min=0.7017, std=0.0004
+CheXpert: 2024-01-01 19:45:08,322 [INFO] Iter=40, size=64, max=0.7021, avg=0.7013, min=0.7005, std=0.0003
+CheXpert: 2024-01-01 19:45:12,310 [INFO] Iter=50, size=64, max=0.7121, avg=0.7112, min=0.7101, std=0.0005
+CheXpert: 2024-01-01 19:45:16,313 [INFO] Iter=60, size=64, max=0.7008, avg=0.7000, min=0.6992, std=0.0003
+CheXpert: 2024-01-01 19:45:20,325 [INFO] Iter=70, size=64, max=0.7179, avg=0.7168, min=0.7157, std=0.0004
+CheXpert: 2024-01-01 19:45:24,324 [INFO] Iter=80, size=64, max=0.7046, avg=0.7035, min=0.7024, std=0.0005
+CheXpert: 2024-01-01 19:45:28,334 [INFO] Iter=90, size=64, max=0.7055, avg=0.7048, min=0.7040, std=0.0003
+CheXpert: 2024-01-01 19:45:32,364 [INFO] Iter=100, size=64, max=0.7135, avg=0.7129, min=0.7122, std=0.0003
+CheXpert: 2024-01-01 19:45:49,448 [INFO] [TEST] Iter=100, #tests=2, max=0.1615, avg=0.1615, min=0.1615, std=0.0000
+CheXpert: 2024-01-01 19:45:53,494 [INFO] Iter=110, size=64, max=0.7266, avg=0.7252, min=0.7238, std=0.0006
+CheXpert: 2024-01-01 19:45:57,522 [INFO] Iter=120, size=64, max=0.7301, avg=0.7288, min=0.7275, std=0.0006
+CheXpert: 2024-01-01 19:46:01,648 [INFO] Iter=130, size=64, max=0.7064, avg=0.7054, min=0.7044, std=0.0004
+CheXpert: 2024-01-01 19:46:05,682 [INFO] Iter=140, size=64, max=0.7228, avg=0.7215, min=0.7201, std=0.0005
+CheXpert: 2024-01-01 19:46:09,728 [INFO] Iter=150, size=64, max=0.7523, avg=0.7502, min=0.7481, std=0.0008
+CheXpert: 2024-01-01 19:46:13,784 [INFO] Iter=160, size=64, max=0.7376, avg=0.7364, min=0.7353, std=0.0005
+CheXpert: 2024-01-01 19:46:17,847 [INFO] Iter=170, size=64, max=0.7168, avg=0.7157, min=0.7146, std=0.0005
+CheXpert: 2024-01-01 19:46:21,888 [INFO] Iter=180, size=64, max=0.7407, avg=0.7399, min=0.7391, std=0.0004
+CheXpert: 2024-01-01 19:46:25,946 [INFO] Iter=190, size=64, max=0.7169, avg=0.7155, min=0.7141, std=0.0005
+CheXpert: 2024-01-01 19:46:30,002 [INFO] Iter=200, size=64, max=0.7270, avg=0.7261, min=0.7251, std=0.0005
+CheXpert: 2024-01-01 19:46:30,283 [INFO] [TEST] Iter=200, #tests=2, max=0.1615, avg=0.1615, min=0.1615, std=0.0000
+CheXpert: 2024-01-01 19:46:34,363 [INFO] Iter=210, size=64, max=0.7294, avg=0.7288, min=0.7282, std=0.0003
+CheXpert: 2024-01-01 19:46:38,424 [INFO] Iter=220, size=64, max=0.7324, avg=0.7315, min=0.7306, std=0.0004
+CheXpert: 2024-01-01 19:46:42,494 [INFO] Iter=230, size=64, max=0.7458, avg=0.7446, min=0.7434, std=0.0005
+CheXpert: 2024-01-01 19:48:53,913 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 19:48:53,913 [INFO] ==============================
+CheXpert: 2024-01-01 19:49:05,228 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 19:49:11,226 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 19:49:11,250 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 19:49:52,953 [INFO] Iter=10, size=64, max=0.6951, avg=0.6941, min=0.6931, std=0.0004
+CheXpert: 2024-01-01 19:49:56,934 [INFO] Iter=20, size=64, max=0.7031, avg=0.7020, min=0.7008, std=0.0005
+CheXpert: 2024-01-01 19:50:00,918 [INFO] Iter=30, size=64, max=0.7039, avg=0.7028, min=0.7016, std=0.0006
+CheXpert: 2024-01-01 19:50:04,911 [INFO] Iter=40, size=64, max=0.7138, avg=0.7126, min=0.7114, std=0.0005
+CheXpert: 2024-01-01 19:50:08,915 [INFO] Iter=50, size=64, max=0.7080, avg=0.7072, min=0.7065, std=0.0004
+CheXpert: 2024-01-01 19:50:12,914 [INFO] Iter=60, size=64, max=0.7058, avg=0.7050, min=0.7041, std=0.0004
+CheXpert: 2024-01-01 19:50:16,922 [INFO] Iter=70, size=64, max=0.7092, avg=0.7085, min=0.7078, std=0.0003
+CheXpert: 2024-01-01 19:50:20,933 [INFO] Iter=80, size=64, max=0.7070, avg=0.7060, min=0.7051, std=0.0003
+CheXpert: 2024-01-01 19:50:24,946 [INFO] Iter=90, size=64, max=0.7243, avg=0.7232, min=0.7221, std=0.0005
+CheXpert: 2024-01-01 19:50:28,968 [INFO] Iter=100, size=64, max=0.7146, avg=0.7135, min=0.7124, std=0.0005
+CheXpert: 2024-01-01 19:50:46,492 [INFO] [TEST] Iter=100, #tests=2, max=0.1615, avg=0.1615, min=0.1615, std=0.0000
+CheXpert: 2024-01-01 19:50:50,543 [INFO] Iter=110, size=64, max=0.7140, avg=0.7133, min=0.7126, std=0.0003
+CheXpert: 2024-01-01 19:50:54,586 [INFO] Iter=120, size=64, max=0.7476, avg=0.7460, min=0.7445, std=0.0007
+CheXpert: 2024-01-01 19:50:58,615 [INFO] Iter=130, size=64, max=0.7534, avg=0.7523, min=0.7511, std=0.0006
+CheXpert: 2024-01-01 19:51:02,658 [INFO] Iter=140, size=64, max=0.7068, avg=0.7061, min=0.7054, std=0.0004
+CheXpert: 2024-01-01 19:51:06,706 [INFO] Iter=150, size=64, max=0.7306, avg=0.7283, min=0.7259, std=0.0006
+CheXpert: 2024-01-01 19:51:10,739 [INFO] Iter=160, size=64, max=0.7479, avg=0.7466, min=0.7453, std=0.0005
+CheXpert: 2024-01-01 19:51:14,790 [INFO] Iter=170, size=64, max=0.7094, avg=0.7086, min=0.7079, std=0.0003
+CheXpert: 2024-01-01 19:51:18,845 [INFO] Iter=180, size=64, max=0.7320, avg=0.7308, min=0.7296, std=0.0004
+CheXpert: 2024-01-01 19:51:22,900 [INFO] Iter=190, size=64, max=0.7310, avg=0.7301, min=0.7292, std=0.0004
+CheXpert: 2024-01-01 19:51:26,957 [INFO] Iter=200, size=64, max=0.7318, avg=0.7311, min=0.7304, std=0.0003
+CheXpert: 2024-01-01 19:51:27,238 [INFO] [TEST] Iter=200, #tests=2, max=0.1615, avg=0.1615, min=0.1615, std=0.0000
+CheXpert: 2024-01-01 19:51:31,318 [INFO] Iter=210, size=64, max=0.7234, avg=0.7226, min=0.7218, std=0.0003
+CheXpert: 2024-01-01 19:51:35,387 [INFO] Iter=220, size=64, max=0.7583, avg=0.7570, min=0.7556, std=0.0006
+CheXpert: 2024-01-01 19:51:39,468 [INFO] Iter=230, size=64, max=0.7462, avg=0.7449, min=0.7435, std=0.0005
+CheXpert: 2024-01-01 19:51:43,556 [INFO] Iter=240, size=64, max=0.7262, avg=0.7254, min=0.7246, std=0.0004
+CheXpert: 2024-01-01 19:51:47,635 [INFO] Iter=250, size=64, max=0.7508, avg=0.7493, min=0.7479, std=0.0007
+CheXpert: 2024-01-01 19:51:51,723 [INFO] Iter=260, size=64, max=0.7417, avg=0.7405, min=0.7394, std=0.0005
+CheXpert: 2024-01-01 19:51:55,822 [INFO] Iter=270, size=64, max=0.7648, avg=0.7632, min=0.7616, std=0.0007
+CheXpert: 2024-01-01 19:51:59,913 [INFO] Iter=280, size=64, max=0.7747, avg=0.7728, min=0.7708, std=0.0007
+CheXpert: 2024-01-01 19:52:04,004 [INFO] Iter=290, size=64, max=0.6981, avg=0.6968, min=0.6954, std=0.0004
+CheXpert: 2024-01-01 19:52:08,086 [INFO] Iter=300, size=64, max=0.7643, avg=0.7628, min=0.7614, std=0.0006
+CheXpert: 2024-01-01 19:52:08,366 [INFO] [TEST] Iter=300, #tests=2, max=0.1615, avg=0.1615, min=0.1615, std=0.0000
+CheXpert: 2024-01-01 19:52:12,469 [INFO] Iter=310, size=64, max=0.7603, avg=0.7586, min=0.7570, std=0.0006
+CheXpert: 2024-01-01 19:52:16,570 [INFO] Iter=320, size=64, max=0.7721, avg=0.7707, min=0.7694, std=0.0006
+CheXpert: 2024-01-01 19:52:20,672 [INFO] Iter=330, size=64, max=0.7364, avg=0.7352, min=0.7339, std=0.0005
+CheXpert: 2024-01-01 19:52:24,783 [INFO] Iter=340, size=64, max=0.7289, avg=0.7278, min=0.7267, std=0.0004
+CheXpert: 2024-01-01 19:52:28,889 [INFO] Iter=350, size=64, max=0.7710, avg=0.7700, min=0.7691, std=0.0005
+CheXpert: 2024-01-01 19:52:32,991 [INFO] Iter=360, size=64, max=0.7462, avg=0.7453, min=0.7444, std=0.0004
+CheXpert: 2024-01-01 19:52:37,105 [INFO] Iter=370, size=64, max=0.7581, avg=0.7571, min=0.7561, std=0.0005
+CheXpert: 2024-01-01 19:52:41,218 [INFO] Iter=380, size=64, max=0.7582, avg=0.7571, min=0.7560, std=0.0005
+CheXpert: 2024-01-01 19:52:45,332 [INFO] Iter=390, size=64, max=0.7728, avg=0.7719, min=0.7709, std=0.0005
+CheXpert: 2024-01-01 19:52:49,446 [INFO] Iter=400, size=64, max=0.7853, avg=0.7839, min=0.7825, std=0.0007
+CheXpert: 2024-01-01 19:52:49,726 [INFO] [TEST] Iter=400, #tests=2, max=0.1615, avg=0.1615, min=0.1615, std=0.0000
+CheXpert: 2024-01-01 19:52:53,847 [INFO] Iter=410, size=64, max=0.7487, avg=0.7477, min=0.7465, std=0.0005
+CheXpert: 2024-01-01 19:52:57,965 [INFO] Iter=420, size=64, max=0.7456, avg=0.7450, min=0.7443, std=0.0003
+CheXpert: 2024-01-01 19:53:02,080 [INFO] Iter=430, size=64, max=0.7740, avg=0.7729, min=0.7718, std=0.0006
+CheXpert: 2024-01-01 19:53:06,194 [INFO] Iter=440, size=64, max=0.7574, avg=0.7563, min=0.7552, std=0.0005
+CheXpert: 2024-01-01 19:53:10,305 [INFO] Iter=450, size=64, max=0.7434, avg=0.7416, min=0.7399, std=0.0007
+CheXpert: 2024-01-01 19:53:14,409 [INFO] Iter=460, size=64, max=0.7935, avg=0.7918, min=0.7902, std=0.0007
+CheXpert: 2024-01-01 19:53:18,522 [INFO] Iter=470, size=64, max=0.7922, avg=0.7909, min=0.7895, std=0.0006
+CheXpert: 2024-01-01 19:53:22,776 [INFO] Iter=480, size=64, max=0.7838, avg=0.7827, min=0.7816, std=0.0005
+CheXpert: 2024-01-01 19:53:27,124 [INFO] Iter=490, size=64, max=0.7873, avg=0.7862, min=0.7851, std=0.0005
+CheXpert: 2024-01-01 19:53:31,484 [INFO] Iter=500, size=64, max=0.8383, avg=0.8363, min=0.8341, std=0.0009
+CheXpert: 2024-01-01 19:53:31,775 [INFO] [TEST] Iter=500, #tests=2, max=0.1615, avg=0.1615, min=0.1615, std=0.0000
+CheXpert: 2024-01-01 19:53:36,143 [INFO] Iter=510, size=64, max=0.7865, avg=0.7850, min=0.7836, std=0.0006
+CheXpert: 2024-01-01 19:53:40,488 [INFO] Iter=520, size=64, max=0.7503, avg=0.7495, min=0.7488, std=0.0003
+CheXpert: 2024-01-01 19:53:44,837 [INFO] Iter=530, size=64, max=0.7865, avg=0.7855, min=0.7846, std=0.0005
+CheXpert: 2024-01-01 19:53:49,189 [INFO] Iter=540, size=64, max=0.7978, avg=0.7964, min=0.7951, std=0.0007
+CheXpert: 2024-01-01 19:53:53,555 [INFO] Iter=550, size=64, max=0.7632, avg=0.7620, min=0.7608, std=0.0005
+CheXpert: 2024-01-01 19:53:57,904 [INFO] Iter=560, size=64, max=0.8254, avg=0.8237, min=0.8221, std=0.0008
+CheXpert: 2024-01-01 19:54:02,268 [INFO] Iter=570, size=64, max=0.8684, avg=0.8663, min=0.8642, std=0.0009
+CheXpert: 2024-01-01 19:54:06,608 [INFO] Iter=580, size=64, max=0.7720, avg=0.7701, min=0.7682, std=0.0007
+CheXpert: 2024-01-01 19:54:10,952 [INFO] Iter=590, size=64, max=0.9067, avg=0.9047, min=0.9027, std=0.0008
+CheXpert: 2024-01-01 19:54:15,296 [INFO] Iter=600, size=64, max=0.7948, avg=0.7935, min=0.7922, std=0.0006
+CheXpert: 2024-01-01 19:54:15,593 [INFO] [TEST] Iter=600, #tests=2, max=0.1615, avg=0.1615, min=0.1615, std=0.0000
+CheXpert: 2024-01-01 19:54:19,948 [INFO] Iter=610, size=64, max=0.8452, avg=0.8436, min=0.8421, std=0.0008
+CheXpert: 2024-01-01 19:54:24,298 [INFO] Iter=620, size=64, max=0.7845, avg=0.7832, min=0.7819, std=0.0006
+CheXpert: 2024-01-01 19:54:28,649 [INFO] Iter=630, size=64, max=0.8464, avg=0.8443, min=0.8422, std=0.0008
+CheXpert: 2024-01-01 19:54:33,000 [INFO] Iter=640, size=64, max=0.8381, avg=0.8354, min=0.8326, std=0.0009
+CheXpert: 2024-01-01 19:54:37,358 [INFO] Iter=650, size=64, max=0.8887, avg=0.8855, min=0.8824, std=0.0012
+CheXpert: 2024-01-01 19:55:07,821 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 19:55:07,821 [INFO] ==============================
+CheXpert: 2024-01-01 19:55:18,425 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 19:55:24,328 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 19:55:24,353 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 19:56:06,654 [INFO] Iter=10, size=64, max=0.6948, avg=0.6944, min=0.6939, std=0.0002
+CheXpert: 2024-01-01 19:56:10,677 [INFO] Iter=20, size=64, max=0.6983, avg=0.6972, min=0.6962, std=0.0004
+CheXpert: 2024-01-01 19:56:14,706 [INFO] Iter=30, size=64, max=0.7037, avg=0.7026, min=0.7016, std=0.0004
+CheXpert: 2024-01-01 19:56:18,738 [INFO] Iter=40, size=64, max=0.7123, avg=0.7112, min=0.7101, std=0.0005
+CheXpert: 2024-01-01 19:56:22,771 [INFO] Iter=50, size=64, max=0.7095, avg=0.7087, min=0.7079, std=0.0004
+CheXpert: 2024-01-01 19:56:54,953 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 19:56:54,953 [INFO] ==============================
+CheXpert: 2024-01-01 19:57:05,672 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 19:57:13,373 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 19:57:13,398 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 19:58:24,095 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 19:58:24,095 [INFO] ==============================
+CheXpert: 2024-01-01 19:58:34,694 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 19:58:41,266 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 19:58:41,291 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 19:59:20,768 [INFO] Iter=10, size=32, max=0.6951, avg=0.6945, min=0.6939, std=0.0003
+CheXpert: 2024-01-01 19:59:24,740 [INFO] Iter=20, size=32, max=0.7015, avg=0.7006, min=0.6997, std=0.0004
+CheXpert: 2024-01-01 19:59:28,704 [INFO] Iter=30, size=32, max=0.7091, avg=0.7080, min=0.7070, std=0.0005
+CheXpert: 2024-01-01 19:59:32,684 [INFO] Iter=40, size=32, max=0.7073, avg=0.7063, min=0.7053, std=0.0006
+CheXpert: 2024-01-01 19:59:36,667 [INFO] Iter=50, size=32, max=0.7038, avg=0.7031, min=0.7023, std=0.0003
+CheXpert: 2024-01-01 19:59:40,638 [INFO] Iter=60, size=32, max=0.7173, avg=0.7164, min=0.7155, std=0.0005
+CheXpert: 2024-01-01 19:59:44,627 [INFO] Iter=70, size=32, max=0.7154, avg=0.7147, min=0.7141, std=0.0004
+CheXpert: 2024-01-01 19:59:48,621 [INFO] Iter=80, size=32, max=0.7164, avg=0.7152, min=0.7139, std=0.0005
+CheXpert: 2024-01-01 19:59:52,623 [INFO] Iter=90, size=32, max=0.7144, avg=0.7137, min=0.7129, std=0.0003
+CheXpert: 2024-01-01 19:59:56,621 [INFO] Iter=100, size=32, max=0.7352, avg=0.7345, min=0.7338, std=0.0003
+CheXpert: 2024-01-01 20:05:59,557 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 20:05:59,557 [INFO] ==============================
+CheXpert: 2024-01-01 20:06:11,013 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 20:06:17,736 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 20:06:17,760 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 20:06:45,072 [INFO] Iter=10, size=16, max=0.7316, avg=0.7282, min=0.7256, std=0.0018
+CheXpert: 2024-01-01 20:06:47,052 [INFO] Iter=20, size=16, max=0.8307, avg=0.8227, min=0.8153, std=0.0039
+CheXpert: 2024-01-01 20:06:49,035 [INFO] Iter=30, size=16, max=1.4701, avg=1.3698, min=1.2945, std=0.0457
+CheXpert: 2024-01-01 20:06:51,020 [INFO] Iter=40, size=16, max=7.4878, avg=6.9369, min=6.5319, std=0.2071
+CheXpert: 2024-01-01 20:06:52,999 [INFO] Iter=50, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:06:54,978 [INFO] Iter=60, size=16, max=9.5654, avg=9.5654, min=9.5654, std=0.0000
+CheXpert: 2024-01-01 20:06:56,959 [INFO] Iter=70, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:06:58,941 [INFO] Iter=80, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:07:00,928 [INFO] Iter=90, size=16, max=10.3626, avg=10.3626, min=10.3626, std=0.0000
+CheXpert: 2024-01-01 20:07:02,916 [INFO] Iter=100, size=16, max=9.9640, avg=9.9640, min=9.9640, std=0.0000
+CheXpert: 2024-01-01 20:10:13,452 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 20:10:13,452 [INFO] ==============================
+CheXpert: 2024-01-01 20:10:21,821 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 20:10:27,891 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 20:10:27,915 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 20:10:53,986 [INFO] Iter=10, size=16, max=0.7137, avg=0.7120, min=0.7103, std=0.0010
+CheXpert: 2024-01-01 20:10:55,957 [INFO] Iter=20, size=16, max=0.8759, avg=0.8648, min=0.8524, std=0.0060
+CheXpert: 2024-01-01 20:10:57,936 [INFO] Iter=30, size=16, max=2.6907, avg=2.5556, min=2.4347, std=0.0895
+CheXpert: 2024-01-01 20:10:59,917 [INFO] Iter=40, size=16, max=10.7398, avg=10.6696, min=10.6045, std=0.0392
+CheXpert: 2024-01-01 20:11:01,899 [INFO] Iter=50, size=16, max=11.5714, avg=11.5714, min=11.5714, std=0.0000
+CheXpert: 2024-01-01 20:11:03,888 [INFO] Iter=60, size=16, max=11.5758, avg=11.5758, min=11.5758, std=0.0000
+CheXpert: 2024-01-01 20:11:05,877 [INFO] Iter=70, size=16, max=7.9756, avg=7.9756, min=7.9756, std=0.0000
+CheXpert: 2024-01-01 20:11:07,860 [INFO] Iter=80, size=16, max=13.5730, avg=13.5730, min=13.5730, std=0.0000
+CheXpert: 2024-01-01 20:11:09,851 [INFO] Iter=90, size=16, max=12.3685, avg=12.3685, min=12.3685, std=0.0000
+CheXpert: 2024-01-01 20:11:35,444 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 20:11:35,445 [INFO] ==============================
+CheXpert: 2024-01-01 20:11:44,580 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 20:11:50,921 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 20:11:50,946 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 20:12:17,648 [INFO] Iter=10, size=16, max=0.7244, avg=0.7241, min=0.7239, std=0.0001
+CheXpert: 2024-01-01 20:12:19,622 [INFO] Iter=20, size=16, max=0.7824, avg=0.7815, min=0.7806, std=0.0005
+CheXpert: 2024-01-01 20:12:21,603 [INFO] Iter=30, size=16, max=1.5113, avg=1.4996, min=1.4881, std=0.0049
+CheXpert: 2024-01-01 20:12:23,587 [INFO] Iter=40, size=16, max=9.0769, avg=9.0230, min=8.9720, std=0.0296
+CheXpert: 2024-01-01 20:12:25,572 [INFO] Iter=50, size=16, max=9.5742, avg=9.5742, min=9.5742, std=0.0000
+CheXpert: 2024-01-01 20:12:27,557 [INFO] Iter=60, size=16, max=12.3993, avg=12.3993, min=12.3993, std=0.0000
+CheXpert: 2024-01-01 20:12:29,537 [INFO] Iter=70, size=16, max=9.1932, avg=9.1932, min=9.1932, std=0.0000
+CheXpert: 2024-01-01 20:12:31,525 [INFO] Iter=80, size=16, max=10.3933, avg=10.3933, min=10.3933, std=0.0000
+CheXpert: 2024-01-01 20:12:33,509 [INFO] Iter=90, size=16, max=10.3889, avg=10.3889, min=10.3889, std=0.0000
+CheXpert: 2024-01-01 20:12:35,498 [INFO] Iter=100, size=16, max=10.7919, avg=10.7919, min=10.7919, std=0.0000
+CheXpert: 2024-01-01 20:12:49,332 [INFO] [TEST] Iter=100, #tests=2, max=0.4111, avg=0.4111, min=0.4111, std=0.0000
+CheXpert: 2024-01-01 20:12:51,352 [INFO] Iter=110, size=16, max=11.9875, avg=11.9875, min=11.9875, std=0.0000
+CheXpert: 2024-01-01 20:12:53,346 [INFO] Iter=120, size=16, max=9.5830, avg=9.5830, min=9.5830, std=0.0000
+CheXpert: 2024-01-01 20:12:55,343 [INFO] Iter=130, size=16, max=9.1932, avg=9.1932, min=9.1932, std=0.0000
+CheXpert: 2024-01-01 20:12:57,340 [INFO] Iter=140, size=16, max=8.8035, avg=8.8035, min=8.8035, std=0.0000
+CheXpert: 2024-01-01 20:12:59,340 [INFO] Iter=150, size=16, max=11.5890, avg=11.5890, min=11.5890, std=0.0000
+CheXpert: 2024-01-01 20:13:01,340 [INFO] Iter=160, size=16, max=10.3977, avg=10.3977, min=10.3977, std=0.0000
+CheXpert: 2024-01-01 20:13:03,338 [INFO] Iter=170, size=16, max=10.7875, avg=10.7875, min=10.7875, std=0.0000
+CheXpert: 2024-01-01 20:13:05,336 [INFO] Iter=180, size=16, max=10.8006, avg=10.8006, min=10.8006, std=0.0000
+CheXpert: 2024-01-01 20:13:07,344 [INFO] Iter=190, size=16, max=9.1932, avg=9.1932, min=9.1932, std=0.0000
+CheXpert: 2024-01-01 20:13:09,355 [INFO] Iter=200, size=16, max=10.7919, avg=10.7919, min=10.7919, std=0.0000
+CheXpert: 2024-01-01 20:13:09,544 [INFO] [TEST] Iter=200, #tests=2, max=0.4111, avg=0.4111, min=0.4111, std=0.0000
+CheXpert: 2024-01-01 20:13:11,572 [INFO] Iter=210, size=16, max=11.5978, avg=11.5978, min=11.5978, std=0.0000
+CheXpert: 2024-01-01 20:13:13,582 [INFO] Iter=220, size=16, max=9.5962, avg=9.5962, min=9.5962, std=0.0000
+CheXpert: 2024-01-01 20:13:15,591 [INFO] Iter=230, size=16, max=11.6022, avg=11.6022, min=11.6022, std=0.0000
+CheXpert: 2024-01-01 20:13:17,599 [INFO] Iter=240, size=16, max=9.5918, avg=9.5918, min=9.5918, std=0.0000
+CheXpert: 2024-01-01 20:13:19,609 [INFO] Iter=250, size=16, max=10.7875, avg=10.7875, min=10.7875, std=0.0000
+CheXpert: 2024-01-01 20:13:21,624 [INFO] Iter=260, size=16, max=9.5918, avg=9.5918, min=9.5918, std=0.0000
+CheXpert: 2024-01-01 20:13:23,637 [INFO] Iter=270, size=16, max=12.3949, avg=12.3949, min=12.3949, std=0.0000
+CheXpert: 2024-01-01 20:13:25,647 [INFO] Iter=280, size=16, max=10.3889, avg=10.3889, min=10.3889, std=0.0000
+CheXpert: 2024-01-01 20:13:27,658 [INFO] Iter=290, size=16, max=10.3889, avg=10.3889, min=10.3889, std=0.0000
+CheXpert: 2024-01-01 20:13:29,672 [INFO] Iter=300, size=16, max=9.1932, avg=9.1932, min=9.1932, std=0.0000
+CheXpert: 2024-01-01 20:13:29,864 [INFO] [TEST] Iter=300, #tests=2, max=0.4111, avg=0.4111, min=0.4111, std=0.0000
+CheXpert: 2024-01-01 20:13:31,886 [INFO] Iter=310, size=16, max=10.7963, avg=10.7963, min=10.7963, std=0.0000
+CheXpert: 2024-01-01 20:13:33,904 [INFO] Iter=320, size=16, max=9.5874, avg=9.5874, min=9.5874, std=0.0000
+CheXpert: 2024-01-01 20:13:35,919 [INFO] Iter=330, size=16, max=9.1932, avg=9.1932, min=9.1932, std=0.0000
+CheXpert: 2024-01-01 20:13:37,937 [INFO] Iter=340, size=16, max=10.7831, avg=10.7831, min=10.7831, std=0.0000
+CheXpert: 2024-01-01 20:13:39,959 [INFO] Iter=350, size=16, max=9.9947, avg=9.9947, min=9.9947, std=0.0000
+CheXpert: 2024-01-01 20:13:41,978 [INFO] Iter=360, size=16, max=10.7875, avg=10.7875, min=10.7875, std=0.0000
+CheXpert: 2024-01-01 20:13:43,999 [INFO] Iter=370, size=16, max=9.1844, avg=9.1844, min=9.1844, std=0.0000
+CheXpert: 2024-01-01 20:13:46,017 [INFO] Iter=380, size=16, max=11.5934, avg=11.5934, min=11.5934, std=0.0000
+CheXpert: 2024-01-01 20:13:48,036 [INFO] Iter=390, size=16, max=12.7934, avg=12.7934, min=12.7934, std=0.0000
+CheXpert: 2024-01-01 20:13:50,064 [INFO] Iter=400, size=16, max=10.3933, avg=10.3933, min=10.3933, std=0.0000
+CheXpert: 2024-01-01 20:13:50,254 [INFO] [TEST] Iter=400, #tests=2, max=0.4111, avg=0.4111, min=0.4111, std=0.0000
+CheXpert: 2024-01-01 20:13:52,284 [INFO] Iter=410, size=16, max=11.5934, avg=11.5934, min=11.5934, std=0.0000
+CheXpert: 2024-01-01 20:13:54,308 [INFO] Iter=420, size=16, max=8.3698, avg=8.3698, min=8.3698, std=0.0000
+CheXpert: 2024-01-01 20:13:56,336 [INFO] Iter=430, size=16, max=9.9772, avg=9.9772, min=9.9772, std=0.0000
+CheXpert: 2024-01-01 20:13:58,357 [INFO] Iter=440, size=16, max=10.3845, avg=10.3845, min=10.3845, std=0.0000
+CheXpert: 2024-01-01 20:14:00,386 [INFO] Iter=450, size=16, max=11.5890, avg=11.5890, min=11.5890, std=0.0000
+CheXpert: 2024-01-01 20:14:02,417 [INFO] Iter=460, size=16, max=9.9860, avg=9.9860, min=9.9860, std=0.0000
+CheXpert: 2024-01-01 20:14:04,447 [INFO] Iter=470, size=16, max=9.1844, avg=9.1844, min=9.1844, std=0.0000
+CheXpert: 2024-01-01 20:14:06,472 [INFO] Iter=480, size=16, max=9.9903, avg=9.9903, min=9.9903, std=0.0000
+CheXpert: 2024-01-01 20:14:08,505 [INFO] Iter=490, size=16, max=11.9919, avg=11.9919, min=11.9919, std=0.0000
+CheXpert: 2024-01-01 20:14:10,543 [INFO] Iter=500, size=16, max=9.5962, avg=9.5962, min=9.5962, std=0.0000
+CheXpert: 2024-01-01 20:14:10,736 [INFO] [TEST] Iter=500, #tests=2, max=0.4111, avg=0.4111, min=0.4111, std=0.0000
+CheXpert: 2024-01-01 20:14:12,779 [INFO] Iter=510, size=16, max=10.3845, avg=10.3845, min=10.3845, std=0.0000
+CheXpert: 2024-01-01 20:14:14,812 [INFO] Iter=520, size=16, max=9.5918, avg=9.5918, min=9.5918, std=0.0000
+CheXpert: 2024-01-01 20:14:16,853 [INFO] Iter=530, size=16, max=10.3757, avg=10.3757, min=10.3757, std=0.0000
+CheXpert: 2024-01-01 20:14:18,894 [INFO] Iter=540, size=16, max=9.5918, avg=9.5918, min=9.5918, std=0.0000
+CheXpert: 2024-01-01 20:14:20,938 [INFO] Iter=550, size=16, max=9.5786, avg=9.5786, min=9.5786, std=0.0000
+CheXpert: 2024-01-01 20:14:22,976 [INFO] Iter=560, size=16, max=11.5846, avg=11.5846, min=11.5846, std=0.0000
+CheXpert: 2024-01-01 20:14:25,014 [INFO] Iter=570, size=16, max=9.5962, avg=9.5962, min=9.5962, std=0.0000
+CheXpert: 2024-01-01 20:14:27,048 [INFO] Iter=580, size=16, max=8.3829, avg=8.3829, min=8.3829, std=0.0000
+CheXpert: 2024-01-01 20:14:29,087 [INFO] Iter=590, size=16, max=11.5978, avg=11.5978, min=11.5978, std=0.0000
+CheXpert: 2024-01-01 20:14:31,120 [INFO] Iter=600, size=16, max=11.1948, avg=11.1948, min=11.1948, std=0.0000
+CheXpert: 2024-01-01 20:14:31,314 [INFO] [TEST] Iter=600, #tests=2, max=0.4111, avg=0.4111, min=0.4111, std=0.0000
+CheXpert: 2024-01-01 20:14:33,359 [INFO] Iter=610, size=16, max=9.2108, avg=9.2108, min=9.2108, std=0.0000
+CheXpert: 2024-01-01 20:14:35,401 [INFO] Iter=620, size=16, max=9.9903, avg=9.9903, min=9.9903, std=0.0000
+CheXpert: 2024-01-01 20:14:37,439 [INFO] Iter=630, size=16, max=10.7875, avg=10.7875, min=10.7875, std=0.0000
+CheXpert: 2024-01-01 20:14:39,474 [INFO] Iter=640, size=16, max=10.3889, avg=10.3889, min=10.3889, std=0.0000
+CheXpert: 2024-01-01 20:14:41,514 [INFO] Iter=650, size=16, max=9.9947, avg=9.9947, min=9.9947, std=0.0000
+CheXpert: 2024-01-01 20:14:43,554 [INFO] Iter=660, size=16, max=10.7919, avg=10.7919, min=10.7919, std=0.0000
+CheXpert: 2024-01-01 20:14:45,597 [INFO] Iter=670, size=16, max=9.9947, avg=9.9947, min=9.9947, std=0.0000
+CheXpert: 2024-01-01 20:14:47,643 [INFO] Iter=680, size=16, max=9.9860, avg=9.9860, min=9.9860, std=0.0000
+CheXpert: 2024-01-01 20:14:49,684 [INFO] Iter=690, size=16, max=10.4021, avg=10.4021, min=10.4021, std=0.0000
+CheXpert: 2024-01-01 20:14:51,727 [INFO] Iter=700, size=16, max=9.1800, avg=9.1800, min=9.1800, std=0.0000
+CheXpert: 2024-01-01 20:14:51,923 [INFO] [TEST] Iter=700, #tests=2, max=0.4111, avg=0.4111, min=0.4111, std=0.0000
+CheXpert: 2024-01-01 20:14:53,970 [INFO] Iter=710, size=16, max=10.7875, avg=10.7875, min=10.7875, std=0.0000
+CheXpert: 2024-01-01 20:14:56,013 [INFO] Iter=720, size=16, max=8.3829, avg=8.3829, min=8.3829, std=0.0000
+CheXpert: 2024-01-01 20:14:58,055 [INFO] Iter=730, size=16, max=11.2036, avg=11.2036, min=11.2036, std=0.0000
+CheXpert: 2024-01-01 20:15:00,099 [INFO] Iter=740, size=16, max=10.3889, avg=10.3889, min=10.3889, std=0.0000
+CheXpert: 2024-01-01 20:15:02,140 [INFO] Iter=750, size=16, max=11.2168, avg=11.2168, min=11.2168, std=0.0000
+CheXpert: 2024-01-01 20:15:04,186 [INFO] Iter=760, size=16, max=10.0079, avg=10.0079, min=10.0079, std=0.0000
+CheXpert: 2024-01-01 20:15:06,232 [INFO] Iter=770, size=16, max=8.3785, avg=8.3785, min=8.3785, std=0.0000
+CheXpert: 2024-01-01 20:15:08,276 [INFO] Iter=780, size=16, max=9.5830, avg=9.5830, min=9.5830, std=0.0000
+CheXpert: 2024-01-01 20:15:10,317 [INFO] Iter=790, size=16, max=10.3889, avg=10.3889, min=10.3889, std=0.0000
+CheXpert: 2024-01-01 20:15:12,362 [INFO] Iter=800, size=16, max=8.7947, avg=8.7947, min=8.7947, std=0.0000
+CheXpert: 2024-01-01 20:15:12,556 [INFO] [TEST] Iter=800, #tests=2, max=0.4111, avg=0.4111, min=0.4111, std=0.0000
+CheXpert: 2024-01-01 20:15:14,607 [INFO] Iter=810, size=16, max=7.5858, avg=7.5858, min=7.5858, std=0.0000
+CheXpert: 2024-01-01 20:15:16,657 [INFO] Iter=820, size=16, max=10.8006, avg=10.8006, min=10.8006, std=0.0000
+CheXpert: 2024-01-01 20:15:18,705 [INFO] Iter=830, size=16, max=8.7947, avg=8.7947, min=8.7947, std=0.0000
+CheXpert: 2024-01-01 20:15:20,750 [INFO] Iter=840, size=16, max=11.5978, avg=11.5978, min=11.5978, std=0.0000
+CheXpert: 2024-01-01 20:15:22,797 [INFO] Iter=850, size=16, max=9.1800, avg=9.1800, min=9.1800, std=0.0000
+CheXpert: 2024-01-01 20:15:24,848 [INFO] Iter=860, size=16, max=9.1713, avg=9.1713, min=9.1713, std=0.0000
+CheXpert: 2024-01-01 20:15:26,895 [INFO] Iter=870, size=16, max=9.5830, avg=9.5830, min=9.5830, std=0.0000
+CheXpert: 2024-01-01 20:15:28,944 [INFO] Iter=880, size=16, max=10.7831, avg=10.7831, min=10.7831, std=0.0000
+CheXpert: 2024-01-01 20:15:30,998 [INFO] Iter=890, size=16, max=10.7831, avg=10.7831, min=10.7831, std=0.0000
+CheXpert: 2024-01-01 20:15:33,043 [INFO] Iter=900, size=16, max=10.3933, avg=10.3933, min=10.3933, std=0.0000
+CheXpert: 2024-01-01 20:15:33,238 [INFO] [TEST] Iter=900, #tests=2, max=0.4111, avg=0.4111, min=0.4111, std=0.0000
+CheXpert: 2024-01-01 20:15:35,292 [INFO] Iter=910, size=16, max=9.9903, avg=9.9903, min=9.9903, std=0.0000
+CheXpert: 2024-01-01 20:15:37,339 [INFO] Iter=920, size=16, max=10.3801, avg=10.3801, min=10.3801, std=0.0000
+CheXpert: 2024-01-01 20:15:39,391 [INFO] Iter=930, size=16, max=11.6065, avg=11.6065, min=11.6065, std=0.0000
+CheXpert: 2024-01-01 20:15:41,439 [INFO] Iter=940, size=16, max=10.3889, avg=10.3889, min=10.3889, std=0.0000
+CheXpert: 2024-01-01 20:15:43,487 [INFO] Iter=950, size=16, max=11.5934, avg=11.5934, min=11.5934, std=0.0000
+CheXpert: 2024-01-01 20:15:45,586 [INFO] Iter=960, size=16, max=9.9947, avg=9.9947, min=9.9947, std=0.0000
+CheXpert: 2024-01-01 20:15:47,690 [INFO] Iter=970, size=16, max=10.3977, avg=10.3977, min=10.3977, std=0.0000
+CheXpert: 2024-01-01 20:15:49,803 [INFO] Iter=980, size=16, max=10.8006, avg=10.8006, min=10.8006, std=0.0000
+CheXpert: 2024-01-01 20:15:51,912 [INFO] Iter=990, size=16, max=11.5978, avg=11.5978, min=11.5978, std=0.0000
+CheXpert: 2024-01-01 20:15:53,999 [INFO] [TEST] Iter=1000, #tests=2, max=0.4111, avg=0.4111, min=0.4111, std=0.0000
+CheXpert: 2024-01-01 20:15:54,004 [INFO] Training done, best_score=0.4111
+CheXpert: 2024-01-01 20:15:54,009 [INFO] Loaded model parameters from ./log/chexpert.
+CheXpert: 2024-01-01 20:15:54,009 [INFO] Start to test the parameters.
+CheXpert: 2024-01-01 20:15:54,959 [INFO] [TEST] #tests=2, max=0.4111, avg=0.4111, min=0.4111, std=0.0000
+CheXpert: 2024-01-01 20:19:54,656 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 20:19:54,656 [INFO] ==============================
+CheXpert: 2024-01-01 20:20:05,435 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 20:20:11,865 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 20:20:11,890 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 20:20:39,774 [INFO] Iter=10, size=16, max=0.7107, avg=0.7105, min=0.7102, std=0.0001
+CheXpert: 2024-01-01 20:20:41,752 [INFO] Iter=20, size=16, max=0.7537, avg=0.7533, min=0.7529, std=0.0002
+CheXpert: 2024-01-01 20:20:43,739 [INFO] Iter=30, size=16, max=0.8331, avg=0.8321, min=0.8311, std=0.0005
+CheXpert: 2024-01-01 20:20:45,724 [INFO] Iter=40, size=16, max=0.9932, avg=0.9925, min=0.9918, std=0.0005
+CheXpert: 2024-01-01 20:20:47,707 [INFO] Iter=50, size=16, max=1.2456, avg=1.2375, min=1.2294, std=0.0036
+CheXpert: 2024-01-01 20:20:49,691 [INFO] Iter=60, size=16, max=2.4286, avg=2.4097, min=2.3905, std=0.0134
+CheXpert: 2024-01-01 20:20:51,679 [INFO] Iter=70, size=16, max=7.3577, avg=7.2878, min=7.2153, std=0.0516
+CheXpert: 2024-01-01 20:20:53,666 [INFO] Iter=80, size=16, max=10.8468, avg=10.8137, min=10.7888, std=0.0186
+CheXpert: 2024-01-01 20:20:55,659 [INFO] Iter=90, size=16, max=10.2775, avg=10.2402, min=10.2183, std=0.0182
+CheXpert: 2024-01-01 20:20:57,651 [INFO] Iter=100, size=16, max=10.7611, avg=10.7611, min=10.7611, std=0.0000
+CheXpert: 2024-01-01 20:21:11,437 [INFO] [TEST] Iter=100, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:21:13,462 [INFO] Iter=110, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:21:15,464 [INFO] Iter=120, size=16, max=14.3481, avg=14.3481, min=14.3481, std=0.0000
+CheXpert: 2024-01-01 20:21:17,471 [INFO] Iter=130, size=16, max=12.3553, avg=12.3553, min=12.3553, std=0.0000
+CheXpert: 2024-01-01 20:21:19,476 [INFO] Iter=140, size=16, max=10.7611, avg=10.7611, min=10.7611, std=0.0000
+CheXpert: 2024-01-01 20:21:21,480 [INFO] Iter=150, size=16, max=13.1525, avg=13.1525, min=13.1525, std=0.0000
+CheXpert: 2024-01-01 20:21:23,481 [INFO] Iter=160, size=16, max=9.9640, avg=9.9640, min=9.9640, std=0.0000
+CheXpert: 2024-01-01 20:21:25,485 [INFO] Iter=170, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:21:27,488 [INFO] Iter=180, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:21:29,495 [INFO] Iter=190, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:21:31,501 [INFO] Iter=200, size=16, max=12.3553, avg=12.3553, min=12.3553, std=0.0000
+CheXpert: 2024-01-01 20:21:31,690 [INFO] [TEST] Iter=200, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:21:33,716 [INFO] Iter=210, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:21:35,729 [INFO] Iter=220, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:21:37,743 [INFO] Iter=230, size=16, max=12.3553, avg=12.3553, min=12.3553, std=0.0000
+CheXpert: 2024-01-01 20:21:39,754 [INFO] Iter=240, size=16, max=12.7539, avg=12.7539, min=12.7539, std=0.0000
+CheXpert: 2024-01-01 20:21:41,773 [INFO] Iter=250, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:21:43,787 [INFO] Iter=260, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:21:45,801 [INFO] Iter=270, size=16, max=9.5654, avg=9.5654, min=9.5654, std=0.0000
+CheXpert: 2024-01-01 20:21:47,818 [INFO] Iter=280, size=16, max=10.3626, avg=10.3626, min=10.3626, std=0.0000
+CheXpert: 2024-01-01 20:21:49,829 [INFO] Iter=290, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:21:51,844 [INFO] Iter=300, size=16, max=10.7611, avg=10.7611, min=10.7611, std=0.0000
+CheXpert: 2024-01-01 20:21:52,033 [INFO] [TEST] Iter=300, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:21:54,061 [INFO] Iter=310, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:21:56,094 [INFO] Iter=320, size=16, max=13.5510, avg=13.5510, min=13.5510, std=0.0000
+CheXpert: 2024-01-01 20:21:58,121 [INFO] Iter=330, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:22:00,156 [INFO] Iter=340, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:22:02,183 [INFO] Iter=350, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:22:04,212 [INFO] Iter=360, size=16, max=7.5726, avg=7.5726, min=7.5726, std=0.0000
+CheXpert: 2024-01-01 20:22:06,247 [INFO] Iter=370, size=16, max=9.5654, avg=9.5654, min=9.5654, std=0.0000
+CheXpert: 2024-01-01 20:22:08,283 [INFO] Iter=380, size=16, max=13.1525, avg=13.1525, min=13.1525, std=0.0000
+CheXpert: 2024-01-01 20:22:10,313 [INFO] Iter=390, size=16, max=13.5510, avg=13.5510, min=13.5510, std=0.0000
+CheXpert: 2024-01-01 20:22:12,346 [INFO] Iter=400, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:22:12,537 [INFO] [TEST] Iter=400, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:22:14,577 [INFO] Iter=410, size=16, max=14.3481, avg=14.3481, min=14.3481, std=0.0000
+CheXpert: 2024-01-01 20:22:16,618 [INFO] Iter=420, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:22:18,657 [INFO] Iter=430, size=16, max=10.3626, avg=10.3626, min=10.3626, std=0.0000
+CheXpert: 2024-01-01 20:22:20,695 [INFO] Iter=440, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:22:22,727 [INFO] Iter=450, size=16, max=9.9640, avg=9.9640, min=9.9640, std=0.0000
+CheXpert: 2024-01-01 20:22:24,765 [INFO] Iter=460, size=16, max=9.9640, avg=9.9640, min=9.9640, std=0.0000
+CheXpert: 2024-01-01 20:22:26,807 [INFO] Iter=470, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:22:28,848 [INFO] Iter=480, size=16, max=9.9640, avg=9.9640, min=9.9640, std=0.0000
+CheXpert: 2024-01-01 20:22:30,889 [INFO] Iter=490, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:22:32,927 [INFO] Iter=500, size=16, max=12.3553, avg=12.3553, min=12.3553, std=0.0000
+CheXpert: 2024-01-01 20:22:33,118 [INFO] [TEST] Iter=500, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:22:35,167 [INFO] Iter=510, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:22:37,217 [INFO] Iter=520, size=16, max=12.3553, avg=12.3553, min=12.3553, std=0.0000
+CheXpert: 2024-01-01 20:22:39,266 [INFO] Iter=530, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:22:41,309 [INFO] Iter=540, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:22:43,358 [INFO] Iter=550, size=16, max=13.1525, avg=13.1525, min=13.1525, std=0.0000
+CheXpert: 2024-01-01 20:22:45,400 [INFO] Iter=560, size=16, max=12.3553, avg=12.3553, min=12.3553, std=0.0000
+CheXpert: 2024-01-01 20:22:47,441 [INFO] Iter=570, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:22:49,490 [INFO] Iter=580, size=16, max=13.1525, avg=13.1525, min=13.1525, std=0.0000
+CheXpert: 2024-01-01 20:22:51,539 [INFO] Iter=590, size=16, max=10.3626, avg=10.3626, min=10.3626, std=0.0000
+CheXpert: 2024-01-01 20:22:53,588 [INFO] Iter=600, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:22:53,781 [INFO] [TEST] Iter=600, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:22:55,829 [INFO] Iter=610, size=16, max=14.7467, avg=14.7467, min=14.7467, std=0.0000
+CheXpert: 2024-01-01 20:22:57,877 [INFO] Iter=620, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:22:59,924 [INFO] Iter=630, size=16, max=12.3553, avg=12.3553, min=12.3553, std=0.0000
+CheXpert: 2024-01-01 20:23:01,977 [INFO] Iter=640, size=16, max=13.1525, avg=13.1525, min=13.1525, std=0.0000
+CheXpert: 2024-01-01 20:23:04,029 [INFO] Iter=650, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:23:06,081 [INFO] Iter=660, size=16, max=9.9640, avg=9.9640, min=9.9640, std=0.0000
+CheXpert: 2024-01-01 20:23:08,129 [INFO] Iter=670, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:23:10,178 [INFO] Iter=680, size=16, max=9.1669, avg=9.1669, min=9.1669, std=0.0000
+CheXpert: 2024-01-01 20:23:12,223 [INFO] Iter=690, size=16, max=13.1525, avg=13.1525, min=13.1525, std=0.0000
+CheXpert: 2024-01-01 20:23:14,272 [INFO] Iter=700, size=16, max=12.7539, avg=12.7539, min=12.7539, std=0.0000
+CheXpert: 2024-01-01 20:23:14,464 [INFO] [TEST] Iter=700, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:23:16,516 [INFO] Iter=710, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:23:18,569 [INFO] Iter=720, size=16, max=10.7611, avg=10.7611, min=10.7611, std=0.0000
+CheXpert: 2024-01-01 20:23:20,622 [INFO] Iter=730, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:23:22,678 [INFO] Iter=740, size=16, max=10.3626, avg=10.3626, min=10.3626, std=0.0000
+CheXpert: 2024-01-01 20:23:24,729 [INFO] Iter=750, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:23:26,786 [INFO] Iter=760, size=16, max=10.7611, avg=10.7611, min=10.7611, std=0.0000
+CheXpert: 2024-01-01 20:23:28,839 [INFO] Iter=770, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:23:30,900 [INFO] Iter=780, size=16, max=13.1525, avg=13.1525, min=13.1525, std=0.0000
+CheXpert: 2024-01-01 20:23:32,953 [INFO] Iter=790, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:23:35,009 [INFO] Iter=800, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:23:35,204 [INFO] [TEST] Iter=800, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:23:37,261 [INFO] Iter=810, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:23:39,307 [INFO] Iter=820, size=16, max=12.3553, avg=12.3553, min=12.3553, std=0.0000
+CheXpert: 2024-01-01 20:23:41,359 [INFO] Iter=830, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:23:43,414 [INFO] Iter=840, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:23:45,469 [INFO] Iter=850, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:23:47,517 [INFO] Iter=860, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:23:49,572 [INFO] Iter=870, size=16, max=12.7539, avg=12.7539, min=12.7539, std=0.0000
+CheXpert: 2024-01-01 20:23:51,631 [INFO] Iter=880, size=16, max=12.7539, avg=12.7539, min=12.7539, std=0.0000
+CheXpert: 2024-01-01 20:23:53,691 [INFO] Iter=890, size=16, max=13.9496, avg=13.9496, min=13.9496, std=0.0000
+CheXpert: 2024-01-01 20:23:55,742 [INFO] Iter=900, size=16, max=10.7611, avg=10.7611, min=10.7611, std=0.0000
+CheXpert: 2024-01-01 20:23:55,936 [INFO] [TEST] Iter=900, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:23:58,000 [INFO] Iter=910, size=16, max=12.3553, avg=12.3553, min=12.3553, std=0.0000
+CheXpert: 2024-01-01 20:24:00,056 [INFO] Iter=920, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:24:02,116 [INFO] Iter=930, size=16, max=11.9568, avg=11.9568, min=11.9568, std=0.0000
+CheXpert: 2024-01-01 20:24:04,173 [INFO] Iter=940, size=16, max=11.5582, avg=11.5582, min=11.5582, std=0.0000
+CheXpert: 2024-01-01 20:24:06,230 [INFO] Iter=950, size=16, max=12.3553, avg=12.3553, min=12.3553, std=0.0000
+CheXpert: 2024-01-01 20:24:08,294 [INFO] Iter=960, size=16, max=10.3626, avg=10.3626, min=10.3626, std=0.0000
+CheXpert: 2024-01-01 20:24:10,425 [INFO] Iter=970, size=16, max=10.3626, avg=10.3626, min=10.3626, std=0.0000
+CheXpert: 2024-01-01 20:24:12,552 [INFO] Iter=980, size=16, max=11.1597, avg=11.1597, min=11.1597, std=0.0000
+CheXpert: 2024-01-01 20:24:14,677 [INFO] Iter=990, size=16, max=12.7539, avg=12.7539, min=12.7539, std=0.0000
+CheXpert: 2024-01-01 20:24:16,789 [INFO] [TEST] Iter=1000, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:24:16,794 [INFO] Training done, best_score=0.1500
+CheXpert: 2024-01-01 20:24:16,799 [INFO] Loaded model parameters from ./log/chexpert.
+CheXpert: 2024-01-01 20:24:16,799 [INFO] Start to test the parameters.
+CheXpert: 2024-01-01 20:24:17,747 [INFO] [TEST] #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:28:00,120 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 20:28:00,120 [INFO] ==============================
+CheXpert: 2024-01-01 20:28:10,889 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 20:28:17,437 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 20:28:17,461 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 20:28:45,382 [INFO] Iter=10, size=16, max=0.7214, avg=0.7211, min=0.7207, std=0.0002
+CheXpert: 2024-01-01 20:28:47,359 [INFO] Iter=20, size=16, max=0.7271, avg=0.7269, min=0.7267, std=0.0001
+CheXpert: 2024-01-01 20:28:49,341 [INFO] Iter=30, size=16, max=0.7459, avg=0.7453, min=0.7448, std=0.0002
+CheXpert: 2024-01-01 20:28:51,320 [INFO] Iter=40, size=16, max=0.8773, avg=0.8766, min=0.8760, std=0.0004
+CheXpert: 2024-01-01 20:28:53,300 [INFO] Iter=50, size=16, max=1.2483, avg=1.2463, min=1.2442, std=0.0012
+CheXpert: 2024-01-01 20:28:55,285 [INFO] Iter=60, size=16, max=2.2261, avg=2.2086, min=2.1917, std=0.0107
+CheXpert: 2024-01-01 20:28:57,275 [INFO] Iter=70, size=16, max=5.4120, avg=5.3749, min=5.3384, std=0.0202
+CheXpert: 2024-01-01 20:28:59,266 [INFO] Iter=80, size=16, max=10.8329, avg=10.7906, min=10.7349, std=0.0241
+CheXpert: 2024-01-01 20:29:01,250 [INFO] Iter=90, size=16, max=11.9700, avg=11.9700, min=11.9700, std=0.0000
+CheXpert: 2024-01-01 20:29:03,245 [INFO] Iter=100, size=16, max=11.5802, avg=11.5802, min=11.5802, std=0.0000
+CheXpert: 2024-01-01 20:29:17,048 [INFO] [TEST] Iter=100, #tests=2, max=0.3056, avg=0.3056, min=0.3056, std=0.0000
+CheXpert: 2024-01-01 20:29:19,076 [INFO] Iter=110, size=16, max=11.5802, avg=11.5802, min=11.5802, std=0.0000
+CheXpert: 2024-01-01 20:29:21,077 [INFO] Iter=120, size=16, max=12.3729, avg=12.3729, min=12.3729, std=0.0000
+CheXpert: 2024-01-01 20:29:23,082 [INFO] Iter=130, size=16, max=11.1685, avg=11.1685, min=11.1685, std=0.0000
+CheXpert: 2024-01-01 20:29:25,087 [INFO] Iter=140, size=16, max=11.5802, avg=11.5802, min=11.5802, std=0.0000
+CheXpert: 2024-01-01 20:29:27,087 [INFO] Iter=150, size=16, max=13.1788, avg=13.1788, min=13.1788, std=0.0000
+CheXpert: 2024-01-01 20:29:29,086 [INFO] Iter=160, size=16, max=11.1816, avg=11.1816, min=11.1816, std=0.0000
+CheXpert: 2024-01-01 20:35:04,883 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 20:35:04,883 [INFO] ==============================
+CheXpert: 2024-01-01 20:35:14,533 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 20:35:20,983 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 20:35:21,007 [INFO] Start to train for 1000 iterations.
+CheXpert: 2024-01-01 20:35:49,017 [INFO] Iter=10, size=16, max=0.6954, avg=0.6953, min=0.6952, std=0.0001
+CheXpert: 2024-01-01 20:35:50,987 [INFO] Iter=20, size=16, max=0.6994, avg=0.6992, min=0.6991, std=0.0001
+CheXpert: 2024-01-01 20:35:52,959 [INFO] Iter=30, size=16, max=0.6979, avg=0.6977, min=0.6976, std=0.0001
+CheXpert: 2024-01-01 20:35:54,933 [INFO] Iter=40, size=16, max=0.6987, avg=0.6985, min=0.6984, std=0.0001
+CheXpert: 2024-01-01 20:35:56,908 [INFO] Iter=50, size=16, max=0.7086, avg=0.7085, min=0.7084, std=0.0000
+CheXpert: 2024-01-01 20:35:58,880 [INFO] Iter=60, size=16, max=0.7159, avg=0.7158, min=0.7156, std=0.0001
+CheXpert: 2024-01-01 20:36:00,853 [INFO] Iter=70, size=16, max=0.7101, avg=0.7100, min=0.7099, std=0.0001
+CheXpert: 2024-01-01 20:36:02,832 [INFO] Iter=80, size=16, max=0.7048, avg=0.7047, min=0.7046, std=0.0001
+CheXpert: 2024-01-01 20:36:04,817 [INFO] Iter=90, size=16, max=0.7198, avg=0.7197, min=0.7196, std=0.0001
+CheXpert: 2024-01-01 20:36:06,797 [INFO] Iter=100, size=16, max=0.7228, avg=0.7227, min=0.7225, std=0.0001
+CheXpert: 2024-01-01 20:36:20,593 [INFO] [TEST] Iter=100, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:36:22,615 [INFO] Iter=110, size=16, max=0.7149, avg=0.7148, min=0.7148, std=0.0000
+CheXpert: 2024-01-01 20:36:24,604 [INFO] Iter=120, size=16, max=0.7314, avg=0.7313, min=0.7311, std=0.0001
+CheXpert: 2024-01-01 20:36:26,591 [INFO] Iter=130, size=16, max=0.7160, avg=0.7158, min=0.7157, std=0.0001
+CheXpert: 2024-01-01 20:36:28,581 [INFO] Iter=140, size=16, max=0.7180, avg=0.7179, min=0.7178, std=0.0001
+CheXpert: 2024-01-01 20:36:30,576 [INFO] Iter=150, size=16, max=0.7373, avg=0.7372, min=0.7371, std=0.0001
+CheXpert: 2024-01-01 20:36:32,575 [INFO] Iter=160, size=16, max=0.7368, avg=0.7367, min=0.7365, std=0.0001
+CheXpert: 2024-01-01 20:36:34,568 [INFO] Iter=170, size=16, max=0.7243, avg=0.7242, min=0.7241, std=0.0001
+CheXpert: 2024-01-01 20:36:36,565 [INFO] Iter=180, size=16, max=0.7365, avg=0.7364, min=0.7362, std=0.0001
+CheXpert: 2024-01-01 20:36:38,564 [INFO] Iter=190, size=16, max=0.7210, avg=0.7209, min=0.7208, std=0.0001
+CheXpert: 2024-01-01 20:36:40,568 [INFO] Iter=200, size=16, max=0.7338, avg=0.7337, min=0.7335, std=0.0001
+CheXpert: 2024-01-01 20:36:40,757 [INFO] [TEST] Iter=200, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:36:42,773 [INFO] Iter=210, size=16, max=0.7362, avg=0.7361, min=0.7360, std=0.0000
+CheXpert: 2024-01-01 20:36:44,777 [INFO] Iter=220, size=16, max=0.7457, avg=0.7456, min=0.7455, std=0.0001
+CheXpert: 2024-01-01 20:36:46,784 [INFO] Iter=230, size=16, max=0.7464, avg=0.7463, min=0.7461, std=0.0001
+CheXpert: 2024-01-01 20:36:48,791 [INFO] Iter=240, size=16, max=0.7444, avg=0.7442, min=0.7441, std=0.0001
+CheXpert: 2024-01-01 20:36:50,794 [INFO] Iter=250, size=16, max=0.7642, avg=0.7641, min=0.7640, std=0.0000
+CheXpert: 2024-01-01 20:36:52,800 [INFO] Iter=260, size=16, max=0.7391, avg=0.7391, min=0.7390, std=0.0000
+CheXpert: 2024-01-01 20:36:54,809 [INFO] Iter=270, size=16, max=0.7222, avg=0.7221, min=0.7220, std=0.0001
+CheXpert: 2024-01-01 20:36:56,822 [INFO] Iter=280, size=16, max=0.7566, avg=0.7565, min=0.7563, std=0.0001
+CheXpert: 2024-01-01 20:36:58,833 [INFO] Iter=290, size=16, max=0.7314, avg=0.7313, min=0.7312, std=0.0001
+CheXpert: 2024-01-01 20:37:00,840 [INFO] Iter=300, size=16, max=0.7519, avg=0.7518, min=0.7517, std=0.0001
+CheXpert: 2024-01-01 20:37:01,032 [INFO] [TEST] Iter=300, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:37:03,050 [INFO] Iter=310, size=16, max=0.7749, avg=0.7748, min=0.7746, std=0.0001
+CheXpert: 2024-01-01 20:37:05,061 [INFO] Iter=320, size=16, max=0.7416, avg=0.7415, min=0.7414, std=0.0000
+CheXpert: 2024-01-01 20:37:07,070 [INFO] Iter=330, size=16, max=0.7402, avg=0.7401, min=0.7400, std=0.0001
+CheXpert: 2024-01-01 20:37:09,082 [INFO] Iter=340, size=16, max=0.7394, avg=0.7393, min=0.7392, std=0.0000
+CheXpert: 2024-01-01 20:37:11,088 [INFO] Iter=350, size=16, max=0.7444, avg=0.7442, min=0.7441, std=0.0001
+CheXpert: 2024-01-01 20:37:13,100 [INFO] Iter=360, size=16, max=0.7476, avg=0.7475, min=0.7474, std=0.0001
+CheXpert: 2024-01-01 20:37:15,117 [INFO] Iter=370, size=16, max=0.7691, avg=0.7689, min=0.7688, std=0.0001
+CheXpert: 2024-01-01 20:37:17,135 [INFO] Iter=380, size=16, max=0.7657, avg=0.7654, min=0.7652, std=0.0001
+CheXpert: 2024-01-01 20:37:19,149 [INFO] Iter=390, size=16, max=0.7452, avg=0.7451, min=0.7451, std=0.0000
+CheXpert: 2024-01-01 20:37:21,166 [INFO] Iter=400, size=16, max=0.7445, avg=0.7443, min=0.7442, std=0.0001
+CheXpert: 2024-01-01 20:37:21,359 [INFO] [TEST] Iter=400, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:37:23,383 [INFO] Iter=410, size=16, max=0.7650, avg=0.7649, min=0.7648, std=0.0001
+CheXpert: 2024-01-01 20:37:25,403 [INFO] Iter=420, size=16, max=0.7561, avg=0.7559, min=0.7557, std=0.0001
+CheXpert: 2024-01-01 20:37:27,424 [INFO] Iter=430, size=16, max=0.7642, avg=0.7640, min=0.7639, std=0.0001
+CheXpert: 2024-01-01 20:37:29,450 [INFO] Iter=440, size=16, max=0.7419, avg=0.7418, min=0.7417, std=0.0001
+CheXpert: 2024-01-01 20:37:31,476 [INFO] Iter=450, size=16, max=0.7596, avg=0.7594, min=0.7593, std=0.0001
+CheXpert: 2024-01-01 20:37:33,500 [INFO] Iter=460, size=16, max=0.7672, avg=0.7670, min=0.7668, std=0.0001
+CheXpert: 2024-01-01 20:37:35,530 [INFO] Iter=470, size=16, max=0.7858, avg=0.7856, min=0.7854, std=0.0001
+CheXpert: 2024-01-01 20:37:37,559 [INFO] Iter=480, size=16, max=0.7714, avg=0.7713, min=0.7711, std=0.0001
+CheXpert: 2024-01-01 20:37:39,592 [INFO] Iter=490, size=16, max=0.7526, avg=0.7525, min=0.7524, std=0.0001
+CheXpert: 2024-01-01 20:37:41,620 [INFO] Iter=500, size=16, max=0.7966, avg=0.7964, min=0.7962, std=0.0001
+CheXpert: 2024-01-01 20:37:41,812 [INFO] [TEST] Iter=500, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:37:43,844 [INFO] Iter=510, size=16, max=0.7604, avg=0.7603, min=0.7601, std=0.0001
+CheXpert: 2024-01-01 20:37:45,875 [INFO] Iter=520, size=16, max=0.7860, avg=0.7858, min=0.7855, std=0.0001
+CheXpert: 2024-01-01 20:37:47,910 [INFO] Iter=530, size=16, max=0.7756, avg=0.7754, min=0.7753, std=0.0001
+CheXpert: 2024-01-01 20:37:49,938 [INFO] Iter=540, size=16, max=0.7764, avg=0.7763, min=0.7762, std=0.0001
+CheXpert: 2024-01-01 20:37:51,973 [INFO] Iter=550, size=16, max=0.7854, avg=0.7853, min=0.7851, std=0.0001
+CheXpert: 2024-01-01 20:37:54,004 [INFO] Iter=560, size=16, max=0.7895, avg=0.7894, min=0.7892, std=0.0001
+CheXpert: 2024-01-01 20:37:56,037 [INFO] Iter=570, size=16, max=0.7781, avg=0.7781, min=0.7780, std=0.0001
+CheXpert: 2024-01-01 20:37:58,073 [INFO] Iter=580, size=16, max=0.7831, avg=0.7829, min=0.7828, std=0.0001
+CheXpert: 2024-01-01 20:38:00,104 [INFO] Iter=590, size=16, max=0.7857, avg=0.7856, min=0.7854, std=0.0001
+CheXpert: 2024-01-01 20:38:02,140 [INFO] Iter=600, size=16, max=0.8176, avg=0.8173, min=0.8171, std=0.0001
+CheXpert: 2024-01-01 20:38:02,332 [INFO] [TEST] Iter=600, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:38:04,377 [INFO] Iter=610, size=16, max=0.8118, avg=0.8116, min=0.8115, std=0.0001
+CheXpert: 2024-01-01 20:38:06,420 [INFO] Iter=620, size=16, max=0.8113, avg=0.8112, min=0.8110, std=0.0001
+CheXpert: 2024-01-01 20:38:08,461 [INFO] Iter=630, size=16, max=0.7892, avg=0.7891, min=0.7890, std=0.0001
+CheXpert: 2024-01-01 20:38:10,505 [INFO] Iter=640, size=16, max=0.8162, avg=0.8160, min=0.8157, std=0.0001
+CheXpert: 2024-01-01 20:38:12,549 [INFO] Iter=650, size=16, max=0.8477, avg=0.8475, min=0.8473, std=0.0001
+CheXpert: 2024-01-01 20:38:14,587 [INFO] Iter=660, size=16, max=0.8242, avg=0.8240, min=0.8239, std=0.0001
+CheXpert: 2024-01-01 20:38:16,632 [INFO] Iter=670, size=16, max=0.7975, avg=0.7973, min=0.7972, std=0.0001
+CheXpert: 2024-01-01 20:38:18,671 [INFO] Iter=680, size=16, max=0.7995, avg=0.7993, min=0.7991, std=0.0001
+CheXpert: 2024-01-01 20:38:20,713 [INFO] Iter=690, size=16, max=0.8367, avg=0.8365, min=0.8364, std=0.0001
+CheXpert: 2024-01-01 20:38:22,760 [INFO] Iter=700, size=16, max=0.8098, avg=0.8095, min=0.8093, std=0.0001
+CheXpert: 2024-01-01 20:38:22,954 [INFO] [TEST] Iter=700, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:38:25,004 [INFO] Iter=710, size=16, max=0.8557, avg=0.8555, min=0.8553, std=0.0001
+CheXpert: 2024-01-01 20:38:27,048 [INFO] Iter=720, size=16, max=0.8007, avg=0.8005, min=0.8004, std=0.0001
+CheXpert: 2024-01-01 20:38:29,091 [INFO] Iter=730, size=16, max=0.8003, avg=0.8002, min=0.8001, std=0.0001
+CheXpert: 2024-01-01 20:38:31,133 [INFO] Iter=740, size=16, max=0.8507, avg=0.8505, min=0.8502, std=0.0001
+CheXpert: 2024-01-01 20:38:33,179 [INFO] Iter=750, size=16, max=0.7981, avg=0.7980, min=0.7978, std=0.0001
+CheXpert: 2024-01-01 20:38:35,225 [INFO] Iter=760, size=16, max=0.7956, avg=0.7955, min=0.7953, std=0.0001
+CheXpert: 2024-01-01 20:38:37,272 [INFO] Iter=770, size=16, max=0.8070, avg=0.8069, min=0.8067, std=0.0001
+CheXpert: 2024-01-01 20:38:39,317 [INFO] Iter=780, size=16, max=0.8348, avg=0.8346, min=0.8343, std=0.0001
+CheXpert: 2024-01-01 20:38:41,360 [INFO] Iter=790, size=16, max=0.8234, avg=0.8232, min=0.8230, std=0.0001
+CheXpert: 2024-01-01 20:38:43,405 [INFO] Iter=800, size=16, max=0.8391, avg=0.8390, min=0.8388, std=0.0001
+CheXpert: 2024-01-01 20:38:43,598 [INFO] [TEST] Iter=800, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:38:45,640 [INFO] Iter=810, size=16, max=0.8137, avg=0.8135, min=0.8133, std=0.0001
+CheXpert: 2024-01-01 20:38:47,687 [INFO] Iter=820, size=16, max=0.8421, avg=0.8420, min=0.8419, std=0.0001
+CheXpert: 2024-01-01 20:38:49,732 [INFO] Iter=830, size=16, max=0.8317, avg=0.8315, min=0.8314, std=0.0001
+CheXpert: 2024-01-01 20:38:51,776 [INFO] Iter=840, size=16, max=0.8220, avg=0.8218, min=0.8217, std=0.0001
+CheXpert: 2024-01-01 20:38:53,821 [INFO] Iter=850, size=16, max=0.8135, avg=0.8134, min=0.8133, std=0.0001
+CheXpert: 2024-01-01 20:38:55,864 [INFO] Iter=860, size=16, max=0.8124, avg=0.8123, min=0.8122, std=0.0001
+CheXpert: 2024-01-01 20:38:57,906 [INFO] Iter=870, size=16, max=0.8186, avg=0.8184, min=0.8182, std=0.0001
+CheXpert: 2024-01-01 20:38:59,955 [INFO] Iter=880, size=16, max=0.8425, avg=0.8423, min=0.8421, std=0.0001
+CheXpert: 2024-01-01 20:39:02,003 [INFO] Iter=890, size=16, max=0.8586, avg=0.8584, min=0.8583, std=0.0001
+CheXpert: 2024-01-01 20:39:04,046 [INFO] Iter=900, size=16, max=0.8952, avg=0.8949, min=0.8945, std=0.0002
+CheXpert: 2024-01-01 20:39:04,239 [INFO] [TEST] Iter=900, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:39:06,293 [INFO] Iter=910, size=16, max=0.8499, avg=0.8497, min=0.8496, std=0.0001
+CheXpert: 2024-01-01 20:39:08,342 [INFO] Iter=920, size=16, max=0.7956, avg=0.7954, min=0.7953, std=0.0001
+CheXpert: 2024-01-01 20:39:10,393 [INFO] Iter=930, size=16, max=0.7674, avg=0.7673, min=0.7672, std=0.0001
+CheXpert: 2024-01-01 20:39:12,442 [INFO] Iter=940, size=16, max=0.8367, avg=0.8365, min=0.8363, std=0.0001
+CheXpert: 2024-01-01 20:39:14,487 [INFO] Iter=950, size=16, max=0.7919, avg=0.7917, min=0.7915, std=0.0001
+CheXpert: 2024-01-01 20:39:16,531 [INFO] Iter=960, size=16, max=0.8510, avg=0.8508, min=0.8506, std=0.0001
+CheXpert: 2024-01-01 20:39:18,581 [INFO] Iter=970, size=16, max=0.7699, avg=0.7698, min=0.7697, std=0.0001
+CheXpert: 2024-01-01 20:39:20,625 [INFO] Iter=980, size=16, max=0.8296, avg=0.8294, min=0.8292, std=0.0001
+CheXpert: 2024-01-01 20:39:22,677 [INFO] Iter=990, size=16, max=0.8321, avg=0.8320, min=0.8319, std=0.0001
+CheXpert: 2024-01-01 20:39:24,720 [INFO] [TEST] Iter=1000, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:39:24,725 [INFO] Training done, best_score=0.1500
+CheXpert: 2024-01-01 20:39:24,730 [INFO] Loaded model parameters from ./log/chexpert.
+CheXpert: 2024-01-01 20:39:24,731 [INFO] Start to test the parameters.
+CheXpert: 2024-01-01 20:39:25,681 [INFO] [TEST] #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:51:33,842 [INFO] EvoJAX CheXpert Demo
+CheXpert: 2024-01-01 20:51:33,842 [INFO] ==============================
+CheXpert: 2024-01-01 20:51:44,130 [INFO] DenseNetPolicy.num_params = 231685
+CheXpert: 2024-01-01 20:51:50,531 [INFO] use_for_loop=False
+CheXpert: 2024-01-01 20:51:50,555 [INFO] Start to train for 10000 iterations.
+CheXpert: 2024-01-01 20:52:17,403 [INFO] Iter=10, size=16, max=0.6963, avg=0.6962, min=0.6961, std=0.0001
+CheXpert: 2024-01-01 20:52:19,374 [INFO] Iter=20, size=16, max=0.6998, avg=0.6996, min=0.6995, std=0.0001
+CheXpert: 2024-01-01 20:52:21,340 [INFO] Iter=30, size=16, max=0.7009, avg=0.7007, min=0.7005, std=0.0001
+CheXpert: 2024-01-01 20:52:23,305 [INFO] Iter=40, size=16, max=0.7105, avg=0.7103, min=0.7102, std=0.0001
+CheXpert: 2024-01-01 20:52:25,278 [INFO] Iter=50, size=16, max=0.7163, avg=0.7162, min=0.7161, std=0.0000
+CheXpert: 2024-01-01 20:52:27,257 [INFO] Iter=60, size=16, max=0.7010, avg=0.7009, min=0.7008, std=0.0000
+CheXpert: 2024-01-01 20:52:29,232 [INFO] Iter=70, size=16, max=0.7170, avg=0.7168, min=0.7167, std=0.0001
+CheXpert: 2024-01-01 20:52:31,214 [INFO] Iter=80, size=16, max=0.7131, avg=0.7130, min=0.7129, std=0.0001
+CheXpert: 2024-01-01 20:52:33,199 [INFO] Iter=90, size=16, max=0.7218, avg=0.7217, min=0.7216, std=0.0001
+CheXpert: 2024-01-01 20:52:35,172 [INFO] Iter=100, size=16, max=0.7204, avg=0.7202, min=0.7201, std=0.0001
+CheXpert: 2024-01-01 20:52:48,903 [INFO] [TEST] Iter=100, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:52:50,923 [INFO] Iter=110, size=16, max=0.7253, avg=0.7251, min=0.7250, std=0.0001
+CheXpert: 2024-01-01 20:52:52,915 [INFO] Iter=120, size=16, max=0.7184, avg=0.7183, min=0.7182, std=0.0001
+CheXpert: 2024-01-01 20:52:54,913 [INFO] Iter=130, size=16, max=0.7133, avg=0.7132, min=0.7130, std=0.0001
+CheXpert: 2024-01-01 20:52:56,908 [INFO] Iter=140, size=16, max=0.7324, avg=0.7323, min=0.7322, std=0.0000
+CheXpert: 2024-01-01 20:52:58,908 [INFO] Iter=150, size=16, max=0.7349, avg=0.7348, min=0.7347, std=0.0000
+CheXpert: 2024-01-01 20:53:00,901 [INFO] Iter=160, size=16, max=0.7297, avg=0.7296, min=0.7295, std=0.0001
+CheXpert: 2024-01-01 20:53:02,904 [INFO] Iter=170, size=16, max=0.7507, avg=0.7505, min=0.7503, std=0.0001
+CheXpert: 2024-01-01 20:53:04,906 [INFO] Iter=180, size=16, max=0.7433, avg=0.7431, min=0.7430, std=0.0001
+CheXpert: 2024-01-01 20:53:06,911 [INFO] Iter=190, size=16, max=0.7445, avg=0.7442, min=0.7440, std=0.0001
+CheXpert: 2024-01-01 20:53:08,917 [INFO] Iter=200, size=16, max=0.7334, avg=0.7333, min=0.7331, std=0.0001
+CheXpert: 2024-01-01 20:53:09,105 [INFO] [TEST] Iter=200, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:53:11,121 [INFO] Iter=210, size=16, max=0.7482, avg=0.7481, min=0.7480, std=0.0001
+CheXpert: 2024-01-01 20:53:13,127 [INFO] Iter=220, size=16, max=0.7405, avg=0.7404, min=0.7403, std=0.0001
+CheXpert: 2024-01-01 20:53:15,131 [INFO] Iter=230, size=16, max=0.7560, avg=0.7558, min=0.7556, std=0.0001
+CheXpert: 2024-01-01 20:53:17,136 [INFO] Iter=240, size=16, max=0.7580, avg=0.7578, min=0.7576, std=0.0001
+CheXpert: 2024-01-01 20:53:19,142 [INFO] Iter=250, size=16, max=0.7455, avg=0.7453, min=0.7452, std=0.0001
+CheXpert: 2024-01-01 20:53:21,147 [INFO] Iter=260, size=16, max=0.7707, avg=0.7705, min=0.7702, std=0.0001
+CheXpert: 2024-01-01 20:53:23,152 [INFO] Iter=270, size=16, max=0.7455, avg=0.7453, min=0.7451, std=0.0001
+CheXpert: 2024-01-01 20:53:25,164 [INFO] Iter=280, size=16, max=0.7583, avg=0.7581, min=0.7580, std=0.0001
+CheXpert: 2024-01-01 20:53:27,174 [INFO] Iter=290, size=16, max=0.7171, avg=0.7171, min=0.7170, std=0.0000
+CheXpert: 2024-01-01 20:53:29,186 [INFO] Iter=300, size=16, max=0.7648, avg=0.7646, min=0.7643, std=0.0001
+CheXpert: 2024-01-01 20:53:29,378 [INFO] [TEST] Iter=300, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:53:31,395 [INFO] Iter=310, size=16, max=0.7394, avg=0.7393, min=0.7391, std=0.0001
+CheXpert: 2024-01-01 20:53:33,409 [INFO] Iter=320, size=16, max=0.7757, avg=0.7756, min=0.7755, std=0.0001
+CheXpert: 2024-01-01 20:53:35,421 [INFO] Iter=330, size=16, max=0.7585, avg=0.7584, min=0.7583, std=0.0001
+CheXpert: 2024-01-01 20:53:37,436 [INFO] Iter=340, size=16, max=0.7748, avg=0.7746, min=0.7745, std=0.0001
+CheXpert: 2024-01-01 20:53:39,453 [INFO] Iter=350, size=16, max=0.7663, avg=0.7662, min=0.7661, std=0.0001
+CheXpert: 2024-01-01 20:53:41,468 [INFO] Iter=360, size=16, max=0.7493, avg=0.7492, min=0.7491, std=0.0001
+CheXpert: 2024-01-01 20:53:43,487 [INFO] Iter=370, size=16, max=0.7541, avg=0.7540, min=0.7539, std=0.0001
+CheXpert: 2024-01-01 20:53:45,505 [INFO] Iter=380, size=16, max=0.7424, avg=0.7422, min=0.7420, std=0.0001
+CheXpert: 2024-01-01 20:53:47,525 [INFO] Iter=390, size=16, max=0.7611, avg=0.7610, min=0.7609, std=0.0001
+CheXpert: 2024-01-01 20:53:49,546 [INFO] Iter=400, size=16, max=0.7664, avg=0.7662, min=0.7660, std=0.0001
+CheXpert: 2024-01-01 20:53:49,735 [INFO] [TEST] Iter=400, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:53:51,766 [INFO] Iter=410, size=16, max=0.7480, avg=0.7479, min=0.7477, std=0.0001
+CheXpert: 2024-01-01 20:53:53,787 [INFO] Iter=420, size=16, max=0.7840, avg=0.7837, min=0.7834, std=0.0001
+CheXpert: 2024-01-01 20:53:55,803 [INFO] Iter=430, size=16, max=0.7652, avg=0.7651, min=0.7650, std=0.0001
+CheXpert: 2024-01-01 20:53:57,825 [INFO] Iter=440, size=16, max=0.7382, avg=0.7382, min=0.7381, std=0.0001
+CheXpert: 2024-01-01 20:53:59,849 [INFO] Iter=450, size=16, max=0.7757, avg=0.7756, min=0.7754, std=0.0001
+CheXpert: 2024-01-01 20:54:01,871 [INFO] Iter=460, size=16, max=0.7655, avg=0.7654, min=0.7652, std=0.0001
+CheXpert: 2024-01-01 20:54:03,897 [INFO] Iter=470, size=16, max=0.7896, avg=0.7894, min=0.7892, std=0.0001
+CheXpert: 2024-01-01 20:54:05,921 [INFO] Iter=480, size=16, max=0.8024, avg=0.8023, min=0.8021, std=0.0001
+CheXpert: 2024-01-01 20:54:07,949 [INFO] Iter=490, size=16, max=0.7949, avg=0.7948, min=0.7947, std=0.0001
+CheXpert: 2024-01-01 20:54:09,971 [INFO] Iter=500, size=16, max=0.7817, avg=0.7815, min=0.7814, std=0.0001
+CheXpert: 2024-01-01 20:54:10,164 [INFO] [TEST] Iter=500, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:54:12,192 [INFO] Iter=510, size=16, max=0.7676, avg=0.7674, min=0.7672, std=0.0001
+CheXpert: 2024-01-01 20:54:14,221 [INFO] Iter=520, size=16, max=0.7694, avg=0.7693, min=0.7692, std=0.0001
+CheXpert: 2024-01-01 20:54:16,254 [INFO] Iter=530, size=16, max=0.7658, avg=0.7657, min=0.7656, std=0.0001
+CheXpert: 2024-01-01 20:54:18,283 [INFO] Iter=540, size=16, max=0.7710, avg=0.7709, min=0.7708, std=0.0000
+CheXpert: 2024-01-01 20:54:20,318 [INFO] Iter=550, size=16, max=0.7781, avg=0.7779, min=0.7778, std=0.0001
+CheXpert: 2024-01-01 20:54:22,348 [INFO] Iter=560, size=16, max=0.8063, avg=0.8061, min=0.8058, std=0.0001
+CheXpert: 2024-01-01 20:54:24,383 [INFO] Iter=570, size=16, max=0.8220, avg=0.8218, min=0.8216, std=0.0001
+CheXpert: 2024-01-01 20:54:26,404 [INFO] Iter=580, size=16, max=0.8017, avg=0.8016, min=0.8014, std=0.0001
+CheXpert: 2024-01-01 20:54:28,441 [INFO] Iter=590, size=16, max=0.8108, avg=0.8106, min=0.8104, std=0.0001
+CheXpert: 2024-01-01 20:54:30,476 [INFO] Iter=600, size=16, max=0.8037, avg=0.8036, min=0.8035, std=0.0001
+CheXpert: 2024-01-01 20:54:30,671 [INFO] [TEST] Iter=600, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:54:32,714 [INFO] Iter=610, size=16, max=0.7898, avg=0.7897, min=0.7895, std=0.0001
+CheXpert: 2024-01-01 20:54:34,748 [INFO] Iter=620, size=16, max=0.7958, avg=0.7957, min=0.7956, std=0.0001
+CheXpert: 2024-01-01 20:54:36,788 [INFO] Iter=630, size=16, max=0.7616, avg=0.7615, min=0.7614, std=0.0000
+CheXpert: 2024-01-01 20:54:38,826 [INFO] Iter=640, size=16, max=0.8091, avg=0.8088, min=0.8086, std=0.0002
+CheXpert: 2024-01-01 20:54:40,870 [INFO] Iter=650, size=16, max=0.8018, avg=0.8017, min=0.8015, std=0.0001
+CheXpert: 2024-01-01 20:54:42,913 [INFO] Iter=660, size=16, max=0.8245, avg=0.8244, min=0.8243, std=0.0001
+CheXpert: 2024-01-01 20:54:44,956 [INFO] Iter=670, size=16, max=0.8191, avg=0.8188, min=0.8185, std=0.0001
+CheXpert: 2024-01-01 20:54:46,994 [INFO] Iter=680, size=16, max=0.8187, avg=0.8187, min=0.8186, std=0.0001
+CheXpert: 2024-01-01 20:54:49,036 [INFO] Iter=690, size=16, max=0.7915, avg=0.7913, min=0.7912, std=0.0001
+CheXpert: 2024-01-01 20:54:51,080 [INFO] Iter=700, size=16, max=0.7847, avg=0.7845, min=0.7844, std=0.0001
+CheXpert: 2024-01-01 20:54:51,272 [INFO] [TEST] Iter=700, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:54:53,318 [INFO] Iter=710, size=16, max=0.8060, avg=0.8059, min=0.8057, std=0.0001
+CheXpert: 2024-01-01 20:54:55,363 [INFO] Iter=720, size=16, max=0.7740, avg=0.7738, min=0.7737, std=0.0001
+CheXpert: 2024-01-01 20:54:57,405 [INFO] Iter=730, size=16, max=0.7915, avg=0.7914, min=0.7913, std=0.0001
+CheXpert: 2024-01-01 20:54:59,444 [INFO] Iter=740, size=16, max=0.7761, avg=0.7760, min=0.7759, std=0.0001
+CheXpert: 2024-01-01 20:55:01,490 [INFO] Iter=750, size=16, max=0.8069, avg=0.8067, min=0.8065, std=0.0001
+CheXpert: 2024-01-01 20:55:03,538 [INFO] Iter=760, size=16, max=0.7781, avg=0.7780, min=0.7779, std=0.0001
+CheXpert: 2024-01-01 20:55:05,587 [INFO] Iter=770, size=16, max=0.7641, avg=0.7640, min=0.7639, std=0.0001
+CheXpert: 2024-01-01 20:55:07,635 [INFO] Iter=780, size=16, max=0.8591, avg=0.8589, min=0.8586, std=0.0002
+CheXpert: 2024-01-01 20:55:09,683 [INFO] Iter=790, size=16, max=0.7986, avg=0.7984, min=0.7982, std=0.0001
+CheXpert: 2024-01-01 20:55:11,731 [INFO] Iter=800, size=16, max=0.8664, avg=0.8662, min=0.8660, std=0.0001
+CheXpert: 2024-01-01 20:55:11,923 [INFO] [TEST] Iter=800, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:55:13,974 [INFO] Iter=810, size=16, max=0.8806, avg=0.8804, min=0.8801, std=0.0002
+CheXpert: 2024-01-01 20:55:16,017 [INFO] Iter=820, size=16, max=0.8623, avg=0.8621, min=0.8619, std=0.0001
+CheXpert: 2024-01-01 20:55:18,062 [INFO] Iter=830, size=16, max=0.8401, avg=0.8399, min=0.8397, std=0.0001
+CheXpert: 2024-01-01 20:55:20,112 [INFO] Iter=840, size=16, max=0.7965, avg=0.7963, min=0.7962, std=0.0001
+CheXpert: 2024-01-01 20:55:22,159 [INFO] Iter=850, size=16, max=0.7931, avg=0.7930, min=0.7929, std=0.0001
+CheXpert: 2024-01-01 20:55:24,201 [INFO] Iter=860, size=16, max=0.8357, avg=0.8356, min=0.8354, std=0.0001
+CheXpert: 2024-01-01 20:55:26,251 [INFO] Iter=870, size=16, max=0.7721, avg=0.7720, min=0.7719, std=0.0000
+CheXpert: 2024-01-01 20:55:28,302 [INFO] Iter=880, size=16, max=0.8234, avg=0.8231, min=0.8229, std=0.0001
+CheXpert: 2024-01-01 20:55:30,353 [INFO] Iter=890, size=16, max=0.8271, avg=0.8269, min=0.8268, std=0.0001
+CheXpert: 2024-01-01 20:55:32,400 [INFO] Iter=900, size=16, max=0.7797, avg=0.7796, min=0.7794, std=0.0001
+CheXpert: 2024-01-01 20:55:32,593 [INFO] [TEST] Iter=900, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:55:34,644 [INFO] Iter=910, size=16, max=0.7639, avg=0.7637, min=0.7636, std=0.0001
+CheXpert: 2024-01-01 20:55:36,694 [INFO] Iter=920, size=16, max=0.8917, avg=0.8915, min=0.8912, std=0.0001
+CheXpert: 2024-01-01 20:55:38,746 [INFO] Iter=930, size=16, max=0.8613, avg=0.8611, min=0.8609, std=0.0001
+CheXpert: 2024-01-01 20:55:40,796 [INFO] Iter=940, size=16, max=0.7955, avg=0.7954, min=0.7952, std=0.0001
+CheXpert: 2024-01-01 20:55:42,846 [INFO] Iter=950, size=16, max=0.8579, avg=0.8576, min=0.8574, std=0.0001
+CheXpert: 2024-01-01 20:55:44,892 [INFO] Iter=960, size=16, max=0.8730, avg=0.8728, min=0.8726, std=0.0001
+CheXpert: 2024-01-01 20:55:46,945 [INFO] Iter=970, size=16, max=0.8557, avg=0.8555, min=0.8554, std=0.0001
+CheXpert: 2024-01-01 20:55:48,998 [INFO] Iter=980, size=16, max=0.8455, avg=0.8452, min=0.8449, std=0.0001
+CheXpert: 2024-01-01 20:55:51,054 [INFO] Iter=990, size=16, max=0.8605, avg=0.8603, min=0.8602, std=0.0001
+CheXpert: 2024-01-01 20:55:53,111 [INFO] Iter=1000, size=16, max=0.8418, avg=0.8417, min=0.8416, std=0.0001
+CheXpert: 2024-01-01 20:55:53,305 [INFO] [TEST] Iter=1000, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:55:55,362 [INFO] Iter=1010, size=16, max=0.8569, avg=0.8566, min=0.8563, std=0.0002
+CheXpert: 2024-01-01 20:55:57,411 [INFO] Iter=1020, size=16, max=0.8703, avg=0.8702, min=0.8700, std=0.0001
+CheXpert: 2024-01-01 20:55:59,469 [INFO] Iter=1030, size=16, max=0.8372, avg=0.8370, min=0.8368, std=0.0001
+CheXpert: 2024-01-01 20:56:01,525 [INFO] Iter=1040, size=16, max=0.7984, avg=0.7982, min=0.7980, std=0.0001
+CheXpert: 2024-01-01 20:56:03,573 [INFO] Iter=1050, size=16, max=0.7805, avg=0.7803, min=0.7802, std=0.0001
+CheXpert: 2024-01-01 20:56:05,630 [INFO] Iter=1060, size=16, max=0.8109, avg=0.8107, min=0.8105, std=0.0001
+CheXpert: 2024-01-01 20:56:07,695 [INFO] Iter=1070, size=16, max=0.8281, avg=0.8279, min=0.8277, std=0.0001
+CheXpert: 2024-01-01 20:56:09,870 [INFO] Iter=1080, size=16, max=0.8699, avg=0.8697, min=0.8695, std=0.0001
+CheXpert: 2024-01-01 20:56:12,046 [INFO] Iter=1090, size=16, max=0.8589, avg=0.8587, min=0.8585, std=0.0001
+CheXpert: 2024-01-01 20:56:14,215 [INFO] Iter=1100, size=16, max=0.8442, avg=0.8440, min=0.8438, std=0.0001
+CheXpert: 2024-01-01 20:56:14,418 [INFO] [TEST] Iter=1100, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:56:16,592 [INFO] Iter=1110, size=16, max=0.8575, avg=0.8574, min=0.8573, std=0.0001
+CheXpert: 2024-01-01 20:56:18,760 [INFO] Iter=1120, size=16, max=0.8168, avg=0.8167, min=0.8165, std=0.0001
+CheXpert: 2024-01-01 20:56:20,922 [INFO] Iter=1130, size=16, max=0.8455, avg=0.8454, min=0.8452, std=0.0001
+CheXpert: 2024-01-01 20:56:23,094 [INFO] Iter=1140, size=16, max=0.8971, avg=0.8970, min=0.8968, std=0.0001
+CheXpert: 2024-01-01 20:56:25,265 [INFO] Iter=1150, size=16, max=0.8923, avg=0.8920, min=0.8918, std=0.0002
+CheXpert: 2024-01-01 20:56:27,433 [INFO] Iter=1160, size=16, max=0.8571, avg=0.8570, min=0.8569, std=0.0001
+CheXpert: 2024-01-01 20:56:29,600 [INFO] Iter=1170, size=16, max=0.8164, avg=0.8162, min=0.8160, std=0.0001
+CheXpert: 2024-01-01 20:56:31,772 [INFO] Iter=1180, size=16, max=0.8126, avg=0.8125, min=0.8123, std=0.0001
+CheXpert: 2024-01-01 20:56:33,938 [INFO] Iter=1190, size=16, max=0.7612, avg=0.7610, min=0.7608, std=0.0001
+CheXpert: 2024-01-01 20:56:36,107 [INFO] Iter=1200, size=16, max=0.8867, avg=0.8864, min=0.8860, std=0.0001
+CheXpert: 2024-01-01 20:56:36,310 [INFO] [TEST] Iter=1200, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:56:38,486 [INFO] Iter=1210, size=16, max=0.8595, avg=0.8594, min=0.8592, std=0.0001
+CheXpert: 2024-01-01 20:56:40,647 [INFO] Iter=1220, size=16, max=0.9028, avg=0.9024, min=0.9021, std=0.0002
+CheXpert: 2024-01-01 20:56:42,815 [INFO] Iter=1230, size=16, max=0.8560, avg=0.8558, min=0.8556, std=0.0001
+CheXpert: 2024-01-01 20:56:44,970 [INFO] Iter=1240, size=16, max=0.8847, avg=0.8845, min=0.8842, std=0.0002
+CheXpert: 2024-01-01 20:56:47,130 [INFO] Iter=1250, size=16, max=0.8238, avg=0.8236, min=0.8235, std=0.0001
+CheXpert: 2024-01-01 20:56:49,293 [INFO] Iter=1260, size=16, max=0.8504, avg=0.8503, min=0.8502, std=0.0001
+CheXpert: 2024-01-01 20:56:51,456 [INFO] Iter=1270, size=16, max=0.8643, avg=0.8641, min=0.8639, std=0.0001
+CheXpert: 2024-01-01 20:56:53,620 [INFO] Iter=1280, size=16, max=0.8828, avg=0.8826, min=0.8823, std=0.0001
+CheXpert: 2024-01-01 20:56:55,781 [INFO] Iter=1290, size=16, max=0.8673, avg=0.8670, min=0.8667, std=0.0002
+CheXpert: 2024-01-01 20:56:57,941 [INFO] Iter=1300, size=16, max=0.9104, avg=0.9101, min=0.9099, std=0.0001
+CheXpert: 2024-01-01 20:56:58,144 [INFO] [TEST] Iter=1300, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:57:00,314 [INFO] Iter=1310, size=16, max=0.8876, avg=0.8875, min=0.8873, std=0.0001
+CheXpert: 2024-01-01 20:57:02,474 [INFO] Iter=1320, size=16, max=0.8300, avg=0.8299, min=0.8297, std=0.0001
+CheXpert: 2024-01-01 20:57:04,641 [INFO] Iter=1330, size=16, max=0.8137, avg=0.8135, min=0.8133, std=0.0001
+CheXpert: 2024-01-01 20:57:06,803 [INFO] Iter=1340, size=16, max=0.8437, avg=0.8435, min=0.8434, std=0.0001
+CheXpert: 2024-01-01 20:57:08,964 [INFO] Iter=1350, size=16, max=0.8988, avg=0.8986, min=0.8983, std=0.0001
+CheXpert: 2024-01-01 20:57:11,125 [INFO] Iter=1360, size=16, max=0.8967, avg=0.8965, min=0.8963, std=0.0001
+CheXpert: 2024-01-01 20:57:13,288 [INFO] Iter=1370, size=16, max=0.9448, avg=0.9446, min=0.9444, std=0.0001
+CheXpert: 2024-01-01 20:57:15,445 [INFO] Iter=1380, size=16, max=0.8944, avg=0.8943, min=0.8941, std=0.0001
+CheXpert: 2024-01-01 20:57:17,613 [INFO] Iter=1390, size=16, max=0.8754, avg=0.8752, min=0.8749, std=0.0001
+CheXpert: 2024-01-01 20:57:19,776 [INFO] Iter=1400, size=16, max=0.9337, avg=0.9334, min=0.9331, std=0.0001
+CheXpert: 2024-01-01 20:57:19,979 [INFO] [TEST] Iter=1400, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:57:22,143 [INFO] Iter=1410, size=16, max=0.8576, avg=0.8574, min=0.8572, std=0.0001
+CheXpert: 2024-01-01 20:57:24,304 [INFO] Iter=1420, size=16, max=0.9525, avg=0.9522, min=0.9519, std=0.0001
+CheXpert: 2024-01-01 20:57:26,464 [INFO] Iter=1430, size=16, max=0.8558, avg=0.8557, min=0.8556, std=0.0001
+CheXpert: 2024-01-01 20:57:28,626 [INFO] Iter=1440, size=16, max=0.8867, avg=0.8864, min=0.8862, std=0.0001
+CheXpert: 2024-01-01 20:57:30,792 [INFO] Iter=1450, size=16, max=0.8355, avg=0.8352, min=0.8350, std=0.0001
+CheXpert: 2024-01-01 20:57:32,956 [INFO] Iter=1460, size=16, max=0.8447, avg=0.8446, min=0.8444, std=0.0001
+CheXpert: 2024-01-01 20:57:35,113 [INFO] Iter=1470, size=16, max=0.9697, avg=0.9693, min=0.9688, std=0.0002
+CheXpert: 2024-01-01 20:57:37,271 [INFO] Iter=1480, size=16, max=0.9529, avg=0.9526, min=0.9524, std=0.0001
+CheXpert: 2024-01-01 20:57:39,436 [INFO] Iter=1490, size=16, max=0.8939, avg=0.8938, min=0.8937, std=0.0001
+CheXpert: 2024-01-01 20:57:41,596 [INFO] Iter=1500, size=16, max=0.7865, avg=0.7863, min=0.7862, std=0.0001
+CheXpert: 2024-01-01 20:57:41,798 [INFO] [TEST] Iter=1500, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:57:43,957 [INFO] Iter=1510, size=16, max=0.9563, avg=0.9561, min=0.9560, std=0.0001
+CheXpert: 2024-01-01 20:57:46,116 [INFO] Iter=1520, size=16, max=0.9561, avg=0.9558, min=0.9556, std=0.0001
+CheXpert: 2024-01-01 20:57:48,278 [INFO] Iter=1530, size=16, max=0.8881, avg=0.8879, min=0.8877, std=0.0001
+CheXpert: 2024-01-01 20:57:50,443 [INFO] Iter=1540, size=16, max=0.9019, avg=0.9018, min=0.9017, std=0.0001
+CheXpert: 2024-01-01 20:57:52,601 [INFO] Iter=1550, size=16, max=0.8914, avg=0.8912, min=0.8911, std=0.0001
+CheXpert: 2024-01-01 20:57:54,761 [INFO] Iter=1560, size=16, max=0.8720, avg=0.8718, min=0.8715, std=0.0001
+CheXpert: 2024-01-01 20:57:56,922 [INFO] Iter=1570, size=16, max=0.8366, avg=0.8365, min=0.8364, std=0.0001
+CheXpert: 2024-01-01 20:57:59,083 [INFO] Iter=1580, size=16, max=0.8990, avg=0.8987, min=0.8984, std=0.0002
+CheXpert: 2024-01-01 20:58:01,246 [INFO] Iter=1590, size=16, max=0.9311, avg=0.9309, min=0.9307, std=0.0001
+CheXpert: 2024-01-01 20:58:03,414 [INFO] Iter=1600, size=16, max=0.9611, avg=0.9608, min=0.9605, std=0.0002
+CheXpert: 2024-01-01 20:58:03,615 [INFO] [TEST] Iter=1600, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:58:05,781 [INFO] Iter=1610, size=16, max=0.9119, avg=0.9117, min=0.9115, std=0.0001
+CheXpert: 2024-01-01 20:58:07,947 [INFO] Iter=1620, size=16, max=0.9580, avg=0.9577, min=0.9573, std=0.0002
+CheXpert: 2024-01-01 20:58:10,113 [INFO] Iter=1630, size=16, max=0.9187, avg=0.9183, min=0.9179, std=0.0002
+CheXpert: 2024-01-01 20:58:12,274 [INFO] Iter=1640, size=16, max=0.8793, avg=0.8790, min=0.8788, std=0.0001
+CheXpert: 2024-01-01 20:58:14,435 [INFO] Iter=1650, size=16, max=0.9951, avg=0.9948, min=0.9946, std=0.0001
+CheXpert: 2024-01-01 20:58:16,595 [INFO] Iter=1660, size=16, max=0.8495, avg=0.8492, min=0.8489, std=0.0002
+CheXpert: 2024-01-01 20:58:18,759 [INFO] Iter=1670, size=16, max=0.9491, avg=0.9489, min=0.9487, std=0.0002
+CheXpert: 2024-01-01 20:58:20,923 [INFO] Iter=1680, size=16, max=0.9248, avg=0.9244, min=0.9241, std=0.0001
+CheXpert: 2024-01-01 20:58:23,091 [INFO] Iter=1690, size=16, max=0.9366, avg=0.9363, min=0.9360, std=0.0001
+CheXpert: 2024-01-01 20:58:25,251 [INFO] Iter=1700, size=16, max=0.8459, avg=0.8458, min=0.8456, std=0.0001
+CheXpert: 2024-01-01 20:58:25,455 [INFO] [TEST] Iter=1700, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:58:27,622 [INFO] Iter=1710, size=16, max=0.9656, avg=0.9654, min=0.9652, std=0.0001
+CheXpert: 2024-01-01 20:58:29,782 [INFO] Iter=1720, size=16, max=0.9346, avg=0.9345, min=0.9343, std=0.0001
+CheXpert: 2024-01-01 20:58:31,941 [INFO] Iter=1730, size=16, max=0.8805, avg=0.8803, min=0.8801, std=0.0001
+CheXpert: 2024-01-01 20:58:34,099 [INFO] Iter=1740, size=16, max=0.8823, avg=0.8822, min=0.8821, std=0.0001
+CheXpert: 2024-01-01 20:58:36,261 [INFO] Iter=1750, size=16, max=0.7851, avg=0.7850, min=0.7849, std=0.0000
+CheXpert: 2024-01-01 20:58:38,419 [INFO] Iter=1760, size=16, max=0.9761, avg=0.9759, min=0.9756, std=0.0002
+CheXpert: 2024-01-01 20:58:40,575 [INFO] Iter=1770, size=16, max=0.9075, avg=0.9073, min=0.9071, std=0.0001
+CheXpert: 2024-01-01 20:58:42,735 [INFO] Iter=1780, size=16, max=0.9631, avg=0.9629, min=0.9627, std=0.0001
+CheXpert: 2024-01-01 20:58:44,898 [INFO] Iter=1790, size=16, max=0.9494, avg=0.9492, min=0.9490, std=0.0001
+CheXpert: 2024-01-01 20:58:47,064 [INFO] Iter=1800, size=16, max=0.9447, avg=0.9444, min=0.9441, std=0.0002
+CheXpert: 2024-01-01 20:58:47,267 [INFO] [TEST] Iter=1800, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:58:49,436 [INFO] Iter=1810, size=16, max=0.8547, avg=0.8544, min=0.8541, std=0.0001
+CheXpert: 2024-01-01 20:58:51,591 [INFO] Iter=1820, size=16, max=1.0179, avg=1.0176, min=1.0173, std=0.0001
+CheXpert: 2024-01-01 20:58:53,754 [INFO] Iter=1830, size=16, max=0.9751, avg=0.9746, min=0.9742, std=0.0002
+CheXpert: 2024-01-01 20:58:55,919 [INFO] Iter=1840, size=16, max=0.9568, avg=0.9566, min=0.9565, std=0.0001
+CheXpert: 2024-01-01 20:58:58,082 [INFO] Iter=1850, size=16, max=0.9615, avg=0.9612, min=0.9610, std=0.0002
+CheXpert: 2024-01-01 20:59:00,243 [INFO] Iter=1860, size=16, max=0.9572, avg=0.9569, min=0.9566, std=0.0001
+CheXpert: 2024-01-01 20:59:02,402 [INFO] Iter=1870, size=16, max=0.8481, avg=0.8478, min=0.8476, std=0.0001
+CheXpert: 2024-01-01 20:59:04,565 [INFO] Iter=1880, size=16, max=0.9775, avg=0.9771, min=0.9767, std=0.0002
+CheXpert: 2024-01-01 20:59:06,725 [INFO] Iter=1890, size=16, max=0.9679, avg=0.9676, min=0.9672, std=0.0002
+CheXpert: 2024-01-01 20:59:08,889 [INFO] Iter=1900, size=16, max=0.7612, avg=0.7611, min=0.7610, std=0.0000
+CheXpert: 2024-01-01 20:59:09,090 [INFO] [TEST] Iter=1900, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:59:11,258 [INFO] Iter=1910, size=16, max=0.8763, avg=0.8762, min=0.8760, std=0.0001
+CheXpert: 2024-01-01 20:59:13,425 [INFO] Iter=1920, size=16, max=0.9271, avg=0.9268, min=0.9265, std=0.0002
+CheXpert: 2024-01-01 20:59:15,589 [INFO] Iter=1930, size=16, max=1.0096, avg=1.0091, min=1.0085, std=0.0002
+CheXpert: 2024-01-01 20:59:17,749 [INFO] Iter=1940, size=16, max=0.9239, avg=0.9236, min=0.9233, std=0.0002
+CheXpert: 2024-01-01 20:59:19,909 [INFO] Iter=1950, size=16, max=0.9427, avg=0.9424, min=0.9420, std=0.0002
+CheXpert: 2024-01-01 20:59:22,071 [INFO] Iter=1960, size=16, max=0.9669, avg=0.9666, min=0.9663, std=0.0002
+CheXpert: 2024-01-01 20:59:24,226 [INFO] Iter=1970, size=16, max=0.9663, avg=0.9657, min=0.9652, std=0.0002
+CheXpert: 2024-01-01 20:59:26,391 [INFO] Iter=1980, size=16, max=0.9659, avg=0.9657, min=0.9655, std=0.0001
+CheXpert: 2024-01-01 20:59:28,553 [INFO] Iter=1990, size=16, max=0.9356, avg=0.9355, min=0.9353, std=0.0001
+CheXpert: 2024-01-01 20:59:30,718 [INFO] Iter=2000, size=16, max=0.9574, avg=0.9573, min=0.9572, std=0.0001
+CheXpert: 2024-01-01 20:59:30,920 [INFO] [TEST] Iter=2000, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:59:33,089 [INFO] Iter=2010, size=16, max=0.9067, avg=0.9066, min=0.9064, std=0.0001
+CheXpert: 2024-01-01 20:59:35,249 [INFO] Iter=2020, size=16, max=1.1027, avg=1.1023, min=1.1019, std=0.0002
+CheXpert: 2024-01-01 20:59:37,414 [INFO] Iter=2030, size=16, max=0.8673, avg=0.8672, min=0.8671, std=0.0001
+CheXpert: 2024-01-01 20:59:39,574 [INFO] Iter=2040, size=16, max=1.0203, avg=1.0201, min=1.0198, std=0.0001
+CheXpert: 2024-01-01 20:59:41,735 [INFO] Iter=2050, size=16, max=1.0670, avg=1.0665, min=1.0659, std=0.0003
+CheXpert: 2024-01-01 20:59:43,893 [INFO] Iter=2060, size=16, max=0.8796, avg=0.8794, min=0.8792, std=0.0001
+CheXpert: 2024-01-01 20:59:46,051 [INFO] Iter=2070, size=16, max=0.9858, avg=0.9855, min=0.9853, std=0.0002
+CheXpert: 2024-01-01 20:59:48,207 [INFO] Iter=2080, size=16, max=0.9499, avg=0.9497, min=0.9495, std=0.0001
+CheXpert: 2024-01-01 20:59:50,364 [INFO] Iter=2090, size=16, max=0.9855, avg=0.9851, min=0.9847, std=0.0002
+CheXpert: 2024-01-01 20:59:52,531 [INFO] Iter=2100, size=16, max=1.0064, avg=1.0061, min=1.0058, std=0.0002
+CheXpert: 2024-01-01 20:59:52,732 [INFO] [TEST] Iter=2100, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 20:59:54,898 [INFO] Iter=2110, size=16, max=0.8683, avg=0.8682, min=0.8680, std=0.0001
+CheXpert: 2024-01-01 20:59:57,058 [INFO] Iter=2120, size=16, max=0.9859, avg=0.9857, min=0.9854, std=0.0001
+CheXpert: 2024-01-01 20:59:59,215 [INFO] Iter=2130, size=16, max=1.0098, avg=1.0095, min=1.0093, std=0.0002
+CheXpert: 2024-01-01 21:00:01,368 [INFO] Iter=2140, size=16, max=0.8051, avg=0.8049, min=0.8048, std=0.0001
+CheXpert: 2024-01-01 21:00:03,533 [INFO] Iter=2150, size=16, max=0.9826, avg=0.9823, min=0.9820, std=0.0001
+CheXpert: 2024-01-01 21:00:05,687 [INFO] Iter=2160, size=16, max=1.0670, avg=1.0666, min=1.0662, std=0.0002
+CheXpert: 2024-01-01 21:00:07,848 [INFO] Iter=2170, size=16, max=0.9621, avg=0.9619, min=0.9616, std=0.0002
+CheXpert: 2024-01-01 21:00:10,003 [INFO] Iter=2180, size=16, max=0.9990, avg=0.9988, min=0.9985, std=0.0002
+CheXpert: 2024-01-01 21:00:12,157 [INFO] Iter=2190, size=16, max=0.9756, avg=0.9753, min=0.9749, std=0.0002
+CheXpert: 2024-01-01 21:00:14,314 [INFO] Iter=2200, size=16, max=0.9372, avg=0.9369, min=0.9366, std=0.0002
+CheXpert: 2024-01-01 21:00:14,518 [INFO] [TEST] Iter=2200, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:00:16,681 [INFO] Iter=2210, size=16, max=1.0406, avg=1.0403, min=1.0401, std=0.0002
+CheXpert: 2024-01-01 21:00:18,837 [INFO] Iter=2220, size=16, max=0.9896, avg=0.9893, min=0.9890, std=0.0002
+CheXpert: 2024-01-01 21:00:20,998 [INFO] Iter=2230, size=16, max=0.9691, avg=0.9689, min=0.9687, std=0.0001
+CheXpert: 2024-01-01 21:00:23,151 [INFO] Iter=2240, size=16, max=0.9944, avg=0.9941, min=0.9937, std=0.0002
+CheXpert: 2024-01-01 21:00:25,312 [INFO] Iter=2250, size=16, max=1.0143, avg=1.0140, min=1.0138, std=0.0002
+CheXpert: 2024-01-01 21:00:27,474 [INFO] Iter=2260, size=16, max=1.1062, avg=1.1058, min=1.1055, std=0.0002
+CheXpert: 2024-01-01 21:00:29,631 [INFO] Iter=2270, size=16, max=0.9144, avg=0.9141, min=0.9139, std=0.0001
+CheXpert: 2024-01-01 21:00:31,790 [INFO] Iter=2280, size=16, max=1.0382, avg=1.0378, min=1.0375, std=0.0001
+CheXpert: 2024-01-01 21:00:33,953 [INFO] Iter=2290, size=16, max=0.9705, avg=0.9702, min=0.9698, std=0.0002
+CheXpert: 2024-01-01 21:00:36,109 [INFO] Iter=2300, size=16, max=0.9788, avg=0.9786, min=0.9783, std=0.0002
+CheXpert: 2024-01-01 21:00:36,315 [INFO] [TEST] Iter=2300, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:00:38,479 [INFO] Iter=2310, size=16, max=1.0797, avg=1.0793, min=1.0790, std=0.0002
+CheXpert: 2024-01-01 21:00:40,643 [INFO] Iter=2320, size=16, max=1.0126, avg=1.0124, min=1.0121, std=0.0001
+CheXpert: 2024-01-01 21:00:42,804 [INFO] Iter=2330, size=16, max=1.1949, avg=1.1943, min=1.1936, std=0.0003
+CheXpert: 2024-01-01 21:00:44,974 [INFO] Iter=2340, size=16, max=1.0790, avg=1.0786, min=1.0783, std=0.0002
+CheXpert: 2024-01-01 21:00:47,125 [INFO] Iter=2350, size=16, max=1.1102, avg=1.1099, min=1.1096, std=0.0002
+CheXpert: 2024-01-01 21:00:49,281 [INFO] Iter=2360, size=16, max=1.0863, avg=1.0861, min=1.0858, std=0.0002
+CheXpert: 2024-01-01 21:00:51,438 [INFO] Iter=2370, size=16, max=1.1331, avg=1.1326, min=1.1321, std=0.0003
+CheXpert: 2024-01-01 21:00:53,601 [INFO] Iter=2380, size=16, max=0.9334, avg=0.9330, min=0.9326, std=0.0002
+CheXpert: 2024-01-01 21:00:55,766 [INFO] Iter=2390, size=16, max=1.0419, avg=1.0417, min=1.0414, std=0.0001
+CheXpert: 2024-01-01 21:00:57,925 [INFO] Iter=2400, size=16, max=0.9645, avg=0.9641, min=0.9638, std=0.0002
+CheXpert: 2024-01-01 21:00:58,128 [INFO] [TEST] Iter=2400, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:01:00,296 [INFO] Iter=2410, size=16, max=1.0522, avg=1.0519, min=1.0517, std=0.0001
+CheXpert: 2024-01-01 21:01:02,451 [INFO] Iter=2420, size=16, max=1.1311, avg=1.1309, min=1.1307, std=0.0001
+CheXpert: 2024-01-01 21:01:04,619 [INFO] Iter=2430, size=16, max=1.1813, avg=1.1811, min=1.1808, std=0.0002
+CheXpert: 2024-01-01 21:01:06,779 [INFO] Iter=2440, size=16, max=1.0675, avg=1.0672, min=1.0669, std=0.0002
+CheXpert: 2024-01-01 21:01:08,939 [INFO] Iter=2450, size=16, max=1.2022, avg=1.2018, min=1.2013, std=0.0003
+CheXpert: 2024-01-01 21:01:11,103 [INFO] Iter=2460, size=16, max=1.1048, avg=1.1045, min=1.1041, std=0.0002
+CheXpert: 2024-01-01 21:01:13,262 [INFO] Iter=2470, size=16, max=1.0589, avg=1.0585, min=1.0582, std=0.0002
+CheXpert: 2024-01-01 21:01:15,424 [INFO] Iter=2480, size=16, max=1.0495, avg=1.0494, min=1.0492, std=0.0001
+CheXpert: 2024-01-01 21:01:17,584 [INFO] Iter=2490, size=16, max=1.1427, avg=1.1423, min=1.1420, std=0.0003
+CheXpert: 2024-01-01 21:01:19,752 [INFO] Iter=2500, size=16, max=1.0020, avg=1.0017, min=1.0013, std=0.0002
+CheXpert: 2024-01-01 21:01:19,953 [INFO] [TEST] Iter=2500, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:01:22,122 [INFO] Iter=2510, size=16, max=0.9909, avg=0.9905, min=0.9901, std=0.0002
+CheXpert: 2024-01-01 21:01:24,281 [INFO] Iter=2520, size=16, max=0.9546, avg=0.9544, min=0.9542, std=0.0001
+CheXpert: 2024-01-01 21:01:26,447 [INFO] Iter=2530, size=16, max=1.1463, avg=1.1460, min=1.1457, std=0.0001
+CheXpert: 2024-01-01 21:01:28,611 [INFO] Iter=2540, size=16, max=0.9723, avg=0.9721, min=0.9718, std=0.0001
+CheXpert: 2024-01-01 21:01:30,779 [INFO] Iter=2550, size=16, max=0.9589, avg=0.9588, min=0.9586, std=0.0001
+CheXpert: 2024-01-01 21:01:32,935 [INFO] Iter=2560, size=16, max=1.1121, avg=1.1118, min=1.1115, std=0.0002
+CheXpert: 2024-01-01 21:01:35,102 [INFO] Iter=2570, size=16, max=1.0501, avg=1.0497, min=1.0494, std=0.0002
+CheXpert: 2024-01-01 21:01:37,260 [INFO] Iter=2580, size=16, max=1.0868, avg=1.0864, min=1.0861, std=0.0002
+CheXpert: 2024-01-01 21:01:39,428 [INFO] Iter=2590, size=16, max=1.0584, avg=1.0581, min=1.0579, std=0.0001
+CheXpert: 2024-01-01 21:01:41,584 [INFO] Iter=2600, size=16, max=1.0533, avg=1.0531, min=1.0530, std=0.0001
+CheXpert: 2024-01-01 21:01:41,786 [INFO] [TEST] Iter=2600, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:01:43,955 [INFO] Iter=2610, size=16, max=1.1103, avg=1.1101, min=1.1098, std=0.0002
+CheXpert: 2024-01-01 21:01:46,117 [INFO] Iter=2620, size=16, max=1.0970, avg=1.0966, min=1.0963, std=0.0003
+CheXpert: 2024-01-01 21:01:48,278 [INFO] Iter=2630, size=16, max=1.1355, avg=1.1348, min=1.1341, std=0.0003
+CheXpert: 2024-01-01 21:01:50,437 [INFO] Iter=2640, size=16, max=1.1184, avg=1.1180, min=1.1176, std=0.0002
+CheXpert: 2024-01-01 21:01:52,593 [INFO] Iter=2650, size=16, max=1.0223, avg=1.0220, min=1.0217, std=0.0001
+CheXpert: 2024-01-01 21:01:54,754 [INFO] Iter=2660, size=16, max=1.0351, avg=1.0348, min=1.0345, std=0.0002
+CheXpert: 2024-01-01 21:01:56,912 [INFO] Iter=2670, size=16, max=1.0528, avg=1.0526, min=1.0523, std=0.0002
+CheXpert: 2024-01-01 21:01:59,072 [INFO] Iter=2680, size=16, max=1.0137, avg=1.0133, min=1.0128, std=0.0002
+CheXpert: 2024-01-01 21:02:01,232 [INFO] Iter=2690, size=16, max=1.0803, avg=1.0798, min=1.0793, std=0.0002
+CheXpert: 2024-01-01 21:02:03,390 [INFO] Iter=2700, size=16, max=1.0813, avg=1.0810, min=1.0806, std=0.0002
+CheXpert: 2024-01-01 21:02:03,591 [INFO] [TEST] Iter=2700, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:02:05,758 [INFO] Iter=2710, size=16, max=1.0518, avg=1.0515, min=1.0512, std=0.0002
+CheXpert: 2024-01-01 21:02:07,919 [INFO] Iter=2720, size=16, max=1.0869, avg=1.0865, min=1.0861, std=0.0002
+CheXpert: 2024-01-01 21:02:10,081 [INFO] Iter=2730, size=16, max=1.1196, avg=1.1194, min=1.1191, std=0.0002
+CheXpert: 2024-01-01 21:02:12,239 [INFO] Iter=2740, size=16, max=1.1637, avg=1.1631, min=1.1624, std=0.0003
+CheXpert: 2024-01-01 21:02:14,404 [INFO] Iter=2750, size=16, max=1.0898, avg=1.0894, min=1.0891, std=0.0002
+CheXpert: 2024-01-01 21:02:16,564 [INFO] Iter=2760, size=16, max=1.1635, avg=1.1631, min=1.1626, std=0.0002
+CheXpert: 2024-01-01 21:02:18,726 [INFO] Iter=2770, size=16, max=1.1659, avg=1.1652, min=1.1646, std=0.0003
+CheXpert: 2024-01-01 21:02:20,883 [INFO] Iter=2780, size=16, max=1.0582, avg=1.0579, min=1.0576, std=0.0002
+CheXpert: 2024-01-01 21:02:23,035 [INFO] Iter=2790, size=16, max=1.1822, avg=1.1817, min=1.1812, std=0.0003
+CheXpert: 2024-01-01 21:02:25,197 [INFO] Iter=2800, size=16, max=1.1431, avg=1.1428, min=1.1424, std=0.0002
+CheXpert: 2024-01-01 21:02:25,400 [INFO] [TEST] Iter=2800, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:02:27,568 [INFO] Iter=2810, size=16, max=1.1552, avg=1.1550, min=1.1547, std=0.0002
+CheXpert: 2024-01-01 21:02:29,731 [INFO] Iter=2820, size=16, max=1.2204, avg=1.2198, min=1.2192, std=0.0002
+CheXpert: 2024-01-01 21:02:31,893 [INFO] Iter=2830, size=16, max=1.1009, avg=1.1006, min=1.1003, std=0.0002
+CheXpert: 2024-01-01 21:02:34,061 [INFO] Iter=2840, size=16, max=1.1386, avg=1.1381, min=1.1377, std=0.0003
+CheXpert: 2024-01-01 21:02:36,226 [INFO] Iter=2850, size=16, max=0.9884, avg=0.9880, min=0.9876, std=0.0002
+CheXpert: 2024-01-01 21:02:38,391 [INFO] Iter=2860, size=16, max=1.1492, avg=1.1489, min=1.1486, std=0.0002
+CheXpert: 2024-01-01 21:02:40,554 [INFO] Iter=2870, size=16, max=0.9872, avg=0.9869, min=0.9865, std=0.0002
+CheXpert: 2024-01-01 21:02:42,715 [INFO] Iter=2880, size=16, max=1.1830, avg=1.1826, min=1.1823, std=0.0002
+CheXpert: 2024-01-01 21:02:44,876 [INFO] Iter=2890, size=16, max=1.1666, avg=1.1660, min=1.1655, std=0.0003
+CheXpert: 2024-01-01 21:02:47,035 [INFO] Iter=2900, size=16, max=1.0648, avg=1.0643, min=1.0639, std=0.0002
+CheXpert: 2024-01-01 21:02:47,236 [INFO] [TEST] Iter=2900, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:02:49,404 [INFO] Iter=2910, size=16, max=1.1163, avg=1.1159, min=1.1154, std=0.0002
+CheXpert: 2024-01-01 21:02:51,570 [INFO] Iter=2920, size=16, max=1.2900, avg=1.2893, min=1.2886, std=0.0004
+CheXpert: 2024-01-01 21:02:53,730 [INFO] Iter=2930, size=16, max=1.0965, avg=1.0962, min=1.0960, std=0.0001
+CheXpert: 2024-01-01 21:02:55,893 [INFO] Iter=2940, size=16, max=1.2606, avg=1.2599, min=1.2592, std=0.0004
+CheXpert: 2024-01-01 21:02:58,053 [INFO] Iter=2950, size=16, max=1.2714, avg=1.2711, min=1.2707, std=0.0002
+CheXpert: 2024-01-01 21:03:00,209 [INFO] Iter=2960, size=16, max=1.0198, avg=1.0195, min=1.0191, std=0.0002
+CheXpert: 2024-01-01 21:03:02,374 [INFO] Iter=2970, size=16, max=1.1357, avg=1.1352, min=1.1348, std=0.0003
+CheXpert: 2024-01-01 21:03:04,533 [INFO] Iter=2980, size=16, max=1.2546, avg=1.2540, min=1.2534, std=0.0003
+CheXpert: 2024-01-01 21:03:06,694 [INFO] Iter=2990, size=16, max=1.0772, avg=1.0769, min=1.0767, std=0.0001
+CheXpert: 2024-01-01 21:03:08,856 [INFO] Iter=3000, size=16, max=1.1256, avg=1.1252, min=1.1248, std=0.0002
+CheXpert: 2024-01-01 21:03:09,057 [INFO] [TEST] Iter=3000, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:03:11,225 [INFO] Iter=3010, size=16, max=1.3203, avg=1.3199, min=1.3195, std=0.0003
+CheXpert: 2024-01-01 21:03:13,387 [INFO] Iter=3020, size=16, max=1.1133, avg=1.1129, min=1.1125, std=0.0002
+CheXpert: 2024-01-01 21:03:15,549 [INFO] Iter=3030, size=16, max=1.1898, avg=1.1895, min=1.1891, std=0.0002
+CheXpert: 2024-01-01 21:03:17,711 [INFO] Iter=3040, size=16, max=1.0397, avg=1.0392, min=1.0387, std=0.0002
+CheXpert: 2024-01-01 21:03:19,876 [INFO] Iter=3050, size=16, max=1.1936, avg=1.1934, min=1.1931, std=0.0001
+CheXpert: 2024-01-01 21:03:22,042 [INFO] Iter=3060, size=16, max=1.1876, avg=1.1870, min=1.1864, std=0.0004
+CheXpert: 2024-01-01 21:03:24,202 [INFO] Iter=3070, size=16, max=1.1871, avg=1.1867, min=1.1862, std=0.0002
+CheXpert: 2024-01-01 21:03:26,363 [INFO] Iter=3080, size=16, max=1.0536, avg=1.0532, min=1.0528, std=0.0002
+CheXpert: 2024-01-01 21:03:28,530 [INFO] Iter=3090, size=16, max=1.2480, avg=1.2474, min=1.2469, std=0.0002
+CheXpert: 2024-01-01 21:03:30,694 [INFO] Iter=3100, size=16, max=1.1860, avg=1.1854, min=1.1848, std=0.0003
+CheXpert: 2024-01-01 21:03:30,895 [INFO] [TEST] Iter=3100, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:03:33,059 [INFO] Iter=3110, size=16, max=1.1134, avg=1.1131, min=1.1129, std=0.0002
+CheXpert: 2024-01-01 21:03:35,224 [INFO] Iter=3120, size=16, max=1.2210, avg=1.2206, min=1.2203, std=0.0002
+CheXpert: 2024-01-01 21:03:37,382 [INFO] Iter=3130, size=16, max=0.9938, avg=0.9935, min=0.9932, std=0.0002
+CheXpert: 2024-01-01 21:03:39,544 [INFO] Iter=3140, size=16, max=1.1584, avg=1.1582, min=1.1579, std=0.0002
+CheXpert: 2024-01-01 21:03:41,712 [INFO] Iter=3150, size=16, max=1.1477, avg=1.1471, min=1.1465, std=0.0003
+CheXpert: 2024-01-01 21:03:43,877 [INFO] Iter=3160, size=16, max=1.2117, avg=1.2111, min=1.2105, std=0.0003
+CheXpert: 2024-01-01 21:03:46,039 [INFO] Iter=3170, size=16, max=1.2829, avg=1.2825, min=1.2820, std=0.0002
+CheXpert: 2024-01-01 21:03:48,206 [INFO] Iter=3180, size=16, max=1.2109, avg=1.2103, min=1.2097, std=0.0003
+CheXpert: 2024-01-01 21:03:50,366 [INFO] Iter=3190, size=16, max=1.2350, avg=1.2346, min=1.2341, std=0.0002
+CheXpert: 2024-01-01 21:03:52,522 [INFO] Iter=3200, size=16, max=1.1466, avg=1.1459, min=1.1453, std=0.0003
+CheXpert: 2024-01-01 21:03:52,723 [INFO] [TEST] Iter=3200, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:03:54,891 [INFO] Iter=3210, size=16, max=1.0503, avg=1.0500, min=1.0497, std=0.0002
+CheXpert: 2024-01-01 21:03:57,053 [INFO] Iter=3220, size=16, max=1.2449, avg=1.2443, min=1.2436, std=0.0003
+CheXpert: 2024-01-01 21:03:59,213 [INFO] Iter=3230, size=16, max=1.1684, avg=1.1680, min=1.1676, std=0.0003
+CheXpert: 2024-01-01 21:04:01,376 [INFO] Iter=3240, size=16, max=1.3319, avg=1.3314, min=1.3310, std=0.0003
+CheXpert: 2024-01-01 21:04:03,541 [INFO] Iter=3250, size=16, max=1.2458, avg=1.2453, min=1.2449, std=0.0003
+CheXpert: 2024-01-01 21:04:05,694 [INFO] Iter=3260, size=16, max=1.2307, avg=1.2302, min=1.2298, std=0.0003
+CheXpert: 2024-01-01 21:04:07,859 [INFO] Iter=3270, size=16, max=1.2387, avg=1.2382, min=1.2377, std=0.0003
+CheXpert: 2024-01-01 21:04:10,019 [INFO] Iter=3280, size=16, max=1.2941, avg=1.2936, min=1.2931, std=0.0002
+CheXpert: 2024-01-01 21:04:12,184 [INFO] Iter=3290, size=16, max=1.3412, avg=1.3404, min=1.3396, std=0.0004
+CheXpert: 2024-01-01 21:04:14,344 [INFO] Iter=3300, size=16, max=0.9745, avg=0.9741, min=0.9738, std=0.0002
+CheXpert: 2024-01-01 21:04:14,549 [INFO] [TEST] Iter=3300, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:04:16,720 [INFO] Iter=3310, size=16, max=1.1901, avg=1.1895, min=1.1889, std=0.0003
+CheXpert: 2024-01-01 21:04:18,883 [INFO] Iter=3320, size=16, max=1.0634, avg=1.0629, min=1.0625, std=0.0002
+CheXpert: 2024-01-01 21:04:21,049 [INFO] Iter=3330, size=16, max=1.2225, avg=1.2221, min=1.2218, std=0.0002
+CheXpert: 2024-01-01 21:04:23,212 [INFO] Iter=3340, size=16, max=1.3743, avg=1.3738, min=1.3733, std=0.0003
+CheXpert: 2024-01-01 21:04:25,384 [INFO] Iter=3350, size=16, max=1.2374, avg=1.2366, min=1.2359, std=0.0003
+CheXpert: 2024-01-01 21:04:27,555 [INFO] Iter=3360, size=16, max=1.2606, avg=1.2601, min=1.2597, std=0.0002
+CheXpert: 2024-01-01 21:04:29,723 [INFO] Iter=3370, size=16, max=1.1793, avg=1.1787, min=1.1781, std=0.0004
+CheXpert: 2024-01-01 21:04:31,894 [INFO] Iter=3380, size=16, max=1.0968, avg=1.0963, min=1.0958, std=0.0002
+CheXpert: 2024-01-01 21:04:34,063 [INFO] Iter=3390, size=16, max=1.3344, avg=1.3340, min=1.3337, std=0.0002
+CheXpert: 2024-01-01 21:04:36,227 [INFO] Iter=3400, size=16, max=1.3391, avg=1.3386, min=1.3381, std=0.0003
+CheXpert: 2024-01-01 21:04:36,428 [INFO] [TEST] Iter=3400, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:04:38,597 [INFO] Iter=3410, size=16, max=1.1761, avg=1.1754, min=1.1747, std=0.0003
+CheXpert: 2024-01-01 21:04:40,764 [INFO] Iter=3420, size=16, max=1.3888, avg=1.3882, min=1.3877, std=0.0003
+CheXpert: 2024-01-01 21:04:42,930 [INFO] Iter=3430, size=16, max=1.2291, avg=1.2283, min=1.2276, std=0.0004
+CheXpert: 2024-01-01 21:04:45,097 [INFO] Iter=3440, size=16, max=1.3045, avg=1.3037, min=1.3028, std=0.0004
+CheXpert: 2024-01-01 21:04:47,260 [INFO] Iter=3450, size=16, max=1.2721, avg=1.2716, min=1.2711, std=0.0003
+CheXpert: 2024-01-01 21:04:49,429 [INFO] Iter=3460, size=16, max=1.3067, avg=1.3061, min=1.3056, std=0.0004
+CheXpert: 2024-01-01 21:04:51,598 [INFO] Iter=3470, size=16, max=1.3674, avg=1.3670, min=1.3667, std=0.0002
+CheXpert: 2024-01-01 21:04:53,761 [INFO] Iter=3480, size=16, max=1.3328, avg=1.3322, min=1.3316, std=0.0003
+CheXpert: 2024-01-01 21:04:55,930 [INFO] Iter=3490, size=16, max=1.2834, avg=1.2829, min=1.2824, std=0.0003
+CheXpert: 2024-01-01 21:04:58,092 [INFO] Iter=3500, size=16, max=1.1704, avg=1.1699, min=1.1694, std=0.0003
+CheXpert: 2024-01-01 21:04:58,298 [INFO] [TEST] Iter=3500, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:05:00,467 [INFO] Iter=3510, size=16, max=1.2638, avg=1.2633, min=1.2628, std=0.0003
+CheXpert: 2024-01-01 21:05:02,633 [INFO] Iter=3520, size=16, max=1.2894, avg=1.2887, min=1.2880, std=0.0004
+CheXpert: 2024-01-01 21:05:04,790 [INFO] Iter=3530, size=16, max=1.3404, avg=1.3396, min=1.3387, std=0.0003
+CheXpert: 2024-01-01 21:05:06,950 [INFO] Iter=3540, size=16, max=1.2979, avg=1.2972, min=1.2966, std=0.0004
+CheXpert: 2024-01-01 21:05:09,115 [INFO] Iter=3550, size=16, max=1.3584, avg=1.3578, min=1.3572, std=0.0003
+CheXpert: 2024-01-01 21:05:11,281 [INFO] Iter=3560, size=16, max=1.0951, avg=1.0949, min=1.0946, std=0.0002
+CheXpert: 2024-01-01 21:05:13,435 [INFO] Iter=3570, size=16, max=1.3002, avg=1.2997, min=1.2992, std=0.0003
+CheXpert: 2024-01-01 21:05:15,590 [INFO] Iter=3580, size=16, max=1.0577, avg=1.0574, min=1.0570, std=0.0002
+CheXpert: 2024-01-01 21:05:17,748 [INFO] Iter=3590, size=16, max=1.4021, avg=1.4013, min=1.4006, std=0.0005
+CheXpert: 2024-01-01 21:05:19,919 [INFO] Iter=3600, size=16, max=1.3770, avg=1.3766, min=1.3763, std=0.0002
+CheXpert: 2024-01-01 21:05:20,122 [INFO] [TEST] Iter=3600, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:05:22,294 [INFO] Iter=3610, size=16, max=1.3831, avg=1.3826, min=1.3821, std=0.0004
+CheXpert: 2024-01-01 21:05:24,456 [INFO] Iter=3620, size=16, max=1.5112, avg=1.5106, min=1.5100, std=0.0003
+CheXpert: 2024-01-01 21:05:26,623 [INFO] Iter=3630, size=16, max=1.4536, avg=1.4528, min=1.4520, std=0.0005
+CheXpert: 2024-01-01 21:05:28,783 [INFO] Iter=3640, size=16, max=1.4233, avg=1.4226, min=1.4218, std=0.0003
+CheXpert: 2024-01-01 21:05:30,952 [INFO] Iter=3650, size=16, max=1.1409, avg=1.1403, min=1.1397, std=0.0003
+CheXpert: 2024-01-01 21:05:33,121 [INFO] Iter=3660, size=16, max=1.1709, avg=1.1704, min=1.1700, std=0.0002
+CheXpert: 2024-01-01 21:05:35,284 [INFO] Iter=3670, size=16, max=1.3302, avg=1.3296, min=1.3290, std=0.0003
+CheXpert: 2024-01-01 21:05:37,448 [INFO] Iter=3680, size=16, max=1.4263, avg=1.4260, min=1.4257, std=0.0002
+CheXpert: 2024-01-01 21:05:39,616 [INFO] Iter=3690, size=16, max=1.3817, avg=1.3811, min=1.3804, std=0.0003
+CheXpert: 2024-01-01 21:05:41,780 [INFO] Iter=3700, size=16, max=1.4677, avg=1.4673, min=1.4669, std=0.0003
+CheXpert: 2024-01-01 21:05:41,983 [INFO] [TEST] Iter=3700, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:05:44,152 [INFO] Iter=3710, size=16, max=1.3761, avg=1.3752, min=1.3742, std=0.0005
+CheXpert: 2024-01-01 21:05:46,320 [INFO] Iter=3720, size=16, max=1.3328, avg=1.3321, min=1.3314, std=0.0005
+CheXpert: 2024-01-01 21:05:48,487 [INFO] Iter=3730, size=16, max=1.4061, avg=1.4053, min=1.4045, std=0.0004
+CheXpert: 2024-01-01 21:05:50,652 [INFO] Iter=3740, size=16, max=1.4190, avg=1.4181, min=1.4172, std=0.0004
+CheXpert: 2024-01-01 21:05:52,810 [INFO] Iter=3750, size=16, max=1.0975, avg=1.0971, min=1.0967, std=0.0002
+CheXpert: 2024-01-01 21:05:54,973 [INFO] Iter=3760, size=16, max=1.1594, avg=1.1589, min=1.1583, std=0.0003
+CheXpert: 2024-01-01 21:05:57,137 [INFO] Iter=3770, size=16, max=1.4506, avg=1.4502, min=1.4498, std=0.0003
+CheXpert: 2024-01-01 21:05:59,297 [INFO] Iter=3780, size=16, max=1.2915, avg=1.2910, min=1.2906, std=0.0002
+CheXpert: 2024-01-01 21:06:01,471 [INFO] Iter=3790, size=16, max=1.0524, avg=1.0519, min=1.0513, std=0.0002
+CheXpert: 2024-01-01 21:06:03,632 [INFO] Iter=3800, size=16, max=1.2245, avg=1.2242, min=1.2239, std=0.0002
+CheXpert: 2024-01-01 21:06:03,833 [INFO] [TEST] Iter=3800, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:06:06,006 [INFO] Iter=3810, size=16, max=1.2644, avg=1.2639, min=1.2633, std=0.0003
+CheXpert: 2024-01-01 21:06:08,167 [INFO] Iter=3820, size=16, max=1.3828, avg=1.3824, min=1.3819, std=0.0002
+CheXpert: 2024-01-01 21:06:10,334 [INFO] Iter=3830, size=16, max=1.5736, avg=1.5726, min=1.5716, std=0.0005
+CheXpert: 2024-01-01 21:06:12,507 [INFO] Iter=3840, size=16, max=1.2429, avg=1.2423, min=1.2416, std=0.0004
+CheXpert: 2024-01-01 21:06:14,678 [INFO] Iter=3850, size=16, max=1.6083, avg=1.6080, min=1.6076, std=0.0003
+CheXpert: 2024-01-01 21:06:16,837 [INFO] Iter=3860, size=16, max=1.3591, avg=1.3588, min=1.3585, std=0.0002
+CheXpert: 2024-01-01 21:06:19,005 [INFO] Iter=3870, size=16, max=1.3215, avg=1.3208, min=1.3202, std=0.0005
+CheXpert: 2024-01-01 21:06:21,168 [INFO] Iter=3880, size=16, max=1.3103, avg=1.3097, min=1.3090, std=0.0004
+CheXpert: 2024-01-01 21:06:23,337 [INFO] Iter=3890, size=16, max=1.4366, avg=1.4357, min=1.4347, std=0.0005
+CheXpert: 2024-01-01 21:06:25,499 [INFO] Iter=3900, size=16, max=1.2666, avg=1.2662, min=1.2659, std=0.0002
+CheXpert: 2024-01-01 21:06:25,706 [INFO] [TEST] Iter=3900, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:06:27,881 [INFO] Iter=3910, size=16, max=1.1586, avg=1.1582, min=1.1578, std=0.0002
+CheXpert: 2024-01-01 21:06:30,048 [INFO] Iter=3920, size=16, max=1.2355, avg=1.2348, min=1.2341, std=0.0004
+CheXpert: 2024-01-01 21:06:32,215 [INFO] Iter=3930, size=16, max=1.4656, avg=1.4649, min=1.4641, std=0.0004
+CheXpert: 2024-01-01 21:06:34,382 [INFO] Iter=3940, size=16, max=1.5708, avg=1.5703, min=1.5698, std=0.0003
+CheXpert: 2024-01-01 21:06:36,545 [INFO] Iter=3950, size=16, max=1.5065, avg=1.5060, min=1.5056, std=0.0003
+CheXpert: 2024-01-01 21:06:38,711 [INFO] Iter=3960, size=16, max=1.3742, avg=1.3737, min=1.3731, std=0.0003
+CheXpert: 2024-01-01 21:06:40,868 [INFO] Iter=3970, size=16, max=1.4317, avg=1.4307, min=1.4296, std=0.0005
+CheXpert: 2024-01-01 21:06:43,028 [INFO] Iter=3980, size=16, max=1.4734, avg=1.4728, min=1.4723, std=0.0003
+CheXpert: 2024-01-01 21:06:45,186 [INFO] Iter=3990, size=16, max=1.5318, avg=1.5309, min=1.5300, std=0.0004
+CheXpert: 2024-01-01 21:06:47,354 [INFO] Iter=4000, size=16, max=1.3054, avg=1.3045, min=1.3036, std=0.0004
+CheXpert: 2024-01-01 21:06:47,556 [INFO] [TEST] Iter=4000, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:06:49,723 [INFO] Iter=4010, size=16, max=1.4351, avg=1.4343, min=1.4335, std=0.0005
+CheXpert: 2024-01-01 21:06:51,891 [INFO] Iter=4020, size=16, max=1.5080, avg=1.5075, min=1.5069, std=0.0003
+CheXpert: 2024-01-01 21:06:54,056 [INFO] Iter=4030, size=16, max=1.5380, avg=1.5375, min=1.5369, std=0.0003
+CheXpert: 2024-01-01 21:06:56,217 [INFO] Iter=4040, size=16, max=1.6539, avg=1.6531, min=1.6522, std=0.0005
+CheXpert: 2024-01-01 21:06:58,376 [INFO] Iter=4050, size=16, max=1.3694, avg=1.3690, min=1.3686, std=0.0003
+CheXpert: 2024-01-01 21:07:00,543 [INFO] Iter=4060, size=16, max=1.1185, avg=1.1179, min=1.1173, std=0.0004
+CheXpert: 2024-01-01 21:07:02,709 [INFO] Iter=4070, size=16, max=1.4909, avg=1.4906, min=1.4902, std=0.0002
+CheXpert: 2024-01-01 21:07:04,864 [INFO] Iter=4080, size=16, max=1.3841, avg=1.3832, min=1.3824, std=0.0004
+CheXpert: 2024-01-01 21:07:07,036 [INFO] Iter=4090, size=16, max=1.3147, avg=1.3144, min=1.3141, std=0.0002
+CheXpert: 2024-01-01 21:07:09,197 [INFO] Iter=4100, size=16, max=1.4737, avg=1.4731, min=1.4725, std=0.0003
+CheXpert: 2024-01-01 21:07:09,398 [INFO] [TEST] Iter=4100, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:07:11,570 [INFO] Iter=4110, size=16, max=1.5343, avg=1.5338, min=1.5332, std=0.0004
+CheXpert: 2024-01-01 21:07:13,727 [INFO] Iter=4120, size=16, max=1.3398, avg=1.3393, min=1.3389, std=0.0003
+CheXpert: 2024-01-01 21:07:15,889 [INFO] Iter=4130, size=16, max=1.6869, avg=1.6860, min=1.6850, std=0.0004
+CheXpert: 2024-01-01 21:07:18,056 [INFO] Iter=4140, size=16, max=1.4758, avg=1.4750, min=1.4741, std=0.0004
+CheXpert: 2024-01-01 21:07:20,217 [INFO] Iter=4150, size=16, max=1.6160, avg=1.6150, min=1.6140, std=0.0007
+CheXpert: 2024-01-01 21:07:22,380 [INFO] Iter=4160, size=16, max=1.6771, avg=1.6759, min=1.6747, std=0.0005
+CheXpert: 2024-01-01 21:07:24,543 [INFO] Iter=4170, size=16, max=1.3841, avg=1.3836, min=1.3831, std=0.0004
+CheXpert: 2024-01-01 21:07:26,705 [INFO] Iter=4180, size=16, max=1.5798, avg=1.5782, min=1.5767, std=0.0008
+CheXpert: 2024-01-01 21:07:28,867 [INFO] Iter=4190, size=16, max=1.3672, avg=1.3664, min=1.3655, std=0.0005
+CheXpert: 2024-01-01 21:07:31,024 [INFO] Iter=4200, size=16, max=1.4949, avg=1.4943, min=1.4937, std=0.0003
+CheXpert: 2024-01-01 21:07:31,225 [INFO] [TEST] Iter=4200, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:07:33,398 [INFO] Iter=4210, size=16, max=1.5670, avg=1.5662, min=1.5654, std=0.0005
+CheXpert: 2024-01-01 21:07:35,563 [INFO] Iter=4220, size=16, max=1.6162, avg=1.6156, min=1.6151, std=0.0003
+CheXpert: 2024-01-01 21:07:37,730 [INFO] Iter=4230, size=16, max=1.4912, avg=1.4906, min=1.4900, std=0.0004
+CheXpert: 2024-01-01 21:07:39,895 [INFO] Iter=4240, size=16, max=1.5023, avg=1.5012, min=1.5001, std=0.0006
+CheXpert: 2024-01-01 21:07:42,056 [INFO] Iter=4250, size=16, max=1.6285, avg=1.6278, min=1.6272, std=0.0004
+CheXpert: 2024-01-01 21:07:44,224 [INFO] Iter=4260, size=16, max=1.3453, avg=1.3445, min=1.3437, std=0.0004
+CheXpert: 2024-01-01 21:07:46,388 [INFO] Iter=4270, size=16, max=1.3512, avg=1.3502, min=1.3492, std=0.0006
+CheXpert: 2024-01-01 21:07:48,557 [INFO] Iter=4280, size=16, max=1.5440, avg=1.5434, min=1.5428, std=0.0003
+CheXpert: 2024-01-01 21:07:50,724 [INFO] Iter=4290, size=16, max=1.6140, avg=1.6126, min=1.6111, std=0.0006
+CheXpert: 2024-01-01 21:07:52,886 [INFO] Iter=4300, size=16, max=1.7024, avg=1.7012, min=1.7001, std=0.0006
+CheXpert: 2024-01-01 21:07:53,091 [INFO] [TEST] Iter=4300, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:07:55,258 [INFO] Iter=4310, size=16, max=1.4497, avg=1.4491, min=1.4485, std=0.0003
+CheXpert: 2024-01-01 21:07:57,423 [INFO] Iter=4320, size=16, max=1.5165, avg=1.5161, min=1.5157, std=0.0002
+CheXpert: 2024-01-01 21:07:59,582 [INFO] Iter=4330, size=16, max=1.6228, avg=1.6217, min=1.6207, std=0.0006
+CheXpert: 2024-01-01 21:08:01,747 [INFO] Iter=4340, size=16, max=1.6439, avg=1.6432, min=1.6426, std=0.0004
+CheXpert: 2024-01-01 21:08:03,911 [INFO] Iter=4350, size=16, max=1.5249, avg=1.5241, min=1.5233, std=0.0004
+CheXpert: 2024-01-01 21:08:06,079 [INFO] Iter=4360, size=16, max=1.5384, avg=1.5377, min=1.5370, std=0.0004
+CheXpert: 2024-01-01 21:08:08,245 [INFO] Iter=4370, size=16, max=1.6304, avg=1.6297, min=1.6289, std=0.0006
+CheXpert: 2024-01-01 21:08:10,405 [INFO] Iter=4380, size=16, max=1.3721, avg=1.3714, min=1.3707, std=0.0004
+CheXpert: 2024-01-01 21:08:12,565 [INFO] Iter=4390, size=16, max=1.5580, avg=1.5572, min=1.5563, std=0.0004
+CheXpert: 2024-01-01 21:08:14,725 [INFO] Iter=4400, size=16, max=1.6929, avg=1.6923, min=1.6918, std=0.0003
+CheXpert: 2024-01-01 21:08:14,927 [INFO] [TEST] Iter=4400, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:08:17,100 [INFO] Iter=4410, size=16, max=1.7866, avg=1.7857, min=1.7847, std=0.0005
+CheXpert: 2024-01-01 21:08:19,266 [INFO] Iter=4420, size=16, max=1.3880, avg=1.3873, min=1.3866, std=0.0004
+CheXpert: 2024-01-01 21:08:21,435 [INFO] Iter=4430, size=16, max=1.5637, avg=1.5626, min=1.5615, std=0.0006
+CheXpert: 2024-01-01 21:08:23,596 [INFO] Iter=4440, size=16, max=1.4807, avg=1.4799, min=1.4791, std=0.0004
+CheXpert: 2024-01-01 21:08:25,759 [INFO] Iter=4450, size=16, max=1.4440, avg=1.4431, min=1.4421, std=0.0004
+CheXpert: 2024-01-01 21:08:27,924 [INFO] Iter=4460, size=16, max=1.6932, avg=1.6924, min=1.6916, std=0.0006
+CheXpert: 2024-01-01 21:08:30,087 [INFO] Iter=4470, size=16, max=1.6729, avg=1.6720, min=1.6711, std=0.0006
+CheXpert: 2024-01-01 21:08:32,249 [INFO] Iter=4480, size=16, max=1.5786, avg=1.5780, min=1.5774, std=0.0004
+CheXpert: 2024-01-01 21:08:34,415 [INFO] Iter=4490, size=16, max=1.4839, avg=1.4831, min=1.4824, std=0.0005
+CheXpert: 2024-01-01 21:08:36,573 [INFO] Iter=4500, size=16, max=1.7086, avg=1.7075, min=1.7064, std=0.0006
+CheXpert: 2024-01-01 21:08:36,780 [INFO] [TEST] Iter=4500, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:08:38,947 [INFO] Iter=4510, size=16, max=1.6230, avg=1.6226, min=1.6221, std=0.0003
+CheXpert: 2024-01-01 21:08:41,112 [INFO] Iter=4520, size=16, max=1.6810, avg=1.6798, min=1.6786, std=0.0005
+CheXpert: 2024-01-01 21:08:43,278 [INFO] Iter=4530, size=16, max=1.7799, avg=1.7786, min=1.7772, std=0.0006
+CheXpert: 2024-01-01 21:08:45,441 [INFO] Iter=4540, size=16, max=1.4968, avg=1.4959, min=1.4950, std=0.0005
+CheXpert: 2024-01-01 21:08:47,607 [INFO] Iter=4550, size=16, max=1.7897, avg=1.7876, min=1.7856, std=0.0010
+CheXpert: 2024-01-01 21:08:49,767 [INFO] Iter=4560, size=16, max=1.7101, avg=1.7089, min=1.7077, std=0.0007
+CheXpert: 2024-01-01 21:08:51,933 [INFO] Iter=4570, size=16, max=1.4120, avg=1.4114, min=1.4109, std=0.0004
+CheXpert: 2024-01-01 21:08:54,099 [INFO] Iter=4580, size=16, max=1.7064, avg=1.7053, min=1.7041, std=0.0006
+CheXpert: 2024-01-01 21:08:56,268 [INFO] Iter=4590, size=16, max=1.8584, avg=1.8576, min=1.8567, std=0.0005
+CheXpert: 2024-01-01 21:08:58,433 [INFO] Iter=4600, size=16, max=1.7559, avg=1.7553, min=1.7546, std=0.0004
+CheXpert: 2024-01-01 21:08:58,635 [INFO] [TEST] Iter=4600, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:09:00,808 [INFO] Iter=4610, size=16, max=1.7321, avg=1.7308, min=1.7295, std=0.0007
+CheXpert: 2024-01-01 21:09:02,975 [INFO] Iter=4620, size=16, max=1.5612, avg=1.5603, min=1.5593, std=0.0006
+CheXpert: 2024-01-01 21:09:05,136 [INFO] Iter=4630, size=16, max=1.7655, avg=1.7640, min=1.7624, std=0.0009
+CheXpert: 2024-01-01 21:09:07,299 [INFO] Iter=4640, size=16, max=1.5698, avg=1.5688, min=1.5678, std=0.0006
+CheXpert: 2024-01-01 21:09:09,463 [INFO] Iter=4650, size=16, max=1.7790, avg=1.7777, min=1.7764, std=0.0007
+CheXpert: 2024-01-01 21:09:11,628 [INFO] Iter=4660, size=16, max=1.7878, avg=1.7866, min=1.7854, std=0.0008
+CheXpert: 2024-01-01 21:09:13,793 [INFO] Iter=4670, size=16, max=1.7169, avg=1.7156, min=1.7143, std=0.0007
+CheXpert: 2024-01-01 21:09:15,961 [INFO] Iter=4680, size=16, max=1.8413, avg=1.8400, min=1.8388, std=0.0006
+CheXpert: 2024-01-01 21:09:18,131 [INFO] Iter=4690, size=16, max=1.8140, avg=1.8127, min=1.8114, std=0.0009
+CheXpert: 2024-01-01 21:09:20,293 [INFO] Iter=4700, size=16, max=1.8926, avg=1.8915, min=1.8904, std=0.0005
+CheXpert: 2024-01-01 21:09:20,496 [INFO] [TEST] Iter=4700, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:09:22,662 [INFO] Iter=4710, size=16, max=2.0654, avg=2.0631, min=2.0608, std=0.0011
+CheXpert: 2024-01-01 21:09:24,824 [INFO] Iter=4720, size=16, max=1.6415, avg=1.6405, min=1.6394, std=0.0005
+CheXpert: 2024-01-01 21:09:26,986 [INFO] Iter=4730, size=16, max=1.6247, avg=1.6236, min=1.6225, std=0.0006
+CheXpert: 2024-01-01 21:09:29,153 [INFO] Iter=4740, size=16, max=1.5443, avg=1.5435, min=1.5427, std=0.0004
+CheXpert: 2024-01-01 21:09:31,309 [INFO] Iter=4750, size=16, max=1.9446, avg=1.9434, min=1.9421, std=0.0006
+CheXpert: 2024-01-01 21:09:33,469 [INFO] Iter=4760, size=16, max=1.7823, avg=1.7814, min=1.7805, std=0.0006
+CheXpert: 2024-01-01 21:09:35,633 [INFO] Iter=4770, size=16, max=1.7686, avg=1.7676, min=1.7667, std=0.0006
+CheXpert: 2024-01-01 21:09:37,795 [INFO] Iter=4780, size=16, max=1.7619, avg=1.7601, min=1.7582, std=0.0007
+CheXpert: 2024-01-01 21:09:39,963 [INFO] Iter=4790, size=16, max=1.6736, avg=1.6728, min=1.6721, std=0.0003
+CheXpert: 2024-01-01 21:09:42,127 [INFO] Iter=4800, size=16, max=2.0002, avg=1.9982, min=1.9962, std=0.0010
+CheXpert: 2024-01-01 21:09:42,328 [INFO] [TEST] Iter=4800, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:09:44,501 [INFO] Iter=4810, size=16, max=1.8850, avg=1.8831, min=1.8811, std=0.0011
+CheXpert: 2024-01-01 21:09:46,663 [INFO] Iter=4820, size=16, max=1.8484, avg=1.8464, min=1.8443, std=0.0009
+CheXpert: 2024-01-01 21:09:48,831 [INFO] Iter=4830, size=16, max=1.6129, avg=1.6120, min=1.6111, std=0.0005
+CheXpert: 2024-01-01 21:09:51,006 [INFO] Iter=4840, size=16, max=2.0751, avg=2.0734, min=2.0717, std=0.0008
+CheXpert: 2024-01-01 21:09:53,177 [INFO] Iter=4850, size=16, max=1.7479, avg=1.7468, min=1.7457, std=0.0006
+CheXpert: 2024-01-01 21:09:55,347 [INFO] Iter=4860, size=16, max=2.0515, avg=2.0502, min=2.0489, std=0.0009
+CheXpert: 2024-01-01 21:09:57,517 [INFO] Iter=4870, size=16, max=2.0303, avg=2.0290, min=2.0278, std=0.0007
+CheXpert: 2024-01-01 21:09:59,683 [INFO] Iter=4880, size=16, max=1.7662, avg=1.7654, min=1.7645, std=0.0006
+CheXpert: 2024-01-01 21:10:01,849 [INFO] Iter=4890, size=16, max=1.6477, avg=1.6466, min=1.6455, std=0.0005
+CheXpert: 2024-01-01 21:10:04,012 [INFO] Iter=4900, size=16, max=1.9376, avg=1.9357, min=1.9338, std=0.0008
+CheXpert: 2024-01-01 21:10:04,218 [INFO] [TEST] Iter=4900, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:10:06,390 [INFO] Iter=4910, size=16, max=1.7809, avg=1.7799, min=1.7789, std=0.0006
+CheXpert: 2024-01-01 21:10:08,554 [INFO] Iter=4920, size=16, max=1.7904, avg=1.7892, min=1.7881, std=0.0006
+CheXpert: 2024-01-01 21:10:10,718 [INFO] Iter=4930, size=16, max=2.0774, avg=2.0761, min=2.0747, std=0.0008
+CheXpert: 2024-01-01 21:10:12,880 [INFO] Iter=4940, size=16, max=2.0100, avg=2.0083, min=2.0066, std=0.0007
+CheXpert: 2024-01-01 21:10:15,048 [INFO] Iter=4950, size=16, max=1.8867, avg=1.8848, min=1.8829, std=0.0010
+CheXpert: 2024-01-01 21:10:17,215 [INFO] Iter=4960, size=16, max=2.2897, avg=2.2885, min=2.2873, std=0.0007
+CheXpert: 2024-01-01 21:10:19,386 [INFO] Iter=4970, size=16, max=2.1237, avg=2.1226, min=2.1215, std=0.0006
+CheXpert: 2024-01-01 21:10:21,546 [INFO] Iter=4980, size=16, max=2.1549, avg=2.1539, min=2.1529, std=0.0005
+CheXpert: 2024-01-01 21:10:23,713 [INFO] Iter=4990, size=16, max=2.2010, avg=2.2000, min=2.1990, std=0.0006
+CheXpert: 2024-01-01 21:10:25,869 [INFO] Iter=5000, size=16, max=1.9107, avg=1.9098, min=1.9090, std=0.0004
+CheXpert: 2024-01-01 21:10:26,075 [INFO] [TEST] Iter=5000, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:10:28,249 [INFO] Iter=5010, size=16, max=1.7649, avg=1.7636, min=1.7624, std=0.0008
+CheXpert: 2024-01-01 21:10:30,418 [INFO] Iter=5020, size=16, max=2.0355, avg=2.0344, min=2.0333, std=0.0006
+CheXpert: 2024-01-01 21:10:32,587 [INFO] Iter=5030, size=16, max=1.8896, avg=1.8884, min=1.8872, std=0.0006
+CheXpert: 2024-01-01 21:10:34,751 [INFO] Iter=5040, size=16, max=2.0782, avg=2.0768, min=2.0755, std=0.0007
+CheXpert: 2024-01-01 21:10:36,915 [INFO] Iter=5050, size=16, max=2.0269, avg=2.0252, min=2.0235, std=0.0011
+CheXpert: 2024-01-01 21:10:39,082 [INFO] Iter=5060, size=16, max=1.5917, avg=1.5907, min=1.5898, std=0.0007
+CheXpert: 2024-01-01 21:10:41,252 [INFO] Iter=5070, size=16, max=2.0617, avg=2.0603, min=2.0590, std=0.0007
+CheXpert: 2024-01-01 21:10:43,415 [INFO] Iter=5080, size=16, max=1.8189, avg=1.8175, min=1.8161, std=0.0008
+CheXpert: 2024-01-01 21:10:45,584 [INFO] Iter=5090, size=16, max=2.0350, avg=2.0332, min=2.0313, std=0.0009
+CheXpert: 2024-01-01 21:10:47,753 [INFO] Iter=5100, size=16, max=2.1601, avg=2.1591, min=2.1581, std=0.0006
+CheXpert: 2024-01-01 21:10:47,956 [INFO] [TEST] Iter=5100, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:10:50,124 [INFO] Iter=5110, size=16, max=2.1969, avg=2.1951, min=2.1934, std=0.0008
+CheXpert: 2024-01-01 21:10:52,295 [INFO] Iter=5120, size=16, max=1.8070, avg=1.8052, min=1.8034, std=0.0007
+CheXpert: 2024-01-01 21:10:54,468 [INFO] Iter=5130, size=16, max=2.1857, avg=2.1829, min=2.1802, std=0.0013
+CheXpert: 2024-01-01 21:10:56,645 [INFO] Iter=5140, size=16, max=2.3476, avg=2.3460, min=2.3444, std=0.0007
+CheXpert: 2024-01-01 21:10:58,802 [INFO] Iter=5150, size=16, max=2.2024, avg=2.2006, min=2.1989, std=0.0010
+CheXpert: 2024-01-01 21:11:00,973 [INFO] Iter=5160, size=16, max=2.0641, avg=2.0628, min=2.0614, std=0.0009
+CheXpert: 2024-01-01 21:11:03,137 [INFO] Iter=5170, size=16, max=1.9069, avg=1.9051, min=1.9033, std=0.0008
+CheXpert: 2024-01-01 21:11:05,299 [INFO] Iter=5180, size=16, max=1.7055, avg=1.7043, min=1.7031, std=0.0006
+CheXpert: 2024-01-01 21:11:07,461 [INFO] Iter=5190, size=16, max=2.3037, avg=2.3030, min=2.3022, std=0.0005
+CheXpert: 2024-01-01 21:11:09,627 [INFO] Iter=5200, size=16, max=1.9729, avg=1.9708, min=1.9688, std=0.0010
+CheXpert: 2024-01-01 21:11:09,830 [INFO] [TEST] Iter=5200, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:11:13,384 [INFO] Iter=5210, size=16, max=2.4070, avg=2.4056, min=2.4041, std=0.0012
+CheXpert: 2024-01-01 21:11:16,186 [INFO] Iter=5220, size=16, max=2.0037, avg=2.0016, min=1.9995, std=0.0012
+CheXpert: 2024-01-01 21:11:18,945 [INFO] Iter=5230, size=16, max=2.3836, avg=2.3820, min=2.3803, std=0.0009
+CheXpert: 2024-01-01 21:11:21,627 [INFO] Iter=5240, size=16, max=1.8458, avg=1.8449, min=1.8440, std=0.0004
+CheXpert: 2024-01-01 21:11:24,104 [INFO] Iter=5250, size=16, max=2.2304, avg=2.2283, min=2.2262, std=0.0010
+CheXpert: 2024-01-01 21:11:26,532 [INFO] Iter=5260, size=16, max=2.2019, avg=2.1999, min=2.1980, std=0.0010
+CheXpert: 2024-01-01 21:11:28,958 [INFO] Iter=5270, size=16, max=1.9875, avg=1.9859, min=1.9842, std=0.0009
+CheXpert: 2024-01-01 21:11:31,372 [INFO] Iter=5280, size=16, max=2.1111, avg=2.1089, min=2.1066, std=0.0009
+CheXpert: 2024-01-01 21:11:33,797 [INFO] Iter=5290, size=16, max=2.2317, avg=2.2302, min=2.2287, std=0.0009
+CheXpert: 2024-01-01 21:11:36,217 [INFO] Iter=5300, size=16, max=1.9707, avg=1.9689, min=1.9672, std=0.0007
+CheXpert: 2024-01-01 21:11:36,438 [INFO] [TEST] Iter=5300, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:11:38,861 [INFO] Iter=5310, size=16, max=1.8495, avg=1.8482, min=1.8469, std=0.0008
+CheXpert: 2024-01-01 21:11:41,262 [INFO] Iter=5320, size=16, max=2.2392, avg=2.2363, min=2.2335, std=0.0011
+CheXpert: 2024-01-01 21:11:43,695 [INFO] Iter=5330, size=16, max=1.3347, avg=1.3335, min=1.3323, std=0.0008
+CheXpert: 2024-01-01 21:11:46,095 [INFO] Iter=5340, size=16, max=1.9846, avg=1.9832, min=1.9819, std=0.0009
+CheXpert: 2024-01-01 21:11:48,503 [INFO] Iter=5350, size=16, max=2.3628, avg=2.3596, min=2.3565, std=0.0014
+CheXpert: 2024-01-01 21:11:50,917 [INFO] Iter=5360, size=16, max=2.2542, avg=2.2524, min=2.2505, std=0.0009
+CheXpert: 2024-01-01 21:11:53,335 [INFO] Iter=5370, size=16, max=2.4196, avg=2.4171, min=2.4146, std=0.0013
+CheXpert: 2024-01-01 21:11:55,636 [INFO] Iter=5380, size=16, max=2.5786, avg=2.5766, min=2.5747, std=0.0012
+CheXpert: 2024-01-01 21:11:57,899 [INFO] Iter=5390, size=16, max=2.2072, avg=2.2057, min=2.2041, std=0.0009
+CheXpert: 2024-01-01 21:12:00,156 [INFO] Iter=5400, size=16, max=2.4437, avg=2.4420, min=2.4402, std=0.0009
+CheXpert: 2024-01-01 21:12:00,368 [INFO] [TEST] Iter=5400, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:12:02,637 [INFO] Iter=5410, size=16, max=2.0647, avg=2.0634, min=2.0622, std=0.0008
+CheXpert: 2024-01-01 21:12:04,899 [INFO] Iter=5420, size=16, max=1.9791, avg=1.9756, min=1.9722, std=0.0016
+CheXpert: 2024-01-01 21:12:07,168 [INFO] Iter=5430, size=16, max=2.2387, avg=2.2365, min=2.2344, std=0.0012
+CheXpert: 2024-01-01 21:12:09,425 [INFO] Iter=5440, size=16, max=2.3094, avg=2.3072, min=2.3049, std=0.0012
+CheXpert: 2024-01-01 21:12:11,685 [INFO] Iter=5450, size=16, max=2.3519, avg=2.3503, min=2.3488, std=0.0008
+CheXpert: 2024-01-01 21:12:13,937 [INFO] Iter=5460, size=16, max=2.6140, avg=2.6102, min=2.6065, std=0.0019
+CheXpert: 2024-01-01 21:12:16,200 [INFO] Iter=5470, size=16, max=2.6307, avg=2.6285, min=2.6263, std=0.0014
+CheXpert: 2024-01-01 21:12:18,441 [INFO] Iter=5480, size=16, max=2.3787, avg=2.3767, min=2.3746, std=0.0012
+CheXpert: 2024-01-01 21:12:20,643 [INFO] Iter=5490, size=16, max=2.0115, avg=2.0090, min=2.0065, std=0.0013
+CheXpert: 2024-01-01 21:12:22,842 [INFO] Iter=5500, size=16, max=2.5104, avg=2.5080, min=2.5056, std=0.0014
+CheXpert: 2024-01-01 21:12:23,052 [INFO] [TEST] Iter=5500, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:12:25,258 [INFO] Iter=5510, size=16, max=2.2753, avg=2.2728, min=2.2704, std=0.0010
+CheXpert: 2024-01-01 21:12:27,459 [INFO] Iter=5520, size=16, max=2.2415, avg=2.2393, min=2.2372, std=0.0010
+CheXpert: 2024-01-01 21:12:29,655 [INFO] Iter=5530, size=16, max=2.6145, avg=2.6128, min=2.6111, std=0.0011
+CheXpert: 2024-01-01 21:12:31,866 [INFO] Iter=5540, size=16, max=2.5575, avg=2.5556, min=2.5536, std=0.0012
+CheXpert: 2024-01-01 21:12:34,070 [INFO] Iter=5550, size=16, max=2.8036, avg=2.8011, min=2.7986, std=0.0017
+CheXpert: 2024-01-01 21:12:36,276 [INFO] Iter=5560, size=16, max=2.3866, avg=2.3839, min=2.3812, std=0.0013
+CheXpert: 2024-01-01 21:12:38,476 [INFO] Iter=5570, size=16, max=2.5147, avg=2.5119, min=2.5090, std=0.0015
+CheXpert: 2024-01-01 21:12:40,675 [INFO] Iter=5580, size=16, max=1.9529, avg=1.9521, min=1.9513, std=0.0006
+CheXpert: 2024-01-01 21:12:42,885 [INFO] Iter=5590, size=16, max=2.2601, avg=2.2575, min=2.2549, std=0.0016
+CheXpert: 2024-01-01 21:12:45,088 [INFO] Iter=5600, size=16, max=2.4359, avg=2.4341, min=2.4323, std=0.0011
+CheXpert: 2024-01-01 21:12:45,294 [INFO] [TEST] Iter=5600, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:12:47,504 [INFO] Iter=5610, size=16, max=2.5869, avg=2.5849, min=2.5829, std=0.0011
+CheXpert: 2024-01-01 21:12:49,712 [INFO] Iter=5620, size=16, max=2.7748, avg=2.7709, min=2.7669, std=0.0021
+CheXpert: 2024-01-01 21:12:51,925 [INFO] Iter=5630, size=16, max=2.5699, avg=2.5677, min=2.5656, std=0.0012
+CheXpert: 2024-01-01 21:12:54,137 [INFO] Iter=5640, size=16, max=2.7312, avg=2.7276, min=2.7239, std=0.0016
+CheXpert: 2024-01-01 21:12:56,348 [INFO] Iter=5650, size=16, max=2.0804, avg=2.0787, min=2.0769, std=0.0009
+CheXpert: 2024-01-01 21:12:58,546 [INFO] Iter=5660, size=16, max=1.9584, avg=1.9564, min=1.9545, std=0.0010
+CheXpert: 2024-01-01 21:13:00,750 [INFO] Iter=5670, size=16, max=2.6989, avg=2.6954, min=2.6919, std=0.0014
+CheXpert: 2024-01-01 21:13:02,959 [INFO] Iter=5680, size=16, max=2.4227, avg=2.4195, min=2.4164, std=0.0017
+CheXpert: 2024-01-01 21:13:05,169 [INFO] Iter=5690, size=16, max=2.8088, avg=2.8066, min=2.8044, std=0.0013
+CheXpert: 2024-01-01 21:13:07,377 [INFO] Iter=5700, size=16, max=2.2645, avg=2.2621, min=2.2596, std=0.0015
+CheXpert: 2024-01-01 21:13:07,582 [INFO] [TEST] Iter=5700, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:13:09,794 [INFO] Iter=5710, size=16, max=2.6158, avg=2.6121, min=2.6083, std=0.0019
+CheXpert: 2024-01-01 21:13:12,001 [INFO] Iter=5720, size=16, max=2.4326, avg=2.4300, min=2.4273, std=0.0016
+CheXpert: 2024-01-01 21:13:14,214 [INFO] Iter=5730, size=16, max=2.7510, avg=2.7486, min=2.7462, std=0.0016
+CheXpert: 2024-01-01 21:13:16,422 [INFO] Iter=5740, size=16, max=2.7144, avg=2.7120, min=2.7097, std=0.0013
+CheXpert: 2024-01-01 21:13:18,625 [INFO] Iter=5750, size=16, max=2.8864, avg=2.8836, min=2.8808, std=0.0013
+CheXpert: 2024-01-01 21:13:20,837 [INFO] Iter=5760, size=16, max=2.3623, avg=2.3602, min=2.3581, std=0.0013
+CheXpert: 2024-01-01 21:13:23,045 [INFO] Iter=5770, size=16, max=2.7005, avg=2.6983, min=2.6961, std=0.0014
+CheXpert: 2024-01-01 21:13:25,256 [INFO] Iter=5780, size=16, max=3.0685, avg=3.0666, min=3.0647, std=0.0011
+CheXpert: 2024-01-01 21:13:27,473 [INFO] Iter=5790, size=16, max=2.7534, avg=2.7515, min=2.7496, std=0.0012
+CheXpert: 2024-01-01 21:13:29,681 [INFO] Iter=5800, size=16, max=2.8823, avg=2.8804, min=2.8786, std=0.0012
+CheXpert: 2024-01-01 21:13:29,887 [INFO] [TEST] Iter=5800, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:13:32,100 [INFO] Iter=5810, size=16, max=2.4381, avg=2.4341, min=2.4301, std=0.0018
+CheXpert: 2024-01-01 21:13:34,313 [INFO] Iter=5820, size=16, max=2.1169, avg=2.1150, min=2.1132, std=0.0009
+CheXpert: 2024-01-01 21:13:36,520 [INFO] Iter=5830, size=16, max=2.7480, avg=2.7463, min=2.7446, std=0.0010
+CheXpert: 2024-01-01 21:13:38,729 [INFO] Iter=5840, size=16, max=2.6770, avg=2.6758, min=2.6745, std=0.0009
+CheXpert: 2024-01-01 21:13:40,942 [INFO] Iter=5850, size=16, max=3.0115, avg=3.0075, min=3.0035, std=0.0017
+CheXpert: 2024-01-01 21:13:43,157 [INFO] Iter=5860, size=16, max=2.7899, avg=2.7869, min=2.7840, std=0.0015
+CheXpert: 2024-01-01 21:13:45,379 [INFO] Iter=5870, size=16, max=2.6540, avg=2.6524, min=2.6507, std=0.0010
+CheXpert: 2024-01-01 21:13:47,595 [INFO] Iter=5880, size=16, max=2.6247, avg=2.6217, min=2.6189, std=0.0015
+CheXpert: 2024-01-01 21:13:49,810 [INFO] Iter=5890, size=16, max=2.9730, avg=2.9703, min=2.9676, std=0.0018
+CheXpert: 2024-01-01 21:13:52,016 [INFO] Iter=5900, size=16, max=3.0940, avg=3.0892, min=3.0844, std=0.0021
+CheXpert: 2024-01-01 21:13:52,226 [INFO] [TEST] Iter=5900, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:13:54,430 [INFO] Iter=5910, size=16, max=2.7455, avg=2.7412, min=2.7369, std=0.0022
+CheXpert: 2024-01-01 21:13:56,644 [INFO] Iter=5920, size=16, max=3.1163, avg=3.1133, min=3.1103, std=0.0014
+CheXpert: 2024-01-01 21:13:58,851 [INFO] Iter=5930, size=16, max=2.8996, avg=2.8957, min=2.8917, std=0.0022
+CheXpert: 2024-01-01 21:14:01,066 [INFO] Iter=5940, size=16, max=2.7190, avg=2.7168, min=2.7147, std=0.0011
+CheXpert: 2024-01-01 21:14:03,274 [INFO] Iter=5950, size=16, max=2.7120, avg=2.7101, min=2.7082, std=0.0011
+CheXpert: 2024-01-01 21:14:05,489 [INFO] Iter=5960, size=16, max=2.5387, avg=2.5364, min=2.5340, std=0.0013
+CheXpert: 2024-01-01 21:14:07,699 [INFO] Iter=5970, size=16, max=3.0632, avg=3.0588, min=3.0543, std=0.0021
+CheXpert: 2024-01-01 21:14:09,915 [INFO] Iter=5980, size=16, max=3.1020, avg=3.0977, min=3.0934, std=0.0018
+CheXpert: 2024-01-01 21:14:12,125 [INFO] Iter=5990, size=16, max=3.1227, avg=3.1197, min=3.1166, std=0.0019
+CheXpert: 2024-01-01 21:14:14,337 [INFO] Iter=6000, size=16, max=3.1945, avg=3.1911, min=3.1879, std=0.0020
+CheXpert: 2024-01-01 21:14:14,541 [INFO] [TEST] Iter=6000, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:14:16,753 [INFO] Iter=6010, size=16, max=3.1052, avg=3.1022, min=3.0992, std=0.0017
+CheXpert: 2024-01-01 21:14:18,966 [INFO] Iter=6020, size=16, max=2.8207, avg=2.8180, min=2.8154, std=0.0013
+CheXpert: 2024-01-01 21:14:21,181 [INFO] Iter=6030, size=16, max=2.8969, avg=2.8926, min=2.8883, std=0.0020
+CheXpert: 2024-01-01 21:14:23,388 [INFO] Iter=6040, size=16, max=2.6010, avg=2.5971, min=2.5933, std=0.0019
+CheXpert: 2024-01-01 21:14:25,601 [INFO] Iter=6050, size=16, max=3.2093, avg=3.2059, min=3.2024, std=0.0019
+CheXpert: 2024-01-01 21:14:27,801 [INFO] Iter=6060, size=16, max=2.7312, avg=2.7279, min=2.7245, std=0.0022
+CheXpert: 2024-01-01 21:14:30,008 [INFO] Iter=6070, size=16, max=3.4208, avg=3.4177, min=3.4147, std=0.0019
+CheXpert: 2024-01-01 21:14:32,229 [INFO] Iter=6080, size=16, max=2.7746, avg=2.7714, min=2.7682, std=0.0016
+CheXpert: 2024-01-01 21:14:34,438 [INFO] Iter=6090, size=16, max=3.3103, avg=3.3055, min=3.3008, std=0.0024
+CheXpert: 2024-01-01 21:14:36,653 [INFO] Iter=6100, size=16, max=3.1796, avg=3.1770, min=3.1743, std=0.0015
+CheXpert: 2024-01-01 21:14:36,863 [INFO] [TEST] Iter=6100, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:14:39,084 [INFO] Iter=6110, size=16, max=3.0478, avg=3.0447, min=3.0415, std=0.0015
+CheXpert: 2024-01-01 21:14:41,292 [INFO] Iter=6120, size=16, max=3.0225, avg=3.0190, min=3.0156, std=0.0018
+CheXpert: 2024-01-01 21:14:43,511 [INFO] Iter=6130, size=16, max=3.6701, avg=3.6658, min=3.6614, std=0.0022
+CheXpert: 2024-01-01 21:14:45,728 [INFO] Iter=6140, size=16, max=2.2773, avg=2.2738, min=2.2704, std=0.0014
+CheXpert: 2024-01-01 21:14:47,935 [INFO] Iter=6150, size=16, max=3.7465, avg=3.7409, min=3.7354, std=0.0023
+CheXpert: 2024-01-01 21:14:50,147 [INFO] Iter=6160, size=16, max=3.4506, avg=3.4492, min=3.4478, std=0.0011
+CheXpert: 2024-01-01 21:14:52,367 [INFO] Iter=6170, size=16, max=3.2379, avg=3.2349, min=3.2318, std=0.0016
+CheXpert: 2024-01-01 21:14:54,579 [INFO] Iter=6180, size=16, max=3.8118, avg=3.8073, min=3.8028, std=0.0022
+CheXpert: 2024-01-01 21:14:56,794 [INFO] Iter=6190, size=16, max=3.0612, avg=3.0580, min=3.0548, std=0.0013
+CheXpert: 2024-01-01 21:14:59,006 [INFO] Iter=6200, size=16, max=3.2327, avg=3.2276, min=3.2226, std=0.0027
+CheXpert: 2024-01-01 21:14:59,218 [INFO] [TEST] Iter=6200, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:15:01,436 [INFO] Iter=6210, size=16, max=3.2295, avg=3.2258, min=3.2221, std=0.0020
+CheXpert: 2024-01-01 21:15:03,644 [INFO] Iter=6220, size=16, max=3.2682, avg=3.2634, min=3.2586, std=0.0020
+CheXpert: 2024-01-01 21:15:05,856 [INFO] Iter=6230, size=16, max=3.6297, avg=3.6246, min=3.6196, std=0.0022
+CheXpert: 2024-01-01 21:15:08,068 [INFO] Iter=6240, size=16, max=3.3883, avg=3.3859, min=3.3834, std=0.0013
+CheXpert: 2024-01-01 21:15:10,287 [INFO] Iter=6250, size=16, max=3.0710, avg=3.0667, min=3.0623, std=0.0023
+CheXpert: 2024-01-01 21:15:12,502 [INFO] Iter=6260, size=16, max=4.0318, avg=4.0272, min=4.0226, std=0.0024
+CheXpert: 2024-01-01 21:15:14,714 [INFO] Iter=6270, size=16, max=3.4500, avg=3.4468, min=3.4436, std=0.0018
+CheXpert: 2024-01-01 21:15:16,925 [INFO] Iter=6280, size=16, max=3.3900, avg=3.3864, min=3.3829, std=0.0019
+CheXpert: 2024-01-01 21:15:19,139 [INFO] Iter=6290, size=16, max=3.2905, avg=3.2868, min=3.2831, std=0.0019
+CheXpert: 2024-01-01 21:15:21,342 [INFO] Iter=6300, size=16, max=3.3331, avg=3.3283, min=3.3235, std=0.0032
+CheXpert: 2024-01-01 21:15:21,553 [INFO] [TEST] Iter=6300, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:15:23,762 [INFO] Iter=6310, size=16, max=3.2609, avg=3.2569, min=3.2530, std=0.0023
+CheXpert: 2024-01-01 21:15:25,976 [INFO] Iter=6320, size=16, max=3.5061, avg=3.5020, min=3.4980, std=0.0020
+CheXpert: 2024-01-01 21:15:28,182 [INFO] Iter=6330, size=16, max=3.0794, avg=3.0752, min=3.0710, std=0.0022
+CheXpert: 2024-01-01 21:15:30,402 [INFO] Iter=6340, size=16, max=3.8501, avg=3.8467, min=3.8433, std=0.0021
+CheXpert: 2024-01-01 21:15:32,617 [INFO] Iter=6350, size=16, max=3.5118, avg=3.5076, min=3.5035, std=0.0021
+CheXpert: 2024-01-01 21:15:34,838 [INFO] Iter=6360, size=16, max=3.6831, avg=3.6768, min=3.6705, std=0.0029
+CheXpert: 2024-01-01 21:15:37,048 [INFO] Iter=6370, size=16, max=3.6820, avg=3.6788, min=3.6756, std=0.0018
+CheXpert: 2024-01-01 21:15:39,259 [INFO] Iter=6380, size=16, max=3.8618, avg=3.8571, min=3.8524, std=0.0023
+CheXpert: 2024-01-01 21:15:41,477 [INFO] Iter=6390, size=16, max=3.1330, avg=3.1285, min=3.1240, std=0.0022
+CheXpert: 2024-01-01 21:15:43,695 [INFO] Iter=6400, size=16, max=3.7426, avg=3.7379, min=3.7332, std=0.0025
+CheXpert: 2024-01-01 21:15:43,903 [INFO] [TEST] Iter=6400, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:15:46,128 [INFO] Iter=6410, size=16, max=3.6068, avg=3.6019, min=3.5970, std=0.0019
+CheXpert: 2024-01-01 21:15:48,335 [INFO] Iter=6420, size=16, max=3.8755, avg=3.8710, min=3.8665, std=0.0029
+CheXpert: 2024-01-01 21:15:50,551 [INFO] Iter=6430, size=16, max=3.6997, avg=3.6947, min=3.6897, std=0.0021
+CheXpert: 2024-01-01 21:15:52,763 [INFO] Iter=6440, size=16, max=3.7870, avg=3.7784, min=3.7698, std=0.0040
+CheXpert: 2024-01-01 21:15:54,971 [INFO] Iter=6450, size=16, max=3.7236, avg=3.7185, min=3.7134, std=0.0026
+CheXpert: 2024-01-01 21:15:57,195 [INFO] Iter=6460, size=16, max=4.4245, avg=4.4184, min=4.4122, std=0.0039
+CheXpert: 2024-01-01 21:15:59,411 [INFO] Iter=6470, size=16, max=3.2212, avg=3.2150, min=3.2088, std=0.0034
+CheXpert: 2024-01-01 21:16:01,624 [INFO] Iter=6480, size=16, max=3.8366, avg=3.8309, min=3.8252, std=0.0030
+CheXpert: 2024-01-01 21:16:03,834 [INFO] Iter=6490, size=16, max=3.8383, avg=3.8332, min=3.8281, std=0.0024
+CheXpert: 2024-01-01 21:16:06,048 [INFO] Iter=6500, size=16, max=3.2661, avg=3.2616, min=3.2572, std=0.0027
+CheXpert: 2024-01-01 21:16:06,259 [INFO] [TEST] Iter=6500, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:16:08,467 [INFO] Iter=6510, size=16, max=3.1628, avg=3.1578, min=3.1528, std=0.0021
+CheXpert: 2024-01-01 21:16:10,684 [INFO] Iter=6520, size=16, max=4.0629, avg=4.0539, min=4.0450, std=0.0043
+CheXpert: 2024-01-01 21:16:12,903 [INFO] Iter=6530, size=16, max=3.8834, avg=3.8780, min=3.8725, std=0.0028
+CheXpert: 2024-01-01 21:16:15,119 [INFO] Iter=6540, size=16, max=4.4532, avg=4.4449, min=4.4366, std=0.0045
+CheXpert: 2024-01-01 21:16:17,332 [INFO] Iter=6550, size=16, max=3.9886, avg=3.9808, min=3.9731, std=0.0040
+CheXpert: 2024-01-01 21:16:19,545 [INFO] Iter=6560, size=16, max=4.1091, avg=4.1051, min=4.1011, std=0.0026
+CheXpert: 2024-01-01 21:16:21,762 [INFO] Iter=6570, size=16, max=3.0975, avg=3.0953, min=3.0932, std=0.0014
+CheXpert: 2024-01-01 21:16:23,974 [INFO] Iter=6580, size=16, max=4.6038, avg=4.5988, min=4.5937, std=0.0032
+CheXpert: 2024-01-01 21:16:26,182 [INFO] Iter=6590, size=16, max=3.6257, avg=3.6215, min=3.6174, std=0.0026
+CheXpert: 2024-01-01 21:16:28,393 [INFO] Iter=6600, size=16, max=3.8404, avg=3.8345, min=3.8285, std=0.0024
+CheXpert: 2024-01-01 21:16:28,599 [INFO] [TEST] Iter=6600, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:16:30,800 [INFO] Iter=6610, size=16, max=4.6369, avg=4.6300, min=4.6233, std=0.0042
+CheXpert: 2024-01-01 21:16:33,019 [INFO] Iter=6620, size=16, max=3.5949, avg=3.5894, min=3.5839, std=0.0029
+CheXpert: 2024-01-01 21:16:35,238 [INFO] Iter=6630, size=16, max=3.3727, avg=3.3676, min=3.3624, std=0.0034
+CheXpert: 2024-01-01 21:16:37,455 [INFO] Iter=6640, size=16, max=3.8788, avg=3.8721, min=3.8654, std=0.0043
+CheXpert: 2024-01-01 21:16:39,664 [INFO] Iter=6650, size=16, max=4.7495, avg=4.7449, min=4.7404, std=0.0035
+CheXpert: 2024-01-01 21:16:41,878 [INFO] Iter=6660, size=16, max=4.1856, avg=4.1785, min=4.1714, std=0.0040
+CheXpert: 2024-01-01 21:16:44,092 [INFO] Iter=6670, size=16, max=4.5963, avg=4.5890, min=4.5817, std=0.0044
+CheXpert: 2024-01-01 21:16:46,307 [INFO] Iter=6680, size=16, max=4.2872, avg=4.2818, min=4.2763, std=0.0026
+CheXpert: 2024-01-01 21:16:48,521 [INFO] Iter=6690, size=16, max=4.2785, avg=4.2741, min=4.2698, std=0.0031
+CheXpert: 2024-01-01 21:16:50,743 [INFO] Iter=6700, size=16, max=4.8693, avg=4.8574, min=4.8455, std=0.0057
+CheXpert: 2024-01-01 21:16:50,953 [INFO] [TEST] Iter=6700, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:16:53,162 [INFO] Iter=6710, size=16, max=4.4945, avg=4.4860, min=4.4775, std=0.0038
+CheXpert: 2024-01-01 21:16:55,376 [INFO] Iter=6720, size=16, max=3.8270, avg=3.8218, min=3.8166, std=0.0025
+CheXpert: 2024-01-01 21:16:57,591 [INFO] Iter=6730, size=16, max=5.3251, avg=5.3176, min=5.3099, std=0.0049
+CheXpert: 2024-01-01 21:16:59,801 [INFO] Iter=6740, size=16, max=3.8951, avg=3.8895, min=3.8839, std=0.0030
+CheXpert: 2024-01-01 21:17:02,011 [INFO] Iter=6750, size=16, max=5.4185, avg=5.4086, min=5.3988, std=0.0066
+CheXpert: 2024-01-01 21:17:04,231 [INFO] Iter=6760, size=16, max=4.8704, avg=4.8657, min=4.8610, std=0.0029
+CheXpert: 2024-01-01 21:17:06,440 [INFO] Iter=6770, size=16, max=4.8748, avg=4.8708, min=4.8669, std=0.0026
+CheXpert: 2024-01-01 21:17:08,662 [INFO] Iter=6780, size=16, max=5.4029, avg=5.3969, min=5.3911, std=0.0034
+CheXpert: 2024-01-01 21:17:10,872 [INFO] Iter=6790, size=16, max=5.5583, avg=5.5509, min=5.5434, std=0.0039
+CheXpert: 2024-01-01 21:17:13,086 [INFO] Iter=6800, size=16, max=4.7227, avg=4.7167, min=4.7107, std=0.0032
+CheXpert: 2024-01-01 21:17:13,293 [INFO] [TEST] Iter=6800, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:17:15,515 [INFO] Iter=6810, size=16, max=3.9410, avg=3.9345, min=3.9280, std=0.0031
+CheXpert: 2024-01-01 21:17:17,729 [INFO] Iter=6820, size=16, max=5.1843, avg=5.1772, min=5.1701, std=0.0042
+CheXpert: 2024-01-01 21:17:19,948 [INFO] Iter=6830, size=16, max=5.3905, avg=5.3808, min=5.3711, std=0.0053
+CheXpert: 2024-01-01 21:17:22,162 [INFO] Iter=6840, size=16, max=4.8641, avg=4.8578, min=4.8515, std=0.0039
+CheXpert: 2024-01-01 21:17:24,383 [INFO] Iter=6850, size=16, max=4.7435, avg=4.7364, min=4.7293, std=0.0043
+CheXpert: 2024-01-01 21:17:26,599 [INFO] Iter=6860, size=16, max=5.1708, avg=5.1636, min=5.1565, std=0.0043
+CheXpert: 2024-01-01 21:17:28,801 [INFO] Iter=6870, size=16, max=4.8676, avg=4.8620, min=4.8564, std=0.0030
+CheXpert: 2024-01-01 21:17:31,020 [INFO] Iter=6880, size=16, max=4.9328, avg=4.9230, min=4.9132, std=0.0055
+CheXpert: 2024-01-01 21:17:33,234 [INFO] Iter=6890, size=16, max=5.1964, avg=5.1905, min=5.1846, std=0.0036
+CheXpert: 2024-01-01 21:17:35,452 [INFO] Iter=6900, size=16, max=5.3227, avg=5.3128, min=5.3030, std=0.0057
+CheXpert: 2024-01-01 21:17:35,660 [INFO] [TEST] Iter=6900, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:17:37,884 [INFO] Iter=6910, size=16, max=4.8291, avg=4.8243, min=4.8195, std=0.0035
+CheXpert: 2024-01-01 21:17:40,108 [INFO] Iter=6920, size=16, max=5.9139, avg=5.9060, min=5.8982, std=0.0043
+CheXpert: 2024-01-01 21:17:42,317 [INFO] Iter=6930, size=16, max=5.6771, avg=5.6698, min=5.6626, std=0.0040
+CheXpert: 2024-01-01 21:17:44,535 [INFO] Iter=6940, size=16, max=5.5405, avg=5.5315, min=5.5224, std=0.0049
+CheXpert: 2024-01-01 21:17:46,758 [INFO] Iter=6950, size=16, max=6.1195, avg=6.1128, min=6.1063, std=0.0033
+CheXpert: 2024-01-01 21:17:48,974 [INFO] Iter=6960, size=16, max=5.4438, avg=5.4326, min=5.4215, std=0.0059
+CheXpert: 2024-01-01 21:17:51,195 [INFO] Iter=6970, size=16, max=4.7968, avg=4.7871, min=4.7774, std=0.0046
+CheXpert: 2024-01-01 21:17:53,411 [INFO] Iter=6980, size=16, max=6.0182, avg=6.0062, min=5.9943, std=0.0073
+CheXpert: 2024-01-01 21:17:55,625 [INFO] Iter=6990, size=16, max=5.3216, avg=5.3088, min=5.2962, std=0.0060
+CheXpert: 2024-01-01 21:17:57,839 [INFO] Iter=7000, size=16, max=4.9901, avg=4.9828, min=4.9755, std=0.0047
+CheXpert: 2024-01-01 21:17:58,046 [INFO] [TEST] Iter=7000, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:18:00,273 [INFO] Iter=7010, size=16, max=4.3724, avg=4.3614, min=4.3505, std=0.0053
+CheXpert: 2024-01-01 21:18:02,499 [INFO] Iter=7020, size=16, max=6.2783, avg=6.2699, min=6.2616, std=0.0053
+CheXpert: 2024-01-01 21:18:04,720 [INFO] Iter=7030, size=16, max=5.3757, avg=5.3665, min=5.3576, std=0.0049
+CheXpert: 2024-01-01 21:18:06,931 [INFO] Iter=7040, size=16, max=6.9028, avg=6.8880, min=6.8732, std=0.0067
+CheXpert: 2024-01-01 21:18:09,154 [INFO] Iter=7050, size=16, max=5.5863, avg=5.5713, min=5.5563, std=0.0056
+CheXpert: 2024-01-01 21:18:11,375 [INFO] Iter=7060, size=16, max=5.5671, avg=5.5613, min=5.5555, std=0.0029
+CheXpert: 2024-01-01 21:18:13,585 [INFO] Iter=7070, size=16, max=7.0872, avg=7.0780, min=7.0687, std=0.0061
+CheXpert: 2024-01-01 21:18:15,796 [INFO] Iter=7080, size=16, max=6.9839, avg=6.9777, min=6.9715, std=0.0042
+CheXpert: 2024-01-01 21:18:18,019 [INFO] Iter=7090, size=16, max=5.7318, avg=5.7207, min=5.7097, std=0.0061
+CheXpert: 2024-01-01 21:18:20,232 [INFO] Iter=7100, size=16, max=4.0389, avg=4.0319, min=4.0247, std=0.0032
+CheXpert: 2024-01-01 21:18:20,439 [INFO] [TEST] Iter=7100, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:18:22,660 [INFO] Iter=7110, size=16, max=5.5002, avg=5.4949, min=5.4898, std=0.0033
+CheXpert: 2024-01-01 21:18:24,879 [INFO] Iter=7120, size=16, max=4.7344, avg=4.7273, min=4.7205, std=0.0041
+CheXpert: 2024-01-01 21:18:27,096 [INFO] Iter=7130, size=16, max=6.6249, avg=6.6166, min=6.6086, std=0.0055
+CheXpert: 2024-01-01 21:18:29,312 [INFO] Iter=7140, size=16, max=5.4839, avg=5.4735, min=5.4631, std=0.0056
+CheXpert: 2024-01-01 21:18:31,534 [INFO] Iter=7150, size=16, max=4.6879, avg=4.6806, min=4.6733, std=0.0044
+CheXpert: 2024-01-01 21:18:33,749 [INFO] Iter=7160, size=16, max=6.8525, avg=6.8371, min=6.8216, std=0.0082
+CheXpert: 2024-01-01 21:18:35,968 [INFO] Iter=7170, size=16, max=6.3539, avg=6.3452, min=6.3365, std=0.0048
+CheXpert: 2024-01-01 21:18:38,189 [INFO] Iter=7180, size=16, max=5.7749, avg=5.7687, min=5.7625, std=0.0037
+CheXpert: 2024-01-01 21:18:40,406 [INFO] Iter=7190, size=16, max=6.5833, avg=6.5676, min=6.5521, std=0.0092
+CheXpert: 2024-01-01 21:18:42,628 [INFO] Iter=7200, size=16, max=6.2139, avg=6.2059, min=6.1984, std=0.0045
+CheXpert: 2024-01-01 21:18:42,833 [INFO] [TEST] Iter=7200, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:18:45,057 [INFO] Iter=7210, size=16, max=7.2948, avg=7.2835, min=7.2730, std=0.0052
+CheXpert: 2024-01-01 21:18:47,272 [INFO] Iter=7220, size=16, max=6.2318, avg=6.2182, min=6.2056, std=0.0076
+CheXpert: 2024-01-01 21:18:49,476 [INFO] Iter=7230, size=16, max=6.6415, avg=6.6176, min=6.5940, std=0.0109
+CheXpert: 2024-01-01 21:18:51,681 [INFO] Iter=7240, size=16, max=7.2033, avg=7.1902, min=7.1777, std=0.0068
+CheXpert: 2024-01-01 21:18:53,895 [INFO] Iter=7250, size=16, max=6.8421, avg=6.8295, min=6.8179, std=0.0073
+CheXpert: 2024-01-01 21:18:56,113 [INFO] Iter=7260, size=16, max=7.1611, avg=7.1541, min=7.1473, std=0.0042
+CheXpert: 2024-01-01 21:18:58,329 [INFO] Iter=7270, size=16, max=7.1456, avg=7.1342, min=7.1219, std=0.0067
+CheXpert: 2024-01-01 21:19:00,546 [INFO] Iter=7280, size=16, max=7.0203, avg=7.0093, min=6.9977, std=0.0070
+CheXpert: 2024-01-01 21:19:02,759 [INFO] Iter=7290, size=16, max=6.3886, avg=6.3747, min=6.3582, std=0.0076
+CheXpert: 2024-01-01 21:19:04,973 [INFO] Iter=7300, size=16, max=5.8626, avg=5.8568, min=5.8503, std=0.0026
+CheXpert: 2024-01-01 21:19:05,181 [INFO] [TEST] Iter=7300, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:19:07,395 [INFO] Iter=7310, size=16, max=6.4314, avg=6.4205, min=6.4113, std=0.0051
+CheXpert: 2024-01-01 21:19:09,607 [INFO] Iter=7320, size=16, max=6.7433, avg=6.7251, min=6.7091, std=0.0085
+CheXpert: 2024-01-01 21:19:11,824 [INFO] Iter=7330, size=16, max=7.2749, avg=7.2549, min=7.2329, std=0.0092
+CheXpert: 2024-01-01 21:19:14,039 [INFO] Iter=7340, size=16, max=7.2336, avg=7.2140, min=7.1889, std=0.0094
+CheXpert: 2024-01-01 21:19:16,254 [INFO] Iter=7350, size=16, max=7.7395, avg=7.7268, min=7.7121, std=0.0088
+CheXpert: 2024-01-01 21:19:18,466 [INFO] Iter=7360, size=16, max=7.2885, avg=7.2730, min=7.2579, std=0.0082
+CheXpert: 2024-01-01 21:19:20,671 [INFO] Iter=7370, size=16, max=6.9328, avg=6.9141, min=6.8973, std=0.0087
+CheXpert: 2024-01-01 21:19:22,884 [INFO] Iter=7380, size=16, max=6.8602, avg=6.8424, min=6.8236, std=0.0110
+CheXpert: 2024-01-01 21:19:25,092 [INFO] Iter=7390, size=16, max=8.5863, avg=8.5670, min=8.5522, std=0.0091
+CheXpert: 2024-01-01 21:19:27,313 [INFO] Iter=7400, size=16, max=6.9891, avg=6.9726, min=6.9552, std=0.0098
+CheXpert: 2024-01-01 21:19:27,521 [INFO] [TEST] Iter=7400, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:19:29,738 [INFO] Iter=7410, size=16, max=7.2183, avg=7.2092, min=7.1964, std=0.0074
+CheXpert: 2024-01-01 21:19:31,952 [INFO] Iter=7420, size=16, max=8.1211, avg=8.1032, min=8.0833, std=0.0090
+CheXpert: 2024-01-01 21:19:34,167 [INFO] Iter=7430, size=16, max=8.3569, avg=8.3383, min=8.3259, std=0.0088
+CheXpert: 2024-01-01 21:19:36,380 [INFO] Iter=7440, size=16, max=8.5666, avg=8.5522, min=8.5412, std=0.0062
+CheXpert: 2024-01-01 21:19:38,599 [INFO] Iter=7450, size=16, max=7.4902, avg=7.4768, min=7.4435, std=0.0106
+CheXpert: 2024-01-01 21:19:40,814 [INFO] Iter=7460, size=16, max=7.0128, avg=7.0079, min=7.0013, std=0.0037
+CheXpert: 2024-01-01 21:19:43,033 [INFO] Iter=7470, size=16, max=9.4873, avg=9.4726, min=9.4458, std=0.0129
+CheXpert: 2024-01-01 21:19:45,247 [INFO] Iter=7480, size=16, max=8.6108, avg=8.5989, min=8.5848, std=0.0077
+CheXpert: 2024-01-01 21:19:47,456 [INFO] Iter=7490, size=16, max=8.7074, avg=8.6942, min=8.6827, std=0.0066
+CheXpert: 2024-01-01 21:19:49,675 [INFO] Iter=7500, size=16, max=9.6920, avg=9.6741, min=9.6539, std=0.0107
+CheXpert: 2024-01-01 21:19:49,886 [INFO] [TEST] Iter=7500, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:19:52,104 [INFO] Iter=7510, size=16, max=8.7440, avg=8.7294, min=8.7081, std=0.0123
+CheXpert: 2024-01-01 21:19:54,323 [INFO] Iter=7520, size=16, max=9.5826, avg=9.5657, min=9.5525, std=0.0093
+CheXpert: 2024-01-01 21:19:56,533 [INFO] Iter=7530, size=16, max=8.1876, avg=8.1694, min=8.1464, std=0.0084
+CheXpert: 2024-01-01 21:19:58,745 [INFO] Iter=7540, size=16, max=7.9755, avg=7.9698, min=7.9641, std=0.0034
+CheXpert: 2024-01-01 21:20:00,954 [INFO] Iter=7550, size=16, max=8.2525, avg=8.2301, min=8.1944, std=0.0161
+CheXpert: 2024-01-01 21:20:03,171 [INFO] Iter=7560, size=16, max=8.5534, avg=8.5448, min=8.5256, std=0.0065
+CheXpert: 2024-01-01 21:20:05,385 [INFO] Iter=7570, size=16, max=8.6302, avg=8.6244, min=8.6181, std=0.0029
+CheXpert: 2024-01-01 21:20:07,595 [INFO] Iter=7580, size=16, max=8.3390, avg=8.3298, min=8.3221, std=0.0055
+CheXpert: 2024-01-01 21:20:09,807 [INFO] Iter=7590, size=16, max=10.0117, avg=10.0052, min=9.9995, std=0.0043
+CheXpert: 2024-01-01 21:20:12,012 [INFO] Iter=7600, size=16, max=9.1367, avg=9.1226, min=9.1083, std=0.0064
+CheXpert: 2024-01-01 21:20:12,219 [INFO] [TEST] Iter=7600, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:20:14,438 [INFO] Iter=7610, size=16, max=9.9259, avg=9.9185, min=9.9114, std=0.0047
+CheXpert: 2024-01-01 21:20:16,650 [INFO] Iter=7620, size=16, max=10.7270, avg=10.7181, min=10.7094, std=0.0055
+CheXpert: 2024-01-01 21:20:18,869 [INFO] Iter=7630, size=16, max=8.9499, avg=8.9425, min=8.9377, std=0.0040
+CheXpert: 2024-01-01 21:20:21,079 [INFO] Iter=7640, size=16, max=9.2054, avg=9.1988, min=9.1913, std=0.0035
+CheXpert: 2024-01-01 21:20:23,288 [INFO] Iter=7650, size=16, max=8.9545, avg=8.9490, min=8.9430, std=0.0028
+CheXpert: 2024-01-01 21:20:25,504 [INFO] Iter=7660, size=16, max=9.8146, avg=9.8048, min=9.7969, std=0.0054
+CheXpert: 2024-01-01 21:20:27,708 [INFO] Iter=7670, size=16, max=10.0646, avg=10.0582, min=10.0515, std=0.0040
+CheXpert: 2024-01-01 21:20:29,920 [INFO] Iter=7680, size=16, max=9.9298, avg=9.9263, min=9.9212, std=0.0030
+CheXpert: 2024-01-01 21:20:32,132 [INFO] Iter=7690, size=16, max=9.4905, avg=9.4809, min=9.4730, std=0.0050
+CheXpert: 2024-01-01 21:20:34,342 [INFO] Iter=7700, size=16, max=8.7881, avg=8.7765, min=8.7660, std=0.0054
+CheXpert: 2024-01-01 21:20:34,552 [INFO] [TEST] Iter=7700, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:20:36,764 [INFO] Iter=7710, size=16, max=8.3893, avg=8.3833, min=8.3773, std=0.0029
+CheXpert: 2024-01-01 21:20:38,980 [INFO] Iter=7720, size=16, max=9.1423, avg=9.1339, min=9.1268, std=0.0039
+CheXpert: 2024-01-01 21:20:41,202 [INFO] Iter=7730, size=16, max=9.4510, avg=9.4376, min=9.4280, std=0.0056
+CheXpert: 2024-01-01 21:20:43,412 [INFO] Iter=7740, size=16, max=7.6165, avg=7.6057, min=7.6005, std=0.0036
+CheXpert: 2024-01-01 21:20:45,626 [INFO] Iter=7750, size=16, max=9.0030, avg=8.9884, min=8.9780, std=0.0065
+CheXpert: 2024-01-01 21:20:47,836 [INFO] Iter=7760, size=16, max=9.8293, avg=9.8120, min=9.7926, std=0.0100
+CheXpert: 2024-01-01 21:20:50,052 [INFO] Iter=7770, size=16, max=12.1322, avg=12.1267, min=12.1165, std=0.0042
+CheXpert: 2024-01-01 21:20:52,268 [INFO] Iter=7780, size=16, max=10.8559, avg=10.8293, min=10.8155, std=0.0079
+CheXpert: 2024-01-01 21:20:54,482 [INFO] Iter=7790, size=16, max=8.8358, avg=8.8194, min=8.8036, std=0.0082
+CheXpert: 2024-01-01 21:20:56,693 [INFO] Iter=7800, size=16, max=10.3686, avg=10.3606, min=10.3546, std=0.0047
+CheXpert: 2024-01-01 21:20:56,902 [INFO] [TEST] Iter=7800, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:20:59,124 [INFO] Iter=7810, size=16, max=9.7167, avg=9.7002, min=9.6895, std=0.0103
+CheXpert: 2024-01-01 21:21:01,332 [INFO] Iter=7820, size=16, max=9.5833, avg=9.5782, min=9.5693, std=0.0038
+CheXpert: 2024-01-01 21:21:03,545 [INFO] Iter=7830, size=16, max=11.2660, avg=11.2533, min=11.2476, std=0.0054
+CheXpert: 2024-01-01 21:21:05,754 [INFO] Iter=7840, size=16, max=9.7984, avg=9.7847, min=9.7664, std=0.0115
+CheXpert: 2024-01-01 21:21:07,980 [INFO] Iter=7850, size=16, max=10.2846, avg=10.2746, min=10.2714, std=0.0036
+CheXpert: 2024-01-01 21:21:10,191 [INFO] Iter=7860, size=16, max=10.5000, avg=10.4932, min=10.4726, std=0.0065
+CheXpert: 2024-01-01 21:21:12,399 [INFO] Iter=7870, size=16, max=9.9446, avg=9.9416, min=9.9295, std=0.0036
+CheXpert: 2024-01-01 21:21:14,625 [INFO] Iter=7880, size=16, max=11.3951, avg=11.3875, min=11.3842, std=0.0024
+CheXpert: 2024-01-01 21:21:16,851 [INFO] Iter=7890, size=16, max=9.0411, avg=9.0387, min=9.0364, std=0.0013
+CheXpert: 2024-01-01 21:21:19,070 [INFO] Iter=7900, size=16, max=11.1754, avg=11.1633, min=11.1467, std=0.0098
+CheXpert: 2024-01-01 21:21:19,276 [INFO] [TEST] Iter=7900, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:21:21,497 [INFO] Iter=7910, size=16, max=11.2455, avg=11.2431, min=11.2325, std=0.0029
+CheXpert: 2024-01-01 21:21:23,720 [INFO] Iter=7920, size=16, max=8.9032, avg=8.8891, min=8.8788, std=0.0093
+CheXpert: 2024-01-01 21:21:25,936 [INFO] Iter=7930, size=16, max=10.6193, avg=10.6154, min=10.6115, std=0.0018
+CheXpert: 2024-01-01 21:21:28,149 [INFO] Iter=7940, size=16, max=9.1387, avg=9.1353, min=9.1270, std=0.0039
+CheXpert: 2024-01-01 21:21:30,370 [INFO] Iter=7950, size=16, max=12.4003, avg=12.3982, min=12.3961, std=0.0015
+CheXpert: 2024-01-01 21:21:32,596 [INFO] Iter=7960, size=16, max=9.2506, avg=9.2497, min=9.2489, std=0.0005
+CheXpert: 2024-01-01 21:21:34,817 [INFO] Iter=7970, size=16, max=9.1240, avg=9.1211, min=9.1182, std=0.0018
+CheXpert: 2024-01-01 21:21:37,030 [INFO] Iter=7980, size=16, max=9.9446, avg=9.9423, min=9.9400, std=0.0015
+CheXpert: 2024-01-01 21:21:39,253 [INFO] Iter=7990, size=16, max=10.0018, avg=9.9987, min=9.9956, std=0.0015
+CheXpert: 2024-01-01 21:21:41,481 [INFO] Iter=8000, size=16, max=11.0335, avg=11.0311, min=11.0287, std=0.0014
+CheXpert: 2024-01-01 21:21:41,687 [INFO] [TEST] Iter=8000, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:21:43,902 [INFO] Iter=8010, size=16, max=10.0385, avg=10.0258, min=10.0132, std=0.0101
+CheXpert: 2024-01-01 21:21:46,117 [INFO] Iter=8020, size=16, max=11.8564, avg=11.8546, min=11.8528, std=0.0012
+CheXpert: 2024-01-01 21:21:48,336 [INFO] Iter=8030, size=16, max=10.4886, avg=10.4870, min=10.4854, std=0.0009
+CheXpert: 2024-01-01 21:21:50,551 [INFO] Iter=8040, size=16, max=11.2696, avg=11.2649, min=11.2603, std=0.0023
+CheXpert: 2024-01-01 21:21:52,765 [INFO] Iter=8050, size=16, max=11.4537, avg=11.4485, min=11.4434, std=0.0022
+CheXpert: 2024-01-01 21:21:54,982 [INFO] Iter=8060, size=16, max=11.2874, avg=11.2854, min=11.2835, std=0.0010
+CheXpert: 2024-01-01 21:21:57,199 [INFO] Iter=8070, size=16, max=8.9272, avg=8.9237, min=8.9203, std=0.0017
+CheXpert: 2024-01-01 21:21:59,418 [INFO] Iter=8080, size=16, max=9.9367, avg=9.9346, min=9.9326, std=0.0010
+CheXpert: 2024-01-01 21:22:01,634 [INFO] Iter=8090, size=16, max=10.3321, avg=10.3292, min=10.3262, std=0.0018
+CheXpert: 2024-01-01 21:22:03,847 [INFO] Iter=8100, size=16, max=10.5601, avg=10.5573, min=10.5544, std=0.0015
+CheXpert: 2024-01-01 21:22:04,056 [INFO] [TEST] Iter=8100, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:22:06,276 [INFO] Iter=8110, size=16, max=9.1794, avg=9.1762, min=9.1729, std=0.0020
+CheXpert: 2024-01-01 21:22:08,489 [INFO] Iter=8120, size=16, max=9.3965, avg=9.3947, min=9.3928, std=0.0010
+CheXpert: 2024-01-01 21:22:10,701 [INFO] Iter=8130, size=16, max=11.6184, avg=11.6166, min=11.6148, std=0.0014
+CheXpert: 2024-01-01 21:22:12,907 [INFO] Iter=8140, size=16, max=9.0069, avg=9.0048, min=9.0026, std=0.0012
+CheXpert: 2024-01-01 21:22:15,123 [INFO] Iter=8150, size=16, max=9.2337, avg=9.2315, min=9.2293, std=0.0015
+CheXpert: 2024-01-01 21:22:17,322 [INFO] Iter=8160, size=16, max=10.6260, avg=10.6240, min=10.6221, std=0.0012
+CheXpert: 2024-01-01 21:22:19,539 [INFO] Iter=8170, size=16, max=11.2472, avg=11.2440, min=11.2409, std=0.0018
+CheXpert: 2024-01-01 21:22:21,756 [INFO] Iter=8180, size=16, max=11.7217, avg=11.7158, min=11.7098, std=0.0023
+CheXpert: 2024-01-01 21:22:23,969 [INFO] Iter=8190, size=16, max=10.0573, avg=10.0539, min=10.0505, std=0.0017
+CheXpert: 2024-01-01 21:22:26,173 [INFO] Iter=8200, size=16, max=11.1215, avg=11.1184, min=11.1152, std=0.0020
+CheXpert: 2024-01-01 21:22:26,379 [INFO] [TEST] Iter=8200, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:22:28,599 [INFO] Iter=8210, size=16, max=13.2781, avg=13.2759, min=13.2736, std=0.0014
+CheXpert: 2024-01-01 21:22:30,814 [INFO] Iter=8220, size=16, max=8.4262, avg=8.4242, min=8.4223, std=0.0007
+CheXpert: 2024-01-01 21:22:33,034 [INFO] Iter=8230, size=16, max=12.0160, avg=12.0102, min=12.0045, std=0.0033
+CheXpert: 2024-01-01 21:22:35,246 [INFO] Iter=8240, size=16, max=10.7750, avg=10.7708, min=10.7665, std=0.0020
+CheXpert: 2024-01-01 21:22:37,456 [INFO] Iter=8250, size=16, max=9.6661, avg=9.6648, min=9.6634, std=0.0008
+CheXpert: 2024-01-01 21:22:39,676 [INFO] Iter=8260, size=16, max=10.1727, avg=10.1701, min=10.1674, std=0.0013
+CheXpert: 2024-01-01 21:22:41,894 [INFO] Iter=8270, size=16, max=12.8043, avg=12.8002, min=12.7962, std=0.0024
+CheXpert: 2024-01-01 21:22:44,103 [INFO] Iter=8280, size=16, max=11.5125, avg=11.5078, min=11.5031, std=0.0024
+CheXpert: 2024-01-01 21:22:46,316 [INFO] Iter=8290, size=16, max=10.4796, avg=10.4758, min=10.4720, std=0.0015
+CheXpert: 2024-01-01 21:22:48,541 [INFO] Iter=8300, size=16, max=10.7435, avg=10.7395, min=10.7358, std=0.0022
+CheXpert: 2024-01-01 21:22:48,752 [INFO] [TEST] Iter=8300, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:22:50,972 [INFO] Iter=8310, size=16, max=10.5017, avg=10.4999, min=10.4979, std=0.0012
+CheXpert: 2024-01-01 21:22:53,191 [INFO] Iter=8320, size=16, max=9.0729, avg=9.0692, min=9.0655, std=0.0019
+CheXpert: 2024-01-01 21:22:55,407 [INFO] Iter=8330, size=16, max=10.6706, avg=10.6639, min=10.6575, std=0.0031
+CheXpert: 2024-01-01 21:22:57,614 [INFO] Iter=8340, size=16, max=10.8513, avg=10.8477, min=10.8442, std=0.0022
+CheXpert: 2024-01-01 21:22:59,828 [INFO] Iter=8350, size=16, max=11.7447, avg=11.7428, min=11.7410, std=0.0012
+CheXpert: 2024-01-01 21:23:02,051 [INFO] Iter=8360, size=16, max=11.5110, avg=11.5068, min=11.5027, std=0.0022
+CheXpert: 2024-01-01 21:23:04,267 [INFO] Iter=8370, size=16, max=13.2524, avg=13.2430, min=13.2338, std=0.0043
+CheXpert: 2024-01-01 21:23:06,474 [INFO] Iter=8380, size=16, max=10.2221, avg=10.2178, min=10.2138, std=0.0026
+CheXpert: 2024-01-01 21:23:08,679 [INFO] Iter=8390, size=16, max=10.8812, avg=10.8786, min=10.8758, std=0.0012
+CheXpert: 2024-01-01 21:23:10,893 [INFO] Iter=8400, size=16, max=10.7580, avg=10.7537, min=10.7495, std=0.0022
+CheXpert: 2024-01-01 21:23:11,099 [INFO] [TEST] Iter=8400, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:23:13,316 [INFO] Iter=8410, size=16, max=10.4022, avg=10.3980, min=10.3937, std=0.0021
+CheXpert: 2024-01-01 21:23:15,530 [INFO] Iter=8420, size=16, max=11.2280, avg=11.2252, min=11.2229, std=0.0014
+CheXpert: 2024-01-01 21:23:17,739 [INFO] Iter=8430, size=16, max=10.4868, avg=10.4845, min=10.4823, std=0.0013
+CheXpert: 2024-01-01 21:23:19,963 [INFO] Iter=8440, size=16, max=10.8687, avg=10.8667, min=10.8640, std=0.0014
+CheXpert: 2024-01-01 21:23:22,184 [INFO] Iter=8450, size=16, max=11.5999, avg=11.5973, min=11.5925, std=0.0031
+CheXpert: 2024-01-01 21:23:24,406 [INFO] Iter=8460, size=16, max=10.7229, avg=10.7137, min=10.7067, std=0.0045
+CheXpert: 2024-01-01 21:23:26,624 [INFO] Iter=8470, size=16, max=11.2273, avg=11.2257, min=11.2227, std=0.0017
+CheXpert: 2024-01-01 21:23:28,841 [INFO] Iter=8480, size=16, max=10.8836, avg=10.8757, min=10.8663, std=0.0046
+CheXpert: 2024-01-01 21:23:31,055 [INFO] Iter=8490, size=16, max=10.5023, avg=10.4960, min=10.4873, std=0.0045
+CheXpert: 2024-01-01 21:23:33,272 [INFO] Iter=8500, size=16, max=12.0888, avg=12.0820, min=12.0769, std=0.0045
+CheXpert: 2024-01-01 21:23:33,482 [INFO] [TEST] Iter=8500, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:23:35,705 [INFO] Iter=8510, size=16, max=11.0080, avg=11.0066, min=10.9977, std=0.0029
+CheXpert: 2024-01-01 21:23:37,919 [INFO] Iter=8520, size=16, max=12.1461, avg=12.1332, min=12.1227, std=0.0089
+CheXpert: 2024-01-01 21:23:40,142 [INFO] Iter=8530, size=16, max=12.8647, avg=12.8599, min=12.8575, std=0.0019
+CheXpert: 2024-01-01 21:23:42,359 [INFO] Iter=8540, size=16, max=10.1957, avg=10.1906, min=10.1863, std=0.0046
+CheXpert: 2024-01-01 21:23:44,577 [INFO] Iter=8550, size=16, max=11.3608, avg=11.3527, min=11.3398, std=0.0046
+CheXpert: 2024-01-01 21:23:46,788 [INFO] Iter=8560, size=16, max=10.5548, avg=10.5488, min=10.5453, std=0.0041
+CheXpert: 2024-01-01 21:23:49,006 [INFO] Iter=8570, size=16, max=9.8616, avg=9.8616, min=9.8616, std=0.0000
+CheXpert: 2024-01-01 21:23:51,223 [INFO] Iter=8580, size=16, max=9.9640, avg=9.9640, min=9.9640, std=0.0000
+CheXpert: 2024-01-01 21:23:53,449 [INFO] Iter=8590, size=16, max=10.2455, avg=10.2428, min=10.2383, std=0.0035
+CheXpert: 2024-01-01 21:23:55,658 [INFO] Iter=8600, size=16, max=11.0629, avg=11.0623, min=11.0528, std=0.0025
+CheXpert: 2024-01-01 21:23:55,869 [INFO] [TEST] Iter=8600, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:23:58,085 [INFO] Iter=8610, size=16, max=12.6846, avg=12.6846, min=12.6846, std=0.0000
+CheXpert: 2024-01-01 21:24:00,309 [INFO] Iter=8620, size=16, max=12.6846, avg=12.6846, min=12.6846, std=0.0000
+CheXpert: 2024-01-01 21:24:02,525 [INFO] Iter=8630, size=16, max=9.5079, avg=9.5079, min=9.5079, std=0.0000
+CheXpert: 2024-01-01 21:24:04,743 [INFO] Iter=8640, size=16, max=13.1005, avg=13.0992, min=13.0903, std=0.0034
+CheXpert: 2024-01-01 21:24:06,964 [INFO] Iter=8650, size=16, max=12.6571, avg=12.6506, min=12.6398, std=0.0084
+CheXpert: 2024-01-01 21:24:09,183 [INFO] Iter=8660, size=16, max=11.5134, avg=11.5113, min=11.4788, std=0.0084
+CheXpert: 2024-01-01 21:24:11,397 [INFO] Iter=8670, size=16, max=11.4716, avg=11.4705, min=11.4543, std=0.0042
+CheXpert: 2024-01-01 21:24:13,621 [INFO] Iter=8680, size=16, max=12.7019, avg=12.6911, min=12.6846, std=0.0084
+CheXpert: 2024-01-01 21:24:15,845 [INFO] Iter=8690, size=16, max=11.1423, avg=11.1423, min=11.1423, std=0.0000
+CheXpert: 2024-01-01 21:24:18,048 [INFO] Iter=8700, size=16, max=11.9120, avg=11.9120, min=11.9120, std=0.0000
+CheXpert: 2024-01-01 21:24:18,256 [INFO] [TEST] Iter=8700, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:24:20,482 [INFO] Iter=8710, size=16, max=12.7366, avg=12.7366, min=12.7366, std=0.0000
+CheXpert: 2024-01-01 21:24:22,703 [INFO] Iter=8720, size=16, max=9.9640, avg=9.9640, min=9.9640, std=0.0000
+CheXpert: 2024-01-01 21:24:24,925 [INFO] Iter=8730, size=16, max=11.1250, avg=11.1250, min=11.1250, std=0.0000
+CheXpert: 2024-01-01 21:24:27,143 [INFO] Iter=8740, size=16, max=10.3279, avg=10.3279, min=10.3279, std=0.0000
+CheXpert: 2024-01-01 21:24:29,367 [INFO] Iter=8750, size=16, max=10.7091, avg=10.7085, min=10.6990, std=0.0025
+CheXpert: 2024-01-01 21:24:31,584 [INFO] Iter=8760, size=16, max=13.1351, avg=13.1351, min=13.1351, std=0.0000
+CheXpert: 2024-01-01 21:24:33,798 [INFO] Iter=8770, size=16, max=12.7366, avg=12.7214, min=12.7193, std=0.0057
+CheXpert: 2024-01-01 21:24:36,007 [INFO] Iter=8780, size=16, max=10.7438, avg=10.7438, min=10.7438, std=0.0000
+CheXpert: 2024-01-01 21:24:38,221 [INFO] Iter=8790, size=16, max=11.1423, avg=11.1423, min=11.1423, std=0.0000
+CheXpert: 2024-01-01 21:24:40,432 [INFO] Iter=8800, size=16, max=11.1250, avg=11.1250, min=11.1250, std=0.0000
+CheXpert: 2024-01-01 21:24:40,642 [INFO] [TEST] Iter=8800, #tests=2, max=0.1500, avg=0.1500, min=0.1500, std=0.0000
+CheXpert: 2024-01-01 21:24:42,855 [INFO] Iter=8810, size=16, max=11.9395, avg=11.9388, min=11.9293, std=0.0025

@@ -102,7 +102,7 @@ class DenseNetPolicy(PolicyNetwork):
             self._logger = logger
 
         model = DenseNet(num_classes=num_classes)
-        variables = model.init(jax.random.PRNGKey(0), jnp.ones([32, 3, 320, 320]))  # Example input shape
+        variables = model.init(jax.random.PRNGKey(0), jnp.ones([1, 320, 320, 3]))  # Example input shape
         self.params = variables['params']
         #jax.debug.print('params after init : {}',self.params)
         self.num_params, format_params_fn = get_params_format_fn(self.params)
@@ -126,5 +126,5 @@ class DenseNetPolicy(PolicyNetwork):
         #jax.debug.print('params in get actions : {}',params)
         params = self._format_params_fn(params)
         logits = self._forward_fn(params, t_states.obs)
-        jax.debug.print('logits : {}', logits)
+        #jax.debug.print('logits : {}', logits)
         return logits, p_states
