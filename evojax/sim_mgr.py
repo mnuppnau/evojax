@@ -389,7 +389,8 @@ class SimManager(object):
 
         # Reset the tasks and the policy.
         task_state = task_reset_func(reset_keys)
-        task_state = task_state.replace(batch_stats=self.batch_stats)
+        if test:
+            task_state = task_state.replace(batch_stats=self.batch_stats)
 
         batch_stats_testing = task_state.batch_stats
         policy_state = policy_reset_func(task_state)
@@ -397,7 +398,6 @@ class SimManager(object):
             params = split_params_for_pmap(params)
             task_state = split_states_for_pmap(task_state)
             policy_state = split_states_for_pmap(policy_state)
-        
         # Do the rollouts.
         if test:
             scores, all_obs, masks, final_states = rollout_func(

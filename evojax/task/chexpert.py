@@ -8,6 +8,7 @@ import torch
 import torchvision.transforms as T
 import pandas as pd
 import numpy as np
+import torchvision.models as models
 
 from collections.abc import Iterator
 from jax import random
@@ -34,24 +35,6 @@ def numpy_collate(batch):
         return [numpy_collate(samples) for samples in transposed]
     else:
         return np.array(batch)
-
-class NumpyLoader(data.DataLoader):
-  def __init__(self, dataset, batch_size=4,
-                shuffle=True, sampler=None,
-                batch_sampler=None, num_workers=0,
-                pin_memory=False, drop_last=False,
-                timeout=0, worker_init_fn=None):
-    super(self.__class__, self).__init__(dataset,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        sampler=sampler,
-        batch_sampler=batch_sampler,
-        num_workers=num_workers,
-        collate_fn=numpy_collate,
-        pin_memory=pin_memory,
-        drop_last=drop_last,
-        timeout=timeout,
-        worker_init_fn=worker_init_fn)
 
 class ChexpertSmall(Dataset):
     url = 'http://download.cs.stanford.edu/deep/CheXpert-v1.0-small.zip'
@@ -182,10 +165,6 @@ def fetch_dataloader(args, mode):
     ])
 
     dataset = ChexpertSmall(args.data_path, mode, transforms, mini_data=args.mini_data)
-    print('mode : ', mode)
-    print('Inside fetch_dataloader, args batch size = ', args.batch_size)
-    print('Inside fetch_dataloader, shuffle = ', mode=='train')
-
     return DataLoader(dataset, args.batch_size, collate_fn=numpy_collate,shuffle=(mode=='train'), pin_memory=(args.device.type=='cuda'),
                        num_workers=0 if mode=='valid' else 16)  # since evaluating the valid_dataloader is called inside the
                                                               # train_dataloader loop, 0 workers for valid_dataloader avoids
@@ -235,7 +214,6 @@ def load_subset_of_data(data_loader, num_records):
 
         # Update the count and check if the desired number of records is reached
         count += len(batch_images)
-        print('len batch images : ',len(batch_images))
         if count >= num_records:
             break
 
@@ -246,22 +224,55 @@ def load_subset_of_data(data_loader, num_records):
 
     return images, labels, idxs
 
-def loss(predictions: jnp.ndarray, targets: jnp.ndarray) -> jnp.float32:
-    #jax.debug.print('targets : {}',targets)
-    epsilon = 1e-7  # small constant to prevent log(0)
+#def loss(predictions: jnp.ndarray, targets: jnp.ndarray) -> jnp.float32:
+#    #jax.debug.print('targets : {}',targets)
+#    epsilon = 1e-7  # small constant to prevent log(0)
+#    clipped_predictions = jnp.clip(predictions, epsilon, 1 - epsilon)
+#    return -jnp.mean(targets * jnp.log(clipped_predictions) + (1 - targets) * jnp.log(1 - clipped_predictions))
+
+def loss(predictions: jnp.ndarray, targets: jnp.ndarray, positive_weight=2) -> jnp.float32:
+    epsilon = 1e-7
     clipped_predictions = jnp.clip(predictions, epsilon, 1 - epsilon)
-    return -jnp.mean(targets * jnp.log(clipped_predictions) + (1 - targets) * jnp.log(1 - clipped_predictions))
+    
+    # Calculate the weights for each class
+    weights = jnp.where(targets == 1, positive_weight, 1.0)
+    
+    # Calculate the weighted loss
+    bce = -weights * (targets * jnp.log(clipped_predictions) + (1 - targets) * jnp.log(1 - clipped_predictions))
+    return jnp.mean(bce)
 
-def accuracy(prediction: jnp.ndarray, target: jnp.ndarray, threshold: float = 0.5) -> jnp.float32:
-    # Assuming prediction is a probability or has passed through a sigmoid function
-    # Threshold the predictions to get binary outputs
-    predicted_classes = prediction > threshold
 
-    # Compare the predicted classes with the targets
-    correct_predictions = predicted_classes == target
+#def accuracy(prediction: jnp.ndarray, target: jnp.ndarray, threshold: float = 0.5) -> jnp.float32:
+#    # Assuming prediction is a probability or has passed through a sigmoid function
+#    # Threshold the predictions to get binary outputs
+#    predicted_classes = prediction > threshold
 
-    # Calculate accuracy as the mean of correct predictions
-    return jnp.mean(correct_predictions)
+#    # Compare the predicted classes with the targets
+#    correct_predictions = predicted_classes == target
+
+#    # Calculate accuracy as the mean of correct predictions
+#    return jnp.mean(correct_predictions)
+
+def compute_auc_pr(y_true: jnp.ndarray, y_scores: jnp.ndarray) -> jnp.ndarray:
+    descending_order = jnp.argsort(y_scores)[::-1]
+    y_true_sorted = y_true[descending_order]
+    tp_cumsum = jnp.cumsum(y_true_sorted)
+    precision = tp_cumsum / (jnp.arange(len(y_true)) + 1)
+    recall = tp_cumsum / jnp.sum(y_true)
+    delta_recall = jnp.diff(recall, prepend=0)
+    auc_pr = jnp.sum(precision * delta_recall)
+    return auc_pr
+
+def accuracy(y_scores: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
+    assert y_true.ndim == 2 and y_scores.ndim == 2, "Inputs must be 2D (batched)"
+    assert y_true.shape == y_scores.shape, "Shapes of y_true and y_scores must match"
+
+    # Flatten the batched inputs
+    y_true_flat = y_true.flatten()
+    y_scores_flat = y_scores.flatten()
+
+    # Compute AUC-PR on the flattened arrays
+    return compute_auc_pr(y_true_flat, y_scores_flat)
 
 def numpy_callback(x):
   # Need to forward-declare the shape & dtype of the expected output.
@@ -282,7 +293,12 @@ class CheXpert(VectorizedTask):
 
         # Initialize PyTorch DataLoader
         args.device = torch.device('cuda:{}'.format(args.cuda) if args.cuda is not None and torch.cuda.is_available() else 'cpu')
-        
+
+        #densenet = models.densenet121(pretrained=True)
+        #pretrained_weights = densenet.state_dict()
+        #flat_weights = torch.cat([p.flatten() for p in pretrained_weights.values()])
+        #print('flat weights shape : ', flat_weights.shape)
+
         self.train_generator = fetch_dataloader(args, mode='train')
         num_records_to_load = 1400
         train_images, train_labels, train_idxs = load_subset_of_data(self.train_generator, num_records_to_load)
@@ -316,9 +332,13 @@ class CheXpert(VectorizedTask):
 
         def step_fn(state, action):
             if test:
+                #jax.debug.print('Test action : {}',action)
+                #jax.debug.print('Test labels : {}',state.labels)
                 reward = accuracy(action, state.labels)
             else:
-                reward = loss(action, state.labels)
+                #jax.debug.print('Train action : {}',action)
+                #jax.debug.print('Train labels : {}',state.labels)
+                reward = -loss(action, state.labels)
             return state, reward, jnp.ones(())
 
         self._step_fn = jax.jit(jax.vmap(step_fn))

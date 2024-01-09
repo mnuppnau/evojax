@@ -112,29 +112,6 @@ class Trainer(object):
 
     def run(self, demo_mode: bool = False) -> float:
         """Start the training / test process."""
-        def print_batch_stats_shapes(batch_stats, parent_key=''):
-            for key, value in batch_stats.items():
-                full_key = f"{parent_key}.{key}" if parent_key else key
-                if isinstance(value, dict):
-                    print_batch_stats_shapes(value, full_key)
-                else:
-                    print(f"Key: {full_key}, Shape: {value.shape}")
-
-        def reshape_batch_stats(batch_stats):
-            def reshape_stats_recursive(stats):
-                if isinstance(stats, dict):
-                    return {k: reshape_stats_recursive(v) for k, v in stats.items()}
-                elif isinstance(stats, jnp.ndarray):
-                    # Assuming the array has at least 3 dimensions for the reshape [m, n, x] to [m*n, x]
-                    if stats.ndim >= 3:
-                        m, n = stats.shape[:2]
-                        return stats.reshape(m * n, *stats.shape[2:])
-                    else:
-                        return stats
-                else:
-                    raise ValueError(f"Unsupported type: {type(stats)}")
-            return reshape_stats_recursive(batch_stats)
-
         def average_batch_stats_half(batch_stats):
             def average_stats_recursive(stats):
                 if isinstance(stats, dict):
@@ -146,22 +123,6 @@ class Trainer(object):
                         first_half_mean = stats[:stats.shape[0] // 2].mean(axis=0, keepdims=True)
                         second_half_mean = stats[stats.shape[0] // 2:].mean(axis=0, keepdims=True)
                         return jnp.concatenate([first_half_mean, second_half_mean], axis=0)
-                    else:
-                        return stats
-                else:
-                    raise ValueError(f"Unsupported type: {type(stats)}")
-            return average_stats_recursive(batch_stats)
-
-
-        def average_batch_stats(batch_stats):
-            def average_stats_recursive(stats):
-                if isinstance(stats, dict):
-                    return {k: average_stats_recursive(v) for k, v in stats.items()}
-                elif isinstance(stats, jnp.ndarray):
-                    # Average across the first dimension
-                    # This assumes the array has at least 2 dimensions [64, X]
-                    if stats.ndim >= 2:
-                        return stats.mean(axis=0, keepdims=True)
                     else:
                         return stats
                 else:

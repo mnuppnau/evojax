@@ -66,17 +66,21 @@ class TransitionLayer(nn.Module):
 class DenseNet(nn.Module):
     num_classes : int
     act_fn : callable = nn.relu
-    num_layers : tuple = (6, 8, 10, 6)
-    bn_size : int = 2
-    growth_rate : int = 16
+    num_layers : tuple = (6, 12, 24, 16)
+    bn_size : int = 4
+    growth_rate : int = 32
 
     @nn.compact
-    def __call__(self, x, train=False):
+    def __call__(self, x, train=True):
         c_hidden = self.growth_rate * self.bn_size  # The start number of hidden channels
-
-        x = nn.Conv(c_hidden,
-                    kernel_size=(3, 3),
+        
+        x = jnp.pad(x, pad_width=((0, 0), (3, 3), (3, 3), (0, 0)))  # Zero padding
+        x = nn.Conv(64, (7, 7), strides=(2, 2), padding='VALID', 
                     kernel_init=densenet_kernel_init)(x)
+        x = nn.BatchNorm()(x, use_running_average=not train)
+        x = self.act_fn(x)
+        x = jnp.pad(x, pad_width=((0, 0), (1, 1), (1, 1), (0, 0)))  # Zero padding for max pooling
+        x = nn.max_pool(x, window_shape=(3, 3), strides=(2, 2), padding='VALID')
 
         for block_idx, num_layers in enumerate(self.num_layers):
             x = DenseBlock(num_layers=num_layers,
@@ -112,6 +116,12 @@ class DenseNetPolicy(PolicyNetwork):
         self._logger.info('DenseNetPolicy.num_params = {}'.format(self.num_params))
         self._format_params_fn = jax.vmap(format_params_fn)
 
+        # Step 1: Extract all parameters
+        leaves, _ = jax.tree_util.tree_flatten(self.init_params)
+        
+        # Step 2: Concatenate all parameters into a single vector
+        self.flat_init_params = jnp.concatenate([p.flatten() for p in leaves])
+        
         def forward_fn_train(p, o, batch_stats):
             logits, updates = model.apply(
                 {'params': p, 'batch_stats': batch_stats},
