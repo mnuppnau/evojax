@@ -230,16 +230,34 @@ def load_subset_of_data(data_loader, num_records):
 #    clipped_predictions = jnp.clip(predictions, epsilon, 1 - epsilon)
 #    return -jnp.mean(targets * jnp.log(clipped_predictions) + (1 - targets) * jnp.log(1 - clipped_predictions))
 
-def loss(predictions: jnp.ndarray, targets: jnp.ndarray, positive_weight=2) -> jnp.float32:
-    epsilon = 1e-7
-    clipped_predictions = jnp.clip(predictions, epsilon, 1 - epsilon)
+def loss(predictions: jnp.ndarray, targets: jnp.ndarray, weights: jnp.float32 = 2.0) -> jnp.float32:
+#def custom_sigmoid_binary_cross_entropy(predictions, targets, weights):
+    log_p = jax.nn.log_sigmoid(predictions)
+    log_not_p = jax.nn.log_sigmoid(-predictions)
     
-    # Calculate the weights for each class
-    weights = jnp.where(targets == 1, positive_weight, 1.0)
+    # Compute the basic binary cross-entropy loss
+    losses = -targets * log_p - (1. - targets) * log_not_p
     
-    # Calculate the weighted loss
-    bce = -weights * (targets * jnp.log(clipped_predictions) + (1 - targets) * jnp.log(1 - clipped_predictions))
-    return jnp.mean(bce)
+    # Apply weights
+    weighted_losses = losses * weights  # weights should be broadcastable to the shape of losses
+    
+    # Sum the losses for each example across classes
+    summed_losses_per_example = jnp.sum(weighted_losses, axis=1)
+    
+    # Average across the batch
+    average_loss = jnp.mean(summed_losses_per_example)
+
+    return average_loss
+#def loss(predictions: jnp.ndarray, targets: jnp.ndarray, positive_weight=2) -> jnp.float32:
+#    epsilon = 1e-7
+#    clipped_predictions = jnp.clip(predictions, epsilon, 1 - epsilon)
+#    
+#    # Calculate the weights for each class
+#    weights = jnp.where(targets == 1, positive_weight, 1.0)
+#    
+#    # Calculate the weighted loss
+#    bce = -weights * (targets * jnp.log(clipped_predictions) + (1 - targets) * jnp.log(1 - clipped_predictions))
+#    return jnp.mean(bce)
 
 
 #def accuracy(prediction: jnp.ndarray, target: jnp.ndarray, threshold: float = 0.5) -> jnp.float32:
@@ -339,6 +357,7 @@ class CheXpert(VectorizedTask):
                 #jax.debug.print('Train action : {}',action)
                 #jax.debug.print('Train labels : {}',state.labels)
                 reward = -loss(action, state.labels)
+                print('reward : ',reward)
             return state, reward, jnp.ones(())
 
         self._step_fn = jax.jit(jax.vmap(step_fn))

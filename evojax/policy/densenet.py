@@ -97,7 +97,7 @@ class DenseNet(nn.Module):
         x = self.act_fn(x)
         x = x.mean(axis=(1, 2))
         x = nn.Dense(self.num_classes)(x)
-        x = nn.sigmoid(x)
+        #x = nn.sigmoid(x)
         return x
 
 class DenseNetPolicy(PolicyNetwork):
