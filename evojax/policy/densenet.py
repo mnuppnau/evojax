@@ -63,33 +63,35 @@ class TransitionLayer(nn.Module):
 class DenseNet(nn.Module):
     num_classes: int
     act_fn: callable = nn.relu
-    num_layers: tuple = (6, 6, 6, 6)
-    bn_size: int = 2
-    growth_rate: int = 16
+    num_layers: tuple = (6, 12, 24, 16)
+    bn_size: int = 4
+    growth_rate: int = 24
 
     @nn.compact
     def __call__(self, x):
-        c_hidden = self.growth_rate * self.bn_size
-
-        x = nn.Conv(c_hidden,
-                    kernel_size=(3, 3),
+        c_hidden = self.growth_rate * self.bn_size  # The start number of hidden channels
+        
+        x = jnp.pad(x, pad_width=((0, 0), (3, 3), (3, 3), (0, 0)))  # Zero padding
+        x = nn.Conv(64, (7, 7), strides=(2, 2), padding='VALID', 
                     kernel_init=densenet_kernel_init)(x)
+        x = self.act_fn(x)
+        x = jnp.pad(x, pad_width=((0, 0), (1, 1), (1, 1), (0, 0)))  # Zero padding for max pooling
+        x = nn.max_pool(x, window_shape=(3, 3), strides=(2, 2), padding='VALID')
 
         for block_idx, num_layers in enumerate(self.num_layers):
             x = DenseBlock(num_layers=num_layers,
                            bn_size=self.bn_size,
                            growth_rate=self.growth_rate,
-                           act_fn=self.act_fn)(x)
+                           act_fn=self.act_fn)(x) 
             c_hidden += num_layers * self.growth_rate
-            if block_idx < len(self.num_layers) - 1:
-                x = TransitionLayer(c_out=c_hidden // 2,
+            if block_idx < len(self.num_layers)-1:  # Don't apply transition layer on last block
+                x = TransitionLayer(c_out=c_hidden//2,
                                     act_fn=self.act_fn)(x)
                 c_hidden //= 2
 
         x = self.act_fn(x)
         x = x.mean(axis=(1, 2))
         x = nn.Dense(self.num_classes)(x)
-        x = nn.sigmoid(x)
         return x
 
 class DenseNetPolicy(PolicyNetwork):
@@ -117,6 +119,7 @@ class DenseNetPolicy(PolicyNetwork):
                 {'params': p},
                 o
             )
+            #jax.debug.print('logits : {}', logits)
             return logits
             #jax.debug.print('logits : {}', logits)
             

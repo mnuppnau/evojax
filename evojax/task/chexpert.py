@@ -35,24 +35,6 @@ def numpy_collate(batch):
     else:
         return np.array(batch)
 
-class NumpyLoader(data.DataLoader):
-  def __init__(self, dataset, batch_size=4,
-                shuffle=True, sampler=None,
-                batch_sampler=None, num_workers=0,
-                pin_memory=False, drop_last=False,
-                timeout=0, worker_init_fn=None):
-    super(self.__class__, self).__init__(dataset,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        sampler=sampler,
-        batch_sampler=batch_sampler,
-        num_workers=num_workers,
-        collate_fn=numpy_collate,
-        pin_memory=pin_memory,
-        drop_last=drop_last,
-        timeout=timeout,
-        worker_init_fn=worker_init_fn)
-
 class ChexpertSmall(Dataset):
     url = 'http://download.cs.stanford.edu/deep/CheXpert-v1.0-small.zip'
     dir_name = os.path.splitext(os.path.basename(url))[0]  # folder to match the filename
@@ -234,7 +216,6 @@ def load_subset_of_data(data_loader, num_records):
 
         # Update the count and check if the desired number of records is reached
         count += len(batch_images)
-        print('len batch images : ',len(batch_images))
         if count >= num_records:
             break
 
@@ -245,27 +226,45 @@ def load_subset_of_data(data_loader, num_records):
 
     return images, labels, idxs
 
-def loss(predictions: jnp.ndarray, targets: jnp.ndarray) -> jnp.float32:
-    #jax.debug.print('targets : {}',targets)
-    epsilon = 1e-7  # small constant to prevent log(0)
-    clipped_predictions = jnp.clip(predictions, epsilon, 1 - epsilon)
-    return -jnp.mean(targets * jnp.log(clipped_predictions) + (1 - targets) * jnp.log(1 - clipped_predictions))
+def loss(predictions: jnp.ndarray, targets: jnp.ndarray, weights: jnp.float32 = 2.0) -> jnp.float32:
+    log_p = jax.nn.log_sigmoid(predictions)
+    log_not_p = jax.nn.log_sigmoid(-predictions)
+    
+    # Compute the basic binary cross-entropy loss
+    losses = -targets * log_p - (1. - targets) * log_not_p
+    
+    # Apply weights
+    weighted_losses = losses * weights  # weights should be broadcastable to the shape of losses
+    
+    # Sum the losses for each example across classes
+    summed_losses_per_example = jnp.sum(weighted_losses, axis=1)
+    
+    # Average across the batch
+    average_loss = jnp.mean(summed_losses_per_example)
 
-def accuracy(prediction: jnp.ndarray, target: jnp.ndarray, threshold: float = 0.5) -> jnp.float32:
-    # Assuming prediction is a probability or has passed through a sigmoid function
-    # Threshold the predictions to get binary outputs
-    predicted_classes = prediction > threshold
+    return average_loss
 
-    # Compare the predicted classes with the targets
-    correct_predictions = predicted_classes == target
+def compute_auc_pr(y_true: jnp.ndarray, y_scores: jnp.ndarray) -> jnp.ndarray:
+    descending_order = jnp.argsort(y_scores)[::-1]
+    y_true_sorted = y_true[descending_order]
+    tp_cumsum = jnp.cumsum(y_true_sorted)
+    precision = tp_cumsum / (jnp.arange(len(y_true)) + 1)
+    recall = tp_cumsum / jnp.sum(y_true)
+    delta_recall = jnp.diff(recall, prepend=0)
+    auc_pr = jnp.sum(precision * delta_recall)
+    return auc_pr
 
-    # Calculate accuracy as the mean of correct predictions
-    return jnp.mean(correct_predictions)
+def accuracy(y_scores: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
+    assert y_true.ndim == 2 and y_scores.ndim == 2, "Inputs must be 2D (batched)"
+    assert y_true.shape == y_scores.shape, "Shapes of y_true and y_scores must match"
 
-def numpy_callback(x):
-  # Need to forward-declare the shape & dtype of the expected output.
-  result_shape = jax.core.ShapedArray(x.shape, x.dtype)
-  return jax.pure_callback(np.sin, result_shape, x)
+    # Flatten the batched inputs
+    y_true_flat = y_true.flatten()
+    y_scores_flat = y_scores.flatten()
+
+    # Compute AUC-PR on the flattened arrays
+    return compute_auc_pr(y_true_flat, y_scores_flat)
+
 
 class CheXpert(VectorizedTask):
     """CheXpert classification task using PyTorch DataLoader."""
@@ -316,7 +315,7 @@ class CheXpert(VectorizedTask):
             if test:
                 reward = accuracy(action, state.labels)
             else:
-                reward = loss(action, state.labels)
+                reward = -loss(action, state.labels)
             return state, reward, jnp.ones(())
 
         self._step_fn = jax.jit(jax.vmap(step_fn))
