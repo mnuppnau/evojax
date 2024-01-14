@@ -28,11 +28,14 @@ def parse_args():
     parser.add_argument('--cuda', type=int, help='Which cuda device to use.')
     parser.add_argument('--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument('--debug', action='store_true', help='Debug mode.')
+    parser.add_argument('--pretrained',type=bool,default=False,help='Whether pretrained weights are being used.')
     config, _ = parser.parse_known_args()
     return config
 
 
 def main(config):
+    if config.pretrained:
+        model_dir = '/home/gh0st/projects/evojax/notebook_output/saved_models/DenseNet/196/default/checkpoint'
     log_dir = './log/chexpert'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir, exist_ok=True)
@@ -42,16 +45,16 @@ def main(config):
 
     # Adjust the number of classes as per CheXpert's requirement
     num_classes = 5  # Update as needed based on CheXpert's classes
-    policy = DenseNetPolicy(num_classes=num_classes, logger=logger)
-    init_batch_stats = policy.init_batch_stats
-    init_params = policy.init_params
-    train_task = CheXpert(config, test=False, batch_stats=init_batch_stats)
-    test_task = CheXpert(config, test=True, batch_stats=init_batch_stats)
+    policy = DenseNetPolicy(num_classes=num_classes, logger=logger, pretrained=config.pretrained, model_dir=model_dir)
+    transferred_batch_stats = policy.transferred_batch_stats
+    transferred_params = policy.transferred_params
+    train_task = CheXpert(config, test=False, batch_stats=transferred_batch_stats)
+    test_task = CheXpert(config, test=True, batch_stats=transferred_batch_stats)
     
     solver = PGPE(
         pop_size=config.pop_size,
         param_size=policy.num_params,
-        init_params=policy.flat_init_params,
+        init_params=policy.flat_transferred_params,
         optimizer='adam',
         center_learning_rate=config.center_lr,
         stdev_learning_rate=config.std_lr,
@@ -73,6 +76,7 @@ def main(config):
         n_evaluations=1,
         seed=config.seed,
         log_dir=log_dir,
+        model_dir=model_dir,
         logger=logger,
     )
     trainer.run(demo_mode=False)

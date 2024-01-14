@@ -2,6 +2,7 @@ import logging
 import jax
 import jax.numpy as jnp
 
+from flax.training import train_state, checkpoints
 from typing import Tuple
 from flax import linen as nn
 from evojax.policy.base import PolicyNetwork
@@ -103,7 +104,7 @@ class DenseNet(nn.Module):
 class DenseNetPolicy(PolicyNetwork):
     """A DenseNet policy for classification tasks."""
 
-    def __init__(self, num_classes: int, logger: logging.Logger = None):
+    def __init__(self, num_classes: int, pretrained: bool, model_dir: None, logger: logging.Logger = None):
         if logger is None:
             self._logger = create_logger('DenseNetPolicy')
         else:
@@ -116,11 +117,24 @@ class DenseNetPolicy(PolicyNetwork):
         self._logger.info('DenseNetPolicy.num_params = {}'.format(self.num_params))
         self._format_params_fn = jax.vmap(format_params_fn)
 
+        print('model dir : ', model_dir)
+        state_dict = checkpoints.restore_checkpoint(ckpt_dir=model_dir, target=None)
+        print('state dict : ', state_dict)
+        
+        # Transfer all weights except for the final Dense layer ('Dense_0')
+        self.transferred_params = {name: state_dict['params'][name] for name in self.init_params.keys() if 'Dense_0' not in name}
+
+        if num_classes is not None:
+            self.transferred_params['Dense_0'] = self.init_params['Dense_0']
+    
+        # Use the batch stats from the checkpoint if available
+        self.transferred_batch_stats = state_dict.get('batch_stats', self.init_batch_stats)
+
         # Step 1: Extract all parameters
-        leaves, _ = jax.tree_util.tree_flatten(self.init_params)
+        leaves, _ = jax.tree_util.tree_flatten(self.transferred_params)
         
         # Step 2: Concatenate all parameters into a single vector
-        self.flat_init_params = jnp.concatenate([p.flatten() for p in leaves])
+        self.flat_transferred_params = jnp.concatenate([p.flatten() for p in leaves])
         
         def forward_fn_train(p, o, batch_stats):
             logits, updates = model.apply(

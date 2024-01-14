@@ -87,6 +87,7 @@ class Trainer(object):
         self._max_iter = max_iter
         self.model_dir = model_dir
         self._log_dir = log_dir
+        self.policy = policy
 
         self._log_scores_fn = log_scores_fn or (lambda x, y, z: None)
 
@@ -130,10 +131,11 @@ class Trainer(object):
             return average_stats_recursive(batch_stats)
 
         if self.model_dir is not None:
-            params, obs_params = load_model(model_dir=self.model_dir)
-            self.sim_mgr.obs_params = obs_params
-            self._logger.info(
-                'Loaded model parameters from {}.'.format(self.model_dir))
+            params = self.policy.transferred_params
+            #params, obs_params = load_model(model_dir=self.model_dir)
+            #self.sim_mgr.obs_params = obs_params
+            #self._logger.info(
+            #    'Loaded model parameters from {}.'.format(self.model_dir))
         else:
             params = None
 
