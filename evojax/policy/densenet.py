@@ -117,9 +117,9 @@ class DenseNetPolicy(PolicyNetwork):
         self._logger.info('DenseNetPolicy.num_params = {}'.format(self.num_params))
         self._format_params_fn = jax.vmap(format_params_fn)
 
-        print('model dir : ', model_dir)
+        #print('model dir : ', model_dir)
         state_dict = checkpoints.restore_checkpoint(ckpt_dir=model_dir, target=None)
-        print('state dict : ', state_dict)
+        #print('state dict : ', state_dict)
         
         # Transfer all weights except for the final Dense layer ('Dense_0')
         self.transferred_params = {name: state_dict['params'][name] for name in self.init_params.keys() if 'Dense_0' not in name}

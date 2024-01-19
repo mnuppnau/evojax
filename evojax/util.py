@@ -85,15 +85,17 @@ def load_model(model_dir: str) -> Tuple[np.ndarray, np.ndarray]:
     model_file = os.path.join(model_dir, 'model.npz')
     if not os.path.exists(model_file):
         raise ValueError('Model file {} does not exist.')
-    with np.load(model_file) as data:
+    with np.load(model_file,allow_pickle=True) as data:
         params = data['params']
+        batch_stats = data['batch_stats'] if 'batch_stats' in data else None
         obs_params = data['obs_params']
-    return params, obs_params
+    return params, batch_stats, obs_params
 
 
 def save_model(model_dir: str,
                model_name: str,
                params: Union[np.ndarray, jnp.ndarray],
+               batch_stats: Union[np.ndarray, jnp.ndarray] = None,
                obs_params: Union[np.ndarray, jnp.ndarray] = None,
                best: bool = False) -> None:
     """Save policy parameters to the specified directory.
@@ -109,11 +111,13 @@ def save_model(model_dir: str,
     model_file = os.path.join(model_dir, '{}.npz'.format(model_name))
     np.savez(model_file,
              params=np.array(params),
+             batch_stats=np.array(batch_stats) if batch_stats is not None else None,
              obs_params=np.array(obs_params))
     if best:
         model_file = os.path.join(model_dir, 'best.npz')
         np.savez(model_file,
                  params=np.array(params),
+                 batch_stats=np.array(batch_stats) if batch_stats is not None else None,
                  obs_params=np.array(obs_params))
 
 

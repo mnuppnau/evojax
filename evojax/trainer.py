@@ -130,12 +130,13 @@ class Trainer(object):
                     raise ValueError(f"Unsupported type: {type(stats)}")
             return average_stats_recursive(batch_stats)
 
-        if self.model_dir is not None:
-            params = self.policy.transferred_params
-            #params, obs_params = load_model(model_dir=self.model_dir)
-            #self.sim_mgr.obs_params = obs_params
-            #self._logger.info(
-            #    'Loaded model parameters from {}.'.format(self.model_dir))
+        if self.model_dir is not None and not demo_mode:
+            params = self.policy.flat_transferred_params
+        elif self.model_dir is not None and demo_mode:
+            params, batch_stats, obs_params = load_model(model_dir=self.model_dir)
+            self.sim_mgr.obs_params = obs_params
+            self._logger.info(
+                'Loaded model parameters from {}.'.format(self.model_dir))
         else:
             params = None
 
@@ -143,8 +144,7 @@ class Trainer(object):
             if params is None:
                 raise ValueError('No policy parameters to evaluate.')
             self._logger.info('Start to test the parameters.')
-            scores = np.array(
-                self.sim_mgr.eval_params(params=params, test=True)[0])
+            scores,_,_ = self.sim_mgr.eval_params(params=params, test=True, batch_stats=batch_stats)
             self._logger.info(
                 '[TEST] #tests={0}, max={1:.4f}, avg={2:.4f}, min={3:.4f}, '
                 'std={4:.4f}'.format(scores.size, scores.max(), scores.mean(),
@@ -213,7 +213,7 @@ class Trainer(object):
 
             # Test and save the final model.
             best_params = self.solver.best_params
-            test_scores, _, _ = self.sim_mgr.eval_params(
+            test_scores, _, batch_stats = self.sim_mgr.eval_params(
                 params=best_params, test=True, batch_stats=batch_stats)
             self._logger.info(
                 '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
@@ -224,6 +224,7 @@ class Trainer(object):
             save_model(
                 model_dir=self._log_dir,
                 model_name='final',
+                batch_stats=batch_stats,
                 params=best_params,
                 obs_params=self.sim_mgr.obs_params,
                 best=mean_test_score > best_score,

@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import torchvision.models as models
 
+from sklearn.metrics import precision_recall_curve
 from collections.abc import Iterator
 from jax import random
 from PIL import Image
@@ -222,80 +223,51 @@ def load_subset_of_data(data_loader, num_records):
     labels = np.concatenate(labels)[:num_records]
     idxs = np.concatenate(idxs)[:num_records]
 
-    return images, labels, idxs
+    return images, labels
 
-#def loss(predictions: jnp.ndarray, targets: jnp.ndarray) -> jnp.float32:
-#    #jax.debug.print('targets : {}',targets)
-#    epsilon = 1e-7  # small constant to prevent log(0)
-#    clipped_predictions = jnp.clip(predictions, epsilon, 1 - epsilon)
-#    return -jnp.mean(targets * jnp.log(clipped_predictions) + (1 - targets) * jnp.log(1 - clipped_predictions))
+def sigmoid(x):
+    return 1 / (1 + jnp.exp(-x))
 
-def loss(predictions: jnp.ndarray, targets: jnp.ndarray, weights: jnp.float32 = 2.0) -> jnp.float32:
-#def custom_sigmoid_binary_cross_entropy(predictions, targets, weights):
-    log_p = jax.nn.log_sigmoid(predictions)
-    log_not_p = jax.nn.log_sigmoid(-predictions)
-    
-    # Compute the basic binary cross-entropy loss
-    losses = -targets * log_p - (1. - targets) * log_not_p
-    
-    # Apply weights
-    weighted_losses = losses * weights  # weights should be broadcastable to the shape of losses
-    
-    # Sum the losses for each example across classes
-    summed_losses_per_example = jnp.sum(weighted_losses, axis=1)
-    
-    # Average across the batch
-    average_loss = jnp.mean(summed_losses_per_example)
+def loss(predictions: jnp.ndarray, targets: jnp.ndarray, weights: jnp.float32 = 1.2) -> jnp.float32:
+    return -optax.sigmoid_binary_cross_entropy(predictions, targets).mean()
 
-    return average_loss
-#def loss(predictions: jnp.ndarray, targets: jnp.ndarray, positive_weight=2) -> jnp.float32:
-#    epsilon = 1e-7
-#    clipped_predictions = jnp.clip(predictions, epsilon, 1 - epsilon)
-#    
-#    # Calculate the weights for each class
-#    weights = jnp.where(targets == 1, positive_weight, 1.0)
-#    
-#    # Calculate the weighted loss
-#    bce = -weights * (targets * jnp.log(clipped_predictions) + (1 - targets) * jnp.log(1 - clipped_predictions))
-#    return jnp.mean(bce)
+def precision_recall_curve_jax(y_true, y_scores):
 
+    # Apply sigmoid to convert logits to probabilities
+    y_scores = sigmoid(y_scores)
 
-#def accuracy(prediction: jnp.ndarray, target: jnp.ndarray, threshold: float = 0.5) -> jnp.float32:
-#    # Assuming prediction is a probability or has passed through a sigmoid function
-#    # Threshold the predictions to get binary outputs
-#    predicted_classes = prediction > threshold
+    jax.debug.print('y scores : {}',y_scores)
+    # Sort scores and corresponding truth values
+    descending_sort_indices = jnp.argsort(y_scores)[::-1]
+    sorted_y_true = y_true[descending_sort_indices]
+    sorted_y_scores = y_scores[descending_sort_indices]
 
-#    # Compare the predicted classes with the targets
-#    correct_predictions = predicted_classes == target
+    # Compute the number of positive labels
+    n_positives = jnp.sum(sorted_y_true)
 
-#    # Calculate accuracy as the mean of correct predictions
-#    return jnp.mean(correct_predictions)
+    # Create arrays for true positives and false positives
+    tp = jnp.cumsum(sorted_y_true)
+    fp = jnp.cumsum(1 - sorted_y_true)
 
-def compute_auc_pr(y_true: jnp.ndarray, y_scores: jnp.ndarray) -> jnp.ndarray:
-    descending_order = jnp.argsort(y_scores)[::-1]
-    y_true_sorted = y_true[descending_order]
-    tp_cumsum = jnp.cumsum(y_true_sorted)
-    precision = tp_cumsum / (jnp.arange(len(y_true)) + 1)
-    recall = tp_cumsum / jnp.sum(y_true)
-    delta_recall = jnp.diff(recall, prepend=0)
-    auc_pr = jnp.sum(precision * delta_recall)
-    return auc_pr
+    # Calculate precision and recall for each threshold
+    precision = tp / (tp + fp)
+    recall = tp / n_positives
 
-def accuracy(y_scores: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
-    assert y_true.ndim == 2 and y_scores.ndim == 2, "Inputs must be 2D (batched)"
-    assert y_true.shape == y_scores.shape, "Shapes of y_true and y_scores must match"
+    return precision, recall
 
-    # Flatten the batched inputs
-    y_true_flat = y_true.flatten()
-    y_scores_flat = y_scores.flatten()
+def accuracy(predictions, targets):
+    n_classes = targets.shape[1]
+    average_precision_scores = []
 
-    # Compute AUC-PR on the flattened arrays
-    return compute_auc_pr(y_true_flat, y_scores_flat)
+    for i in range(n_classes):
+        precision, recall = precision_recall_curve_jax(targets[:, i], predictions[:, i])
 
-def numpy_callback(x):
-  # Need to forward-declare the shape & dtype of the expected output.
-  result_shape = jax.core.ShapedArray(x.shape, x.dtype)
-  return jax.pure_callback(np.sin, result_shape, x)
+        # Compute the average precision
+        average_precision = jnp.sum((recall[1:] - recall[:-1]) * precision[:-1])
+        average_precision_scores.append(average_precision)
+
+    # Return the mean of the average precisions
+    return jnp.mean(jnp.array(average_precision_scores))
 
 class CheXpert(VectorizedTask):
     """CheXpert classification task using PyTorch DataLoader."""
@@ -312,37 +284,19 @@ class CheXpert(VectorizedTask):
         # Initialize PyTorch DataLoader
         args.device = torch.device('cuda:{}'.format(args.cuda) if args.cuda is not None and torch.cuda.is_available() else 'cpu')
 
-        #densenet = models.densenet121(pretrained=True)
-        #pretrained_weights = densenet.state_dict()
-        #flat_weights = torch.cat([p.flatten() for p in pretrained_weights.values()])
-        #print('flat weights shape : ', flat_weights.shape)
-
-        self.train_generator = fetch_dataloader(args, mode='train')
-        num_records_to_load = 1400
-        train_images, train_labels, train_idxs = load_subset_of_data(self.train_generator, num_records_to_load)
-
-        for images, labels, idx in self.train_generator:
-            # Print the shape of images and labels
-            print("Shape of train images:", images.shape)
-            print("train labels:", labels)
-            # Optionally, break after the first batch to avoid printing shapes for all batches
-            break
-
-        self.valid_generator = fetch_dataloader(args, mode='valid')
-        all_valid_data, all_valid_labels = accumulate_data(self.valid_generator,self.num_batches)
-        
-        for images, labels, idx in self.valid_generator:
-            # Print the shape of images and labels
-            print("Shape of valid images:", images.shape)
-            print("valid labels:", labels)
-            # Optionally, break after the first batch to avoid printing shapes for all batches
-            break
-       
+        if test:
+            self.data_generator = fetch_dataloader(args, mode='valid')
+            data, labels = accumulate_data(self.data_generator,self.num_batches)
+        else: 
+            self.data_generator = fetch_dataloader(args, mode='train')
+            num_records_to_load = 1500
+            data, labels = load_subset_of_data(self.data_generator, num_records_to_load)
+ 
         def reset_fn(key):
             if test:
-                batch_data, batch_labels = all_valid_data, all_valid_labels
+                batch_data, batch_labels = data, labels
             else:
-                batch_data, batch_labels = sample_batch(key,train_images,train_labels,self.batch_size)
+                batch_data, batch_labels = sample_batch(key,data,labels,self.batch_size)
                
             return CheXpertState(obs=batch_data, labels=batch_labels, batch_stats=self.init_batch_stats)
        
@@ -351,13 +305,15 @@ class CheXpert(VectorizedTask):
         def step_fn(state, action):
             if test:
                 #jax.debug.print('Test action : {}',action)
-                #jax.debug.print('Test labels : {}',state.labels)
+                jax.debug.print('Test labels : {}',state.labels)
+                jax.debug.print('Test action shape : {}',action.shape)
+                jax.debug.print('Test labels shape : {}',state.labels.shape)
                 reward = accuracy(action, state.labels)
             else:
                 #jax.debug.print('Train action : {}',action)
                 #jax.debug.print('Train labels : {}',state.labels)
-                reward = -loss(action, state.labels)
-                print('reward : ',reward)
+                reward = loss(action, state.labels)
+                #print('reward : ',reward)
             return state, reward, jnp.ones(())
 
         self._step_fn = jax.jit(jax.vmap(step_fn))
