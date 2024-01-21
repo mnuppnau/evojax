@@ -129,5 +129,5 @@ class DenseNetPolicy(PolicyNetwork):
         #jax.debug.print('params in get actions : {}',params)
         params = self._format_params_fn(params)
         logits = self._forward_fn(params, t_states.obs)
-        #jax.debug.print('logits : {}', logits)
+        jax.debug.print('logits : {}', logits)
         return logits, p_states
