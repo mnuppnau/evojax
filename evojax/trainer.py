@@ -89,6 +89,8 @@ class Trainer(object):
         self._log_dir = log_dir
         self.policy = policy
 
+        self.batch_stats = None
+        self.batch_stats_avg = None
         self._log_scores_fn = log_scores_fn or (lambda x, y, z: None)
 
         self._obs_normalizer = ObsNormalizer(
@@ -130,6 +132,56 @@ class Trainer(object):
                     raise ValueError(f"Unsupported type: {type(stats)}")
             return average_stats_recursive(batch_stats)
 
+        def average_batch_stats_for_both_sets(batch_stats):
+            def average_stats_recursive(stats):
+                if isinstance(stats, dict):
+                    return {k: average_stats_recursive(v) for k, v in stats.items()}
+                elif isinstance(stats, jnp.ndarray):
+                    if stats.ndim >= 2:
+                        # Average across the entire population (assuming it's the first dimension)
+                        averaged_stats = stats.mean(axis=0)
+                        # Duplicate the averaged stats to have a new shape of [2, batch_stats_size]
+                        return jnp.stack([averaged_stats, averaged_stats], axis=0)
+                    else:
+                        return stats
+                else:
+                    raise ValueError(f"Unsupported type: {type(stats)}")
+
+            return average_stats_recursive(batch_stats)
+
+        def select_two_individuals_batch_stats(batch_stats, first_idx=0, second_idx=47):
+            def select_stats_recursive(stats):
+                if isinstance(stats, dict):
+                    return {k: select_stats_recursive(v) for k, v in stats.items()}
+                elif isinstance(stats, jnp.ndarray):
+                    if stats.ndim >= 2:
+                        # Select two specific dimensions (individuals)
+                        selected_stats_first = stats[first_idx]
+                        selected_stats_second = stats[second_idx]
+                        # Stack these selected stats to have a new shape of [2, batch_stats_size]
+                        return jnp.stack([selected_stats_first, selected_stats_second], axis=0)
+                    else:
+                        return stats
+                else:
+                    raise ValueError(f"Unsupported type: {type(stats)}")
+        
+            return select_stats_recursive(batch_stats)
+
+        def print_batch_stats_shapes(batch_stats, parent_key=''):
+            for key, value in batch_stats.items():
+                # Construct a new key path
+                new_key = f"{parent_key}.{key}" if parent_key else key
+
+                if isinstance(value, dict):
+                    # Recursively call the function if the value is another dict
+                    print_batch_stats_shapes(value, new_key)
+                elif isinstance(value, jnp.ndarray):
+                    # Print the shape of the ndarray
+                    print(f"Shape of '{new_key}': {value.shape}")
+                else:
+                    # Handle other types if necessary
+                    print(f"'{new_key}' is not a dict or ndarray, but a {type(value)}")
+
         if self.model_dir is not None and not demo_mode:
             params = self.policy.flat_transferred_params
         elif self.model_dir is not None and demo_mode:
@@ -167,10 +219,24 @@ class Trainer(object):
                     time.perf_counter() - start_time))
 
                 start_time = time.perf_counter()
-                scores, bds, batch_stats = self.sim_mgr.eval_params(
-                    params=params, test=False)
+                        
+                if i == 0:
+                    scores, bds, batch_stats = self.sim_mgr.eval_params(
+                        params=params, test=False)
+                else:
+                    scores, bds, batch_stats = self.sim_mgr.eval_params(
+                        params=params, test=False, batch_stats=self.batch_stats)
+
+                # Update batch_stats
+                self.batch_stats = batch_stats
+                #print_batch_stats_shapes(batch_stats)
+                self.batch_stats_avg = select_two_individuals_batch_stats(batch_stats)
+
+
+                #scores, bds, batch_stats = self.sim_mgr.eval_params(
+                #    params=params, test=False)
                 
-                batch_stats = average_batch_stats_half(batch_stats)
+                #batch_stats = average_batch_stats_half(batch_stats)
                 self._logger.debug('sim_mgr.eval_params time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
@@ -193,7 +259,7 @@ class Trainer(object):
                 if i > 0 and i % self._test_interval == 0:
                     best_params = self.solver.best_params
                     test_scores, _, _ = self.sim_mgr.eval_params(
-                        params=best_params, test=True, batch_stats=batch_stats)
+                        params=best_params, test=True, batch_stats=self.batch_stats_avg)
                     self._logger.info(
                         '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
                         'min={4:.4f}, std={5:.4f}'.format(
@@ -214,7 +280,7 @@ class Trainer(object):
             # Test and save the final model.
             best_params = self.solver.best_params
             test_scores, _, batch_stats = self.sim_mgr.eval_params(
-                params=best_params, test=True, batch_stats=batch_stats)
+                params=best_params, test=True, batch_stats=self.batch_stats_avg)
             self._logger.info(
                 '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
                 'min={4:.4f}, std={5:.4f}'.format(

@@ -275,7 +275,7 @@ class CheXpert(VectorizedTask):
     def __init__(self, args, batch_stats: dict, test: bool = False):
         self.max_steps = 1
         self.num_batches = 25
-        self.init_batch_stats = batch_stats
+        #self.init_batch_stats = batch_stats
         self.batch_size = args.batch_size
         # Define observation and action shapes appropriately
         self.obs_shape = tuple([320, 320, 3])
@@ -294,20 +294,21 @@ class CheXpert(VectorizedTask):
  
         def reset_fn(key):
             if test:
-                batch_data, batch_labels = data, labels
+                #batch_data, batch_labels = data, labels
+                batch_data, batch_labels, idx = next(iter(self.data_generator))
             else:
                 batch_data, batch_labels = sample_batch(key,data,labels,self.batch_size)
                
-            return CheXpertState(obs=batch_data, labels=batch_labels, batch_stats=self.init_batch_stats)
+            return CheXpertState(obs=batch_data, labels=batch_labels, batch_stats=batch_stats)
        
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
         def step_fn(state, action):
             if test:
                 #jax.debug.print('Test action : {}',action)
-                jax.debug.print('Test labels : {}',state.labels)
-                jax.debug.print('Test action shape : {}',action.shape)
-                jax.debug.print('Test labels shape : {}',state.labels.shape)
+                #jax.debug.print('Test labels : {}',state.labels)
+                #jax.debug.print('Test action shape : {}',action.shape)
+                #jax.debug.print('Test labels shape : {}',state.labels.shape)
                 reward = accuracy(action, state.labels)
             else:
                 #jax.debug.print('Train action : {}',action)

@@ -113,6 +113,7 @@ class DenseNetPolicy(PolicyNetwork):
         model = DenseNet(num_classes=num_classes)
         params = model.init(jax.random.PRNGKey(0), jnp.ones([1,320, 320,3]), train=False)  # Example input shape
         self.init_params, self.init_batch_stats = params['params'], params['batch_stats']
+
         self.num_params, format_params_fn = get_params_format_fn(self.init_params)
         self._logger.info('DenseNetPolicy.num_params = {}'.format(self.num_params))
         self._format_params_fn = jax.vmap(format_params_fn)
@@ -123,6 +124,9 @@ class DenseNetPolicy(PolicyNetwork):
         
         # Transfer all weights except for the final Dense layer ('Dense_0')
         self.transferred_params = {name: state_dict['params'][name] for name in self.init_params.keys() if 'Dense_0' not in name}
+
+        jax.debug.print('init params shape : {}', len(self.init_params))
+        jax.debug.print('trans params shape : {}',len(self.transferred_params))
 
         if num_classes is not None:
             self.transferred_params['Dense_0'] = self.init_params['Dense_0']
@@ -147,7 +151,7 @@ class DenseNetPolicy(PolicyNetwork):
 
         def forward_fn(p, o, batch_stats):
             logits = model.apply(
-                {'params': p, 'batch_stats': batch_stats},
+                {'params': self.transferred_params, 'batch_stats': batch_stats},
                 o,
                 train=False
             )

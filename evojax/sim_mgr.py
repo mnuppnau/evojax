@@ -173,6 +173,9 @@ class SimManager(object):
             org_obs = task_state.obs
             #normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             #task_state = task_state.replace(obs=normed_obs)
+            jax.debug.print('obs normed : {}',task_state.obs.shape)
+            jax.debug.print('batch_stats updated : {}',task_state.batch_stats['BatchNorm_0'])
+
             actions, policy_state = policy_net.get_actions(
                 task_state, params, policy_state, train=False)
             if task.multi_agent_training:
@@ -199,10 +202,13 @@ class SimManager(object):
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape((-1, *task_state.obs.shape[2:])))
             org_obs = task_state.obs
-            #normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
-            #task_state = task_state.replace(obs=normed_obs)
+            normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
+            task_state = task_state.replace(obs=normed_obs)
             actions, batch_stats_updated, policy_state = policy_net.get_actions(
                 task_state, params, policy_state, train=True)
+            
+            #jax.debug.print('obs normed : {}',task_state.obs.shape)
+            #jax.debug.print('batch_stats updated : {}',batch_stats_updated['BatchNorm_0'])
             task_state = task_state.replace(batch_stats=batch_stats_updated)
             if task.multi_agent_training:
                 task_state = task_state.replace(
@@ -389,10 +395,15 @@ class SimManager(object):
 
         # Reset the tasks and the policy.
         task_state = task_reset_func(reset_keys)
-        if test:
+        
+        if batch_stats:
             task_state = task_state.replace(batch_stats=self.batch_stats)
+ 
+        #jax.debug.print('batch stats in scan loop : {}',task_state.batch_stats['BatchNorm_0'])
+        #if test:
+        #    task_state = task_state.replace(batch_stats=self.batch_stats)
 
-        batch_stats_testing = task_state.batch_stats
+        #batch_stats_testing = task_state.batch_stats
         policy_state = policy_reset_func(task_state)
         if self._num_device > 1:
             params = split_params_for_pmap(params)
@@ -407,7 +418,7 @@ class SimManager(object):
             scores, all_obs, masks, final_states, batch_stats_updated = rollout_func(
             task_state, policy_state, params, self.obs_params)
         
-        # If batch_stats is updated to have an extra leading dimension
+       # If batch_stats is updated to have an extra leading dimension
         #batch_stats_updated = {k: v.squeeze(0) for k, v in batch_stats_updated.items()}
 
         if self._num_device > 1:
@@ -415,6 +426,7 @@ class SimManager(object):
             masks = reshape_data_from_pmap(masks)
             final_states = merge_state_from_pmap(final_states)
         batch_stats_updated = final_states.batch_stats
+
         if not test and not self.obs_normalizer.is_dummy:
             self.obs_params = self.obs_normalizer.update_normalization_params(
                 obs_buffer=all_obs, obs_mask=masks, obs_params=self.obs_params)
@@ -437,4 +449,4 @@ class SimManager(object):
                 lambda x: x.reshape((scores.shape[0], n_repeats, *x.shape[1:])),
                 final_states)
 
-        return scores, self._bd_summarize_fn(final_states), batch_stats_testing
+        return scores, self._bd_summarize_fn(final_states), batch_stats_updated
