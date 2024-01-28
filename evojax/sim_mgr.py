@@ -42,11 +42,11 @@ def get_task_reset_keys(key: jnp.ndarray,
     if ma_training:
         reset_keys = random.split(subkey, n_repeats)
     else:
-        if test:
-            reset_keys = random.split(subkey, n_tests * n_repeats)
-        else:
-            reset_keys = random.split(subkey, n_repeats)
-            reset_keys = jnp.tile(reset_keys, (pop_size, 1))
+        #if test:
+        #    reset_keys = random.split(subkey, n_tests * n_repeats)
+        #else:
+        reset_keys = random.split(subkey, n_repeats)
+        reset_keys = jnp.tile(reset_keys, (pop_size, 1))
     return key, reset_keys
 
 
@@ -139,6 +139,7 @@ class SimManager(object):
         self._key = random.PRNGKey(seed=seed)
         self._n_repeats = n_repeats
         self._test_n_repeats = test_n_repeats
+        self._test = False
         self._pop_size = pop_size
         self._n_evaluations = max(n_evaluations, jax.local_device_count())
         self._ma_training = train_vec_task.multi_agent_training
@@ -171,13 +172,12 @@ class SimManager(object):
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape((-1, *task_state.obs.shape[2:])))
             org_obs = task_state.obs
-            #normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
-            #task_state = task_state.replace(obs=normed_obs)
-            jax.debug.print('obs normed : {}',task_state.obs.shape)
-            jax.debug.print('batch_stats updated : {}',task_state.batch_stats['BatchNorm_0'])
-
-            actions, policy_state = policy_net.get_actions(
-                task_state, params, policy_state, train=False)
+            normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
+            task_state = task_state.replace(obs=normed_obs)
+            actions, batch_stats_updated, policy_state = policy_net.get_actions(
+                task_state, params, policy_state, train=not self._test)
+            if batch_stats_updated:
+                task_state = task_state.replace(batch_stats=batch_stats_updated)
             if task.multi_agent_training:
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape(
@@ -194,52 +194,8 @@ class SimManager(object):
                      accumulated_reward, valid_mask),
                     (org_obs, valid_mask))
 
-        def step_once_train(carry, input_data, task):
-            (task_state, policy_state, params, obs_params,
-             accumulated_reward, valid_mask, batch_stats) = carry
-            if task.multi_agent_training:
-                num_tasks, num_agents = task_state.obs.shape[:2]
-                task_state = task_state.replace(
-                    obs=task_state.obs.reshape((-1, *task_state.obs.shape[2:])))
-            org_obs = task_state.obs
-            normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
-            task_state = task_state.replace(obs=normed_obs)
-            actions, batch_stats_updated, policy_state = policy_net.get_actions(
-                task_state, params, policy_state, train=True)
-            
-            #jax.debug.print('obs normed : {}',task_state.obs.shape)
-            #jax.debug.print('batch_stats updated : {}',batch_stats_updated['BatchNorm_0'])
-            task_state = task_state.replace(batch_stats=batch_stats_updated)
-            if task.multi_agent_training:
-                task_state = task_state.replace(
-                    obs=task_state.obs.reshape(
-                        (num_tasks, num_agents, *task_state.obs.shape[1:])))
-                actions = actions.reshape(
-                    (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, reward, done = task.step(task_state, actions)
-            if task.multi_agent_training:
-                reward = reward.ravel()
-                done = jnp.repeat(done, num_agents, axis=0)
-            accumulated_reward = accumulated_reward + reward * valid_mask
-            valid_mask = valid_mask * (1 - done.ravel())
-            return ((task_state, policy_state, params, obs_params,
-                     accumulated_reward, valid_mask, batch_stats_updated),
-                    (org_obs, valid_mask))
 
-
-        def rollout_train(task_states, policy_states, params, obs_params,
-                    step_once_fn, max_steps):
-            accumulated_rewards = jnp.zeros(params.shape[0])
-            valid_masks = jnp.ones(params.shape[0])
-            ((task_states, policy_states, params, obs_params,
-              accumulated_rewards, valid_masks, batch_stats),
-             (obs_set, obs_mask)) = jax.lax.scan(
-                step_once_fn,
-                (task_states, policy_states, params, obs_params,
-                 accumulated_rewards, valid_masks, task_states.batch_stats), (), max_steps)
-            return accumulated_rewards, obs_set, obs_mask, task_states, batch_stats
-
-        def rollout_val(task_states, policy_states, params, obs_params,
+        def rollout(task_states, policy_states, params, obs_params,
                     step_once_fn, max_steps):
             accumulated_rewards = jnp.zeros(params.shape[0])
             valid_masks = jnp.ones(params.shape[0])
@@ -250,7 +206,6 @@ class SimManager(object):
                 (task_states, policy_states, params, obs_params,
                  accumulated_rewards, valid_masks), (), max_steps)
             return accumulated_rewards, obs_set, obs_mask, task_states
-
 
         self._policy_reset_fn = jax.jit(policy_net.reset)
         self._policy_act_fn = jax.jit(policy_net.get_actions)
@@ -266,11 +221,12 @@ class SimManager(object):
 
         # Set up training functions.
         self._train_reset_fn = train_vec_task.reset
+        self._train_get_new_batch_fn = train_vec_task.get_new_batch
         self._train_step_fn = train_vec_task.step
         self._train_max_steps = train_vec_task.max_steps
         self._train_rollout_fn = partial(
-            rollout_train,
-            step_once_fn=partial(step_once_train, task=train_vec_task),
+            rollout,
+            step_once_fn=partial(step_once, task=train_vec_task),
             max_steps=train_vec_task.max_steps)
         if self._num_device > 1:
             self._train_rollout_fn = jax.jit(jax.pmap(
@@ -278,10 +234,11 @@ class SimManager(object):
 
         # Set up validation functions.
         self._valid_reset_fn = valid_vec_task.reset
+        self._valid_get_new_batch_fn = valid_vec_task.get_new_batch
         self._valid_step_fn = valid_vec_task.step
         self._valid_max_steps = valid_vec_task.max_steps
         self._valid_rollout_fn = partial(
-            rollout_val,
+            rollout,
             step_once_fn=partial(step_once, task=valid_vec_task),
             max_steps=valid_vec_task.max_steps)
         if self._num_device > 1:
@@ -300,6 +257,7 @@ class SimManager(object):
         Returns:
             An array of fitness scores.
         """
+        self._test = test
         if self._use_for_loop:
             return self._for_loop_eval(params, test, batch_stats)
         else:
@@ -365,12 +323,14 @@ class SimManager(object):
         if test:
             n_repeats = self._test_n_repeats
             task_reset_func = self._valid_reset_fn
+            task_get_new_batch = self._valid_get_new_batch_fn
             rollout_func = self._valid_rollout_fn
-            params = duplicate_params(
-                params[None, :], self._n_evaluations, False)
+            #params = duplicate_params(
+            #    params[None, :], self._n_evaluations, False)
         else:
             n_repeats = self._n_repeats
             task_reset_func = self._train_reset_fn
+            task_get_new_batch = self._train_get_new_batch_fn
             rollout_func = self._train_rollout_fn
 
         # Suppose pop_size=2 and n_repeats=3.
@@ -394,6 +354,7 @@ class SimManager(object):
             self._ma_training)
 
         # Reset the tasks and the policy.
+        #batch_data, batch_labels = task_get_new_batch()
         task_state = task_reset_func(reset_keys)
         
         if batch_stats:
@@ -410,12 +371,8 @@ class SimManager(object):
             task_state = split_states_for_pmap(task_state)
             policy_state = split_states_for_pmap(policy_state)
         # Do the rollouts.
-        if test:
-            scores, all_obs, masks, final_states = rollout_func(
-            task_state, policy_state, params, self.obs_params)
-            batch_stats_updated = None
-        else:
-            scores, all_obs, masks, final_states, batch_stats_updated = rollout_func(
+        #jax.debug.print('train obs params shape : {}',self.obs_params.shape)
+        scores, all_obs, masks, final_states = rollout_func(
             task_state, policy_state, params, self.obs_params)
         
        # If batch_stats is updated to have an extra leading dimension
@@ -432,14 +389,9 @@ class SimManager(object):
                 obs_buffer=all_obs, obs_mask=masks, obs_params=self.obs_params)
 
         if self._ma_training:
-            if not test:
-                # In training, each agent has different parameters.
-                scores = jnp.mean(
-                    scores.ravel().reshape((n_repeats, -1)), axis=0)
-            else:
-                # In tests, they share the same parameters.
-                scores = jnp.mean(
-                    scores.ravel().reshape((n_repeats, -1)), axis=1)
+            # In training, each agent has different parameters.
+            scores = jnp.mean(
+                scores.ravel().reshape((n_repeats, -1)), axis=0)
         else:
             scores = jnp.mean(scores.ravel().reshape((-1, n_repeats)), axis=-1)
 

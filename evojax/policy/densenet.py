@@ -147,22 +147,29 @@ class DenseNetPolicy(PolicyNetwork):
                 train=True, mutable=['batch_stats']
             )
             return logits, updates['batch_stats']
+        
         self._forward_fn_train = jax.vmap(forward_fn_train)
 
         def forward_fn(p, o, batch_stats):
             logits = model.apply(
-                {'params': self.transferred_params, 'batch_stats': batch_stats},
+                {'params': p, 'batch_stats': batch_stats},
                 o,
                 train=False
             )
-            return logits
+            return logits, None
+        
         self._forward_fn = jax.vmap(forward_fn)
 
     def get_actions(self, t_states: TaskState, params: jnp.ndarray, p_states: PolicyState, train: bool) -> Tuple[jnp.ndarray, PolicyState]:
         params = self._format_params_fn(params)
         if train:
+            #jax.debug.print('train params shape : {}',params.shape)
+            #jax.debug.print('train obs shape : {}',t_states.obs.shape)
             logits, batch_stats = self._forward_fn_train(params, t_states.obs, t_states.batch_stats)
             return logits, batch_stats, p_states
         else:
-            logits = self._forward_fn(params, t_states.obs, t_states.batch_stats)
-            return logits, p_states
+            #jax.debug.print('test params shape : {}',params.shape)
+            #jax.debug.print('test obs shape : {}',t_states.obs.shape)
+            logits, batch_stats = self._forward_fn(params, t_states.obs, t_states.batch_stats)
+            return logits, batch_stats, p_states
+        

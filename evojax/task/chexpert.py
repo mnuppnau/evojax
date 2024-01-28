@@ -228,15 +228,15 @@ def load_subset_of_data(data_loader, num_records):
 def sigmoid(x):
     return 1 / (1 + jnp.exp(-x))
 
-def loss(predictions: jnp.ndarray, targets: jnp.ndarray, weights: jnp.float32 = 1.2) -> jnp.float32:
-    return -optax.sigmoid_binary_cross_entropy(predictions, targets).mean()
+def loss(predictions: jnp.ndarray, targets: jnp.ndarray) -> jnp.float32:
+    return -optax.sigmoid_focal_loss(predictions, targets, alpha=0.56).mean()
 
 def precision_recall_curve_jax(y_true, y_scores):
 
     # Apply sigmoid to convert logits to probabilities
     y_scores = sigmoid(y_scores)
 
-    jax.debug.print('y scores : {}',y_scores)
+    #jax.debug.print('y scores : {}',y_scores)
     # Sort scores and corresponding truth values
     descending_sort_indices = jnp.argsort(y_scores)[::-1]
     sorted_y_true = y_true[descending_sort_indices]
@@ -275,7 +275,7 @@ class CheXpert(VectorizedTask):
     def __init__(self, args, batch_stats: dict, test: bool = False):
         self.max_steps = 1
         self.num_batches = 25
-        #self.init_batch_stats = batch_stats
+        self.batch_stats = batch_stats
         self.batch_size = args.batch_size
         # Define observation and action shapes appropriately
         self.obs_shape = tuple([320, 320, 3])
@@ -286,21 +286,36 @@ class CheXpert(VectorizedTask):
 
         if test:
             self.data_generator = fetch_dataloader(args, mode='valid')
-            data, labels = accumulate_data(self.data_generator,self.num_batches)
+            #data, labels = accumulate_data(self.data_generator,self.num_batches)
+            #num_records_to_load = 128
+            #data, labels = load_subset_of_data(self.data_generator, num_records_to_load)
         else: 
             self.data_generator = fetch_dataloader(args, mode='train')
-            num_records_to_load = 1500
-            data, labels = load_subset_of_data(self.data_generator, num_records_to_load)
+            #num_records_to_load = 1500
+            #data, labels = load_subset_of_data(self.data_generator, num_records_to_load)
  
-        def reset_fn(key):
-            if test:
-                #batch_data, batch_labels = data, labels
-                batch_data, batch_labels, idx = next(iter(self.data_generator))
-            else:
-                batch_data, batch_labels = sample_batch(key,data,labels,self.batch_size)
-               
+        #labels_flat = labels.flatten()
+        self.current_batch = next(iter(self.data_generator))  # Initialize with the first batch
+ 
+        # Count zeros and ones
+        #count_zeros = np.sum(labels_flat == 0)
+        #count_ones = np.sum(labels_flat == 1)
+        
+        #print(f"Count of zeros: {count_zeros}")
+        #print(f"Count of ones: {count_ones}") 
+        
+        #def reset_fn(key):
+        #    if test:
+        #        batch_data, batch_labels = data, labels
+        #        #batch_data, batch_labels, idx = next(iter(self.data_generator))
+        #    else:
+        #        batch_data, batch_labels = sample_batch(key,data,labels,self.batch_size)
+        #       
+        #    return CheXpertState(obs=batch_data, labels=batch_labels, batch_stats=batch_stats)
+      
+        def reset_fn(batch_data,batch_labels):
+            #jax.debug.print('batch labels : {}',batch_labels)
             return CheXpertState(obs=batch_data, labels=batch_labels, batch_stats=batch_stats)
-       
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
         def step_fn(state, action):
@@ -319,8 +334,14 @@ class CheXpert(VectorizedTask):
 
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
-    def reset(self, key: jnp.ndarray) -> CheXpertState:
-        return self._reset_fn(key)
+    def get_new_batch(self) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        batch_data, batch_labels, _ = next(iter(self.data_generator))
+        return jnp.array(batch_data), jnp.array(batch_labels)
 
+    def reset(self, key: jnp.ndarray) -> CheXpertState: 
+        batch_data_iter, batch_labels_iter, idx = next(iter(self.data_generator))
+        batch_data, batch_labels = sample_batch(key, batch_data_iter, batch_labels_iter, self.batch_size)
+        return self._reset_fn(batch_data, batch_labels)
+    
     def step(self, state: TaskState, action: jnp.ndarray) -> Tuple[TaskState, jnp.ndarray, jnp.ndarray]:
         return self._step_fn(state, action)

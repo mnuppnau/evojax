@@ -219,7 +219,9 @@ class Trainer(object):
                     time.perf_counter() - start_time))
 
                 start_time = time.perf_counter()
-                        
+                
+                #jax.debug.print('params shape : {}',params.shape)
+                
                 if i == 0:
                     scores, bds, batch_stats = self.sim_mgr.eval_params(
                         params=params, test=False)
@@ -259,7 +261,7 @@ class Trainer(object):
                 if i > 0 and i % self._test_interval == 0:
                     best_params = self.solver.best_params
                     test_scores, _, _ = self.sim_mgr.eval_params(
-                        params=best_params, test=True, batch_stats=self.batch_stats_avg)
+                        params=params, test=True, batch_stats=self.batch_stats)
                     self._logger.info(
                         '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
                         'min={4:.4f}, std={5:.4f}'.format(
