@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 import torchvision.models as models
 
+from functools import partial
 from sklearn.metrics import precision_recall_curve
 from collections.abc import Iterator
 from jax import random
@@ -229,7 +230,7 @@ def sigmoid(x):
     return 1 / (1 + jnp.exp(-x))
 
 def loss(predictions: jnp.ndarray, targets: jnp.ndarray) -> jnp.float32:
-    return -optax.sigmoid_focal_loss(predictions, targets, alpha=0.56).mean()
+    return -optax.sigmoid_focal_loss(predictions, targets, alpha=0.72).mean()
 
 def precision_recall_curve_jax(y_true, y_scores):
 
@@ -313,10 +314,10 @@ class CheXpert(VectorizedTask):
         #       
         #    return CheXpertState(obs=batch_data, labels=batch_labels, batch_stats=batch_stats)
       
-        def reset_fn(batch_data,batch_labels):
+        def reset_fn(key,batch_data,batch_labels):
             #jax.debug.print('batch labels : {}',batch_labels)
             return CheXpertState(obs=batch_data, labels=batch_labels, batch_stats=batch_stats)
-        self._reset_fn = jax.jit(jax.vmap(reset_fn))
+        self._reset_fn = jax.jit(jax.vmap(partial(reset_fn), in_axes=(0, None, None)))
 
         def step_fn(state, action):
             if test:
@@ -339,9 +340,9 @@ class CheXpert(VectorizedTask):
         return jnp.array(batch_data), jnp.array(batch_labels)
 
     def reset(self, key: jnp.ndarray) -> CheXpertState: 
-        batch_data_iter, batch_labels_iter, idx = next(iter(self.data_generator))
-        batch_data, batch_labels = sample_batch(key, batch_data_iter, batch_labels_iter, self.batch_size)
-        return self._reset_fn(batch_data, batch_labels)
+        batch_data, batch_labels, idx = next(iter(self.data_generator))
+        #jax.debug.print('batch labels : {}',batch_labels)
+        return self._reset_fn(key, batch_data, batch_labels)
     
     def step(self, state: TaskState, action: jnp.ndarray) -> Tuple[TaskState, jnp.ndarray, jnp.ndarray]:
         return self._step_fn(state, action)

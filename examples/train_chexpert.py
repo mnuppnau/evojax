@@ -12,7 +12,7 @@ from evojax import util
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--pop-size', type=int, default=8, help='NE population size.')
+    parser.add_argument('--pop-size', type=int, default=16, help='NE population size.')
     parser.add_argument('--batch-size', type=int, default=64, help='Batch size for training.')  # Adjusted for CheXpert
     parser.add_argument('--data_path', default='./data', help='Location of train/valid datasets directory or path to test csv file.')
     parser.add_argument('--max-iter', type=int, default=50000, help='Max training iterations.')  # Adjust as needed
@@ -21,10 +21,10 @@ def parse_args():
     parser.add_argument('--log-interval', type=int, default=100, help='Logging interval.')
     parser.add_argument('--restore', type=str, help='Path to a single model checkpoint to restore or folder of checkpoints to ensemble.')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for training.')
-    parser.add_argument('--center-lr', type=float, default=0.001, help='Center learning rate.')  # Adjust as needed
+    parser.add_argument('--center-lr', type=float, default=0.0001, help='Center learning rate.')  # Adjust as needed
     parser.add_argument('--mini_data', type=int, help='Truncate dataset to this number of examples.')
-    parser.add_argument('--std-lr', type=float, default=0.06, help='Std learning rate.')  # Adjust as needed
-    parser.add_argument('--init-std', type=float, default=0.05, help='Initial std.')  # Adjust as needed
+    parser.add_argument('--std-lr', type=float, default=0.0806, help='Std learning rate.')  # Adjust as needed
+    parser.add_argument('--init-std', type=float, default=0.038, help='Initial std.')  # Adjust as needed
     parser.add_argument('--cuda', type=int, help='Which cuda device to use.')
     parser.add_argument('--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument('--debug', action='store_true', help='Debug mode.')
