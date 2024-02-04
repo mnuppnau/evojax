@@ -95,6 +95,7 @@ def save_model(model_dir: str,
                model_name: str,
                params: Union[np.ndarray, jnp.ndarray],
                obs_params: Union[np.ndarray, jnp.ndarray] = None,
+               batch_stats: Union[np.ndarray, jnp.ndarray] = None,
                best: bool = False) -> None:
     """Save policy parameters to the specified directory.
 
@@ -105,17 +106,17 @@ def save_model(model_dir: str,
         obs_params - The observation parameters to save
         best - Whether to save a copy as best.npz.
     """
-
     model_file = os.path.join(model_dir, '{}.npz'.format(model_name))
     np.savez(model_file,
              params=np.array(params),
+             batch_stats=np.array(batch_stats) if batch_stats is not None else None,
              obs_params=np.array(obs_params))
     if best:
         model_file = os.path.join(model_dir, 'best.npz')
         np.savez(model_file,
                  params=np.array(params),
+                 batch_stats=np.array(batch_stats) if batch_stats is not None else None,
                  obs_params=np.array(obs_params))
-
 
 def save_lattices(log_dir: str,
                   file_name: str,

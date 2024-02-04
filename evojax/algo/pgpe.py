@@ -175,7 +175,7 @@ class PGPE(NEAlgorithm):
             optimizer_config = {}
         decay_coef = optimizer_config.get("center_lr_decay_coef", 1.0)
         self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 1000
+            "center_lr_decay_steps", 2000
         )
 
         if optimizer == "adam":
@@ -183,7 +183,7 @@ class PGPE(NEAlgorithm):
                 step_size=lambda x: self._center_lr * jnp.power(decay_coef, x),
                 b1=optimizer_config.get("beta1", 0.9),
                 b2=optimizer_config.get("beta2", 0.999),
-                eps=optimizer_config.get("epsilon", 1e-8),
+                eps=optimizer_config.get("epsilon", 1e-7),
             )
         elif optimizer == "clipup":
             opt_init, opt_update, get_params = clipup(

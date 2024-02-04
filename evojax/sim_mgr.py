@@ -31,16 +31,20 @@ from evojax.policy.base import PolicyNetwork
 from evojax.util import create_logger
 
 
-@partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
+@partial(jax.jit, static_argnums=(1, 2, 3, 4, 5, 6))
 def get_task_reset_keys(key: jnp.ndarray,
                         test: bool,
                         pop_size: int,
                         n_tests: int,
                         n_repeats: int,
-                        ma_training: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
+                        ma_training: bool,
+                        batch_stats_flag: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
     key, subkey = random.split(key=key)
     if ma_training:
         reset_keys = random.split(subkey, n_repeats)
+    elif batch_stats_flag:
+        reset_keys = random.split(subkey, n_repeats)
+        reset_keys = jnp.tile(reset_keys, (pop_size, 1))
     else:
         if test:
             reset_keys = random.split(subkey, n_tests * n_repeats)
@@ -48,7 +52,6 @@ def get_task_reset_keys(key: jnp.ndarray,
             reset_keys = random.split(subkey, n_repeats)
             reset_keys = jnp.tile(reset_keys, (pop_size, 1))
     return key, reset_keys
-
 
 @jax.jit
 def split_params_for_pmap(param: jnp.ndarray) -> jnp.ndarray:
@@ -115,7 +118,8 @@ class SimManager(object):
                  seed: int = 0,
                  obs_normalizer: ObsNormalizer = None,
                  use_for_loop: bool = False,
-                 logger: logging.Logger = None):
+                 logger: logging.Logger = None,
+                 batch_stats_flag = False):
         """Initialization function.
 
         Args:
@@ -144,6 +148,9 @@ class SimManager(object):
         self._pop_size = pop_size
         self._n_evaluations = max(n_evaluations, jax.local_device_count())
         self._ma_training = train_vec_task.multi_agent_training
+
+        self._test = False
+        self._batch_stats_flag = batch_stats_flag
 
         self.obs_normalizer = obs_normalizer
         if self.obs_normalizer is None:
@@ -175,8 +182,10 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            actions, policy_state = policy_net.get_actions(
-                task_state, params, policy_state)
+            actions, batch_stats_updated, policy_state = policy_net.get_actions(
+                task_state, params, policy_state, train=not self._test)
+            if batch_stats_updated:
+                task_state = task_state.replace(batch_stats=batch_stats_updated)
             if task.multi_agent_training:
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape(
@@ -243,7 +252,8 @@ class SimManager(object):
 
     def eval_params(self,
                     params: jnp.ndarray,
-                    test: bool) -> Tuple[jnp.ndarray, TaskState]:
+                    test: bool,
+                    batch_stats: dict = None) -> Tuple[jnp.ndarray, TaskState]:
         """Evaluate population parameters or test the best parameter.
 
         Args:
@@ -252,10 +262,11 @@ class SimManager(object):
         Returns:
             An array of fitness scores.
         """
+        self._test = test
         if self._use_for_loop:
             return self._for_loop_eval(params, test)
         else:
-            return self._scan_loop_eval(params, test)
+            return self._scan_loop_eval(params, test, batch_stats)
 
     def _for_loop_eval(self,
                        params: jnp.ndarray,
@@ -308,15 +319,18 @@ class SimManager(object):
 
     def _scan_loop_eval(self,
                         params: jnp.ndarray,
-                        test: bool) -> Tuple[jnp.ndarray, TaskState]:
+                        test: bool,
+                        batch_stats: dict = None) -> Tuple[jnp.ndarray, TaskState]:
+        
         """Rollout using jax.lax.scan."""
+        self.batch_stats = batch_stats
         policy_reset_func = self._policy_reset_fn
         if test:
             n_repeats = self._test_n_repeats
             task_reset_func = self._valid_reset_fn
             rollout_func = self._valid_rollout_fn
-            params = duplicate_params(
-                params[None, :], self._n_evaluations, False)
+            #params = duplicate_params(
+            #    params[None, :], self._n_evaluations, False)
         else:
             n_repeats = self._n_repeats
             task_reset_func = self._train_reset_fn
@@ -341,10 +355,13 @@ class SimManager(object):
 
         self._key, reset_keys = get_task_reset_keys(
             self._key, test, self._pop_size, self._n_evaluations, n_repeats,
-            self._ma_training)
+            self._ma_training, self._batch_stats_flag)
 
         # Reset the tasks and the policy.
         task_state = task_reset_func(reset_keys)
+        if batch_stats:
+            task_state = task_state.replace(batch_stats=self.batch_stats)
+
         policy_state = policy_reset_func(task_state)
         if self._num_device > 1:
             params = split_params_for_pmap(params)
@@ -354,11 +371,14 @@ class SimManager(object):
         # Do the rollouts.
         scores, all_obs, masks, final_states = rollout_func(
             task_state, policy_state, params, self.obs_params)
+        
         if self._num_device > 1:
             all_obs = reshape_data_from_pmap(all_obs)
             masks = reshape_data_from_pmap(masks)
             final_states = merge_state_from_pmap(final_states)
 
+        batch_stats_updated = final_states.batch_stats
+        
         if not test and not self.obs_normalizer.is_dummy:
             self.obs_params = self.obs_normalizer.update_normalization_params(
                 obs_buffer=all_obs, obs_mask=masks, obs_params=self.obs_params)
@@ -381,4 +401,4 @@ class SimManager(object):
                 lambda x: x.reshape((scores.shape[0], n_repeats, *x.shape[1:])),
                 final_states)
 
-        return scores, self._bd_summarize_fn(final_states)
+        return scores, self._bd_summarize_fn(final_states), batch_stats_updated

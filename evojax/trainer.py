@@ -51,6 +51,7 @@ class Trainer(object):
                  normalize_obs: bool = False,
                  model_dir: str = None,
                  log_dir: str = None,
+                 batch_stats_flag: bool = False,
                  logger: logging.Logger = None,
                  log_scores_fn: Optional[Callable[[int, jnp.ndarray, str], None]] = None):
         """Initialization.
@@ -71,6 +72,7 @@ class Trainer(object):
             normalize_obs - Whether to use an observation normalizer.
             model_dir - Directory to save/load model.
             log_dir - Directory to dump logs.
+            batch_stats_flag - flag to be set for the use of a BatchNorm layer in policy.
             logger - Logger.
             log_scores_fn - custom function to log the scores array. Expects input:
                 `current_iter`: int, `scores`: jnp.ndarray, 'stage': str = "train" | "test"
@@ -87,6 +89,9 @@ class Trainer(object):
         self._max_iter = max_iter
         self.model_dir = model_dir
         self._log_dir = log_dir
+
+        self._batch_stats_flag = batch_stats_flag
+        self._batch_stats = None
 
         self._log_scores_fn = log_scores_fn or (lambda x, y, z: None)
 
@@ -108,6 +113,7 @@ class Trainer(object):
             obs_normalizer=self._obs_normalizer,
             use_for_loop=use_for_loop,
             logger=self._logger,
+            batch_stats_flag=self._batch_stats_flag,
         )
 
     def run(self, demo_mode: bool = False) -> float:
@@ -149,8 +155,20 @@ class Trainer(object):
                     time.perf_counter() - start_time))
 
                 start_time = time.perf_counter()
-                scores, bds = self.sim_mgr.eval_params(
-                    params=params, test=False)
+                
+                if self._batch_stats_flag:
+                    if i == 0:
+                        scores, bds, batch_stats = self.sim_mgr.eval_params(
+                            params=params, test=False)
+                        self._batch_stats = batch_stats
+                    else:
+                        scores, bds, batch_stats = self.sim_mgr.eval_params(
+                            params=params, test=False, batch_stats=self._batch_stats)
+                        self._batch_stats = batch_stats
+                else:
+                    scores, bds = self.sim_mgr.eval_params(
+                        params=params, test=False)
+                
                 self._logger.debug('sim_mgr.eval_params time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
@@ -170,7 +188,28 @@ class Trainer(object):
                             scores.min(), scores.std()))
                     self._log_scores_fn(i, scores, "train")
 
-                if i > 0 and i % self._test_interval == 0:
+                if i > 0 and i % self._test_interval == 0 and self._batch_stats_flag:
+                    test_scores, _, batch_stats = self.sim_mgr.eval_params(
+                        params=params, test=True, batch_stats=self._batch_stats)
+                    self._logger.info(
+                        '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
+                        'min={4:.4f}, std={5:.4f}'.format(
+                            i, test_scores.size, test_scores.max(),
+                            test_scores.mean(), test_scores.min(),
+                            test_scores.std()))
+                    self._log_scores_fn(i, test_scores, "test")
+                    mean_test_score = test_scores.mean()
+                    save_model(
+                        model_dir=self._log_dir,
+                        model_name='iter_{}'.format(i),
+                        params=params,
+                        batch_stats=batch_stats,
+                        obs_params=self.sim_mgr.obs_params,
+                        best=mean_test_score > best_score,
+                    )
+                    best_score = max(best_score, mean_test_score)
+
+                elif i > 0 and i % self._test_interval == 0:
                     best_params = self.solver.best_params
                     test_scores, _ = self.sim_mgr.eval_params(
                         params=best_params, test=True)
@@ -190,6 +229,7 @@ class Trainer(object):
                         best=mean_test_score > best_score,
                     )
                     best_score = max(best_score, mean_test_score)
+
 
             # Test and save the final model.
             best_params = self.solver.best_params
