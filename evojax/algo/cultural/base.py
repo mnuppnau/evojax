@@ -5,7 +5,6 @@ import jax.numpy as jnp
 
 class CulturalAlgorithm(ABC):
     """Base class for cultural algorithms in EvoJAX."""
-
     pop_size: int
 
     @abstractmethod

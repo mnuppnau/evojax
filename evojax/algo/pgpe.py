@@ -36,6 +36,8 @@ except ModuleNotFoundError:
 from evojax.algo.base import NEAlgorithm
 from evojax.util import create_logger
 
+from cultural.population_space import PopulationSpace
+from cultural.belief_space import BeliefSpace
 
 @partial(jax.jit, static_argnums=(1,))
 def process_scores(
@@ -83,7 +85,6 @@ def update_stdev(
     max_allowed = stdev + allowed_delta
     return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
 
-
 @partial(jax.jit, static_argnums=(3, 4))
 def ask_func(
     key: jnp.ndarray,
@@ -91,16 +92,16 @@ def ask_func(
     center: jnp.ndarray,
     num_directions: int,
     solution_size: int,
+    influence_func: Callable[[jnp.ndarray], jnp.ndarray],
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """A function that samples a population of parameters from Gaussian."""
-
     next_key, key = random.split(key)
     scaled_noises = random.normal(key, [num_directions, solution_size]) * stdev
+    # Apply the influence function to adjust the scaled noises
+    scaled_noises = influence_func(scaled_noises)
     solutions = jnp.hstack(
         [center + scaled_noises, center - scaled_noises]
     ).reshape(-1, solution_size)
     return next_key, scaled_noises, solutions
-
 
 class PGPE(NEAlgorithm):
     """Policy Gradient with Parameter-based Exploration (PGPE) algorithm.
@@ -207,18 +208,35 @@ class PGPE(NEAlgorithm):
         self._solutions = None
         self._scaled_noises = None
 
+        self._previous_best_score = None
+        self._best_score = None
+
+        self.population_space = PopulationSpace(self.pop_size)
+        self.population_space.initialize(self._center, self._stdev)
+
+        self.belief_space = BeliefSpace(pop_size=self.pop_size)
+        self.belief_space.assign_indexes_to_knowledge_sources()
+
     def ask(self) -> jnp.ndarray:
+        # Retrieve updated center and stdev from the belief space if available
+        if self._best_score > self._previous_best_score:
+            center, stdev = self.belief_space.get_updated_params(self._center, self._stdev)
+        else:
+            center, stdev = self._center, self._stdev
         self._key, self._scaled_noises, self._solutions = ask_func(
             self._key,
-            self._stdev,
-            self._center,
+            stdev,
+            center,
             self._num_directions,
             self._center.size,
+            self.belief_space.influence,
         )
         return self._solutions
 
     def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:
         fitness_scores = process_scores(fitness, self._solution_ranking)
+        self._previous_best_score = np.max(fitness_scores) if self._best_score is None else self._best_score
+        self._best_score = np.max(fitness_scores)
         grad_center, grad_stdev = compute_reinforce_update(
             fitness_scores=fitness_scores,
             scaled_noises=self._scaled_noises,
@@ -235,6 +253,12 @@ class PGPE(NEAlgorithm):
             max_change=self._stdev_max_change,
             grad=grad_stdev,
         )
+
+        self.population_space.update(fitness_scores, self._center, self._stdev, self._scaled_noises)
+
+        self.belief_space.accept(self.population_space.individuals)
+        
+        self.belief_space.update()
 
     @property
     def best_params(self) -> jnp.ndarray:
