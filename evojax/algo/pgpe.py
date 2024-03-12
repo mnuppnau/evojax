@@ -223,7 +223,8 @@ class PGPE(NEAlgorithm):
         center = self._center
         # Retrieve updated center and stdev from the belief space if available
         if self._previous_best_score is not None:
-            if self._best_score > self._previous_best_score:
+            if self._best_score < self._previous_best_score:
+                print("Updating center and stdev")
                 center, stdev = self.belief_space.get_updated_params(self._center, self._stdev)
         else:
             center, stdev = self._center, self._stdev
@@ -239,10 +240,10 @@ class PGPE(NEAlgorithm):
         #    current_influence_func,
         #)
         next_key, key = random.split(self._key)
-        scaled_noises = random.normal(key, [self._num_directions, self._center.size]) * stdev
+        self._scaled_noises = random.normal(key, [self._num_directions, self._center.size]) * stdev
         
         # Apply the influence adjustments to the scaled noises
-        self._scaled_noises = self.belief_space.influence(scaled_noises)
+        #self._scaled_noises = self.belief_space.influence(scaled_noises)
         
         self._solutions = jnp.hstack(
             [center + self._scaled_noises, center - self._scaled_noises]
@@ -258,8 +259,10 @@ class PGPE(NEAlgorithm):
 
     def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:
         fitness_scores = process_scores(fitness, self._solution_ranking)
-        self._previous_best_score = np.max(fitness_scores) if self._best_score is None else self._best_score
-        self._best_score = np.max(fitness_scores)
+        self._previous_best_score = np.array(fitness).max() if self._best_score is None else self._best_score
+        print(f"Previous best score: {self._previous_best_score}")
+        self._best_score = np.array(fitness).max()
+        print(f"Current best score: {self._best_score}")
         grad_center, grad_stdev = compute_reinforce_update(
             fitness_scores=fitness_scores,
             scaled_noises=self._scaled_noises,
@@ -277,7 +280,7 @@ class PGPE(NEAlgorithm):
             grad=grad_stdev,
         )
 
-        self.population_space.update(fitness_scores, self._center, self._stdev, self._scaled_noises)
+        self.population_space.update(np.array(fitness), self._center, self._stdev, self._scaled_noises)
 
         self.belief_space.accept(self.population_space.individuals)
         

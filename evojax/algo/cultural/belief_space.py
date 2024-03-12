@@ -13,11 +13,12 @@ class BeliefSpace:
         self.topographic_ks = TopographicKS(num_clusters)
         self.normative_ks = NormativeKS()
         self.assign_indexes_to_knowledge_sources()
+        self.learning_rate = 0.7
 
     def assign_indexes_to_knowledge_sources(self):
         indexes = list(range(1, self.population_size))  # Exclude index 0
         for ks in [self.situational_ks, self.history_ks]:
-            ks.assigned_indexes = random.sample(indexes, k=len(indexes) // 2)
+            ks.assigned_indexes = random.sample(indexes, k=len(indexes) // 6)
             indexes = [i for i in indexes if i not in ks.assigned_indexes]
         self.domain_ks.assigned_indexes = [0]  # Assign index 0 to DomainKS
 
@@ -42,8 +43,8 @@ class BeliefSpace:
         self.normative_ks.update()
 
     def influence(self, scaled_noises: jnp.ndarray) -> jnp.ndarray:
-        index_counter = 0
         for ks in [self.domain_ks, self.situational_ks, self.history_ks]:
+            index_counter = 0
             for i in range(ks.individual_count):
                 if index_counter < scaled_noises.shape[0]:
                     scaled_noises = ks.adjust_noise(scaled_noises, index_counter)
