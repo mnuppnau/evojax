@@ -70,7 +70,7 @@ class SituationalKS:
         return scaled_noises
 
 class HistoryKS:
-    def __init__(self, decay_factor: float):
+    def __init__(self, decay_factor: float = 0.9):
         self.individuals: List[Individual] = []
         self.decay_factor = decay_factor
         self.assigned_indexes = None
@@ -104,7 +104,7 @@ class HistoryKS:
         return scaled_noises
 
 class TopographicKS:
-    def __init__(self, num_clusters: int):
+    def __init__(self, num_clusters: int = 5):
         self.center = None
         self.stdev = None 
         self.num_clusters = num_clusters

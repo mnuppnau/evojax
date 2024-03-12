@@ -1,4 +1,7 @@
-from typing import List, Dict
+import random
+import jax.numpy as jnp
+import jax
+from typing import List, Tuple ,Dict
 from evojax.algo.cultural.knowledge_sources import DomainKS, SituationalKS, HistoryKS, TopographicKS, NormativeKS
 
 class BeliefSpace:
@@ -39,12 +42,11 @@ class BeliefSpace:
         self.normative_ks.update()
 
     def influence(self, scaled_noises: jnp.ndarray) -> jnp.ndarray:
-        # Apply the influence phase to adjust the scaled noises
+        index_counter = 0
         for ks in [self.domain_ks, self.situational_ks, self.history_ks]:
-            index_counter = 0
-            for i in ks.assigned_indexes:
-                if index_counter < ks.individual_count: 
-                    scaled_noises = ks.adjust_noise(scaled_noises, i)
+            for i in range(ks.individual_count):
+                if index_counter < scaled_noises.shape[0]:
+                    scaled_noises = ks.adjust_noise(scaled_noises, index_counter)
                     index_counter += 1
         return scaled_noises
 

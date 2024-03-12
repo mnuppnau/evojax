@@ -22,6 +22,7 @@ import logging
 from typing import Optional
 from typing import Union
 from typing import Tuple
+from typing import Callable
 from functools import partial
 
 import jax
@@ -36,8 +37,8 @@ except ModuleNotFoundError:
 from evojax.algo.base import NEAlgorithm
 from evojax.util import create_logger
 
-from cultural.population_space import PopulationSpace
-from cultural.belief_space import BeliefSpace
+from evojax.algo.cultural.population_space import PopulationSpace
+from evojax.algo.cultural.belief_space import BeliefSpace
 
 @partial(jax.jit, static_argnums=(1,))
 def process_scores(
@@ -85,7 +86,7 @@ def update_stdev(
     max_allowed = stdev + allowed_delta
     return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
 
-@partial(jax.jit, static_argnums=(3, 4))
+@partial(jax.jit, static_argnums=(3, 4, 6))
 def ask_func(
     key: jnp.ndarray,
     stdev: jnp.ndarray,
@@ -96,7 +97,7 @@ def ask_func(
 ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     next_key, key = random.split(key)
     scaled_noises = random.normal(key, [num_directions, solution_size]) * stdev
-    # Apply the influence function to adjust the scaled noises
+    # Apply the influence adjustments to the scaled noises
     scaled_noises = influence_func(scaled_noises)
     solutions = jnp.hstack(
         [center + scaled_noises, center - scaled_noises]
@@ -214,23 +215,45 @@ class PGPE(NEAlgorithm):
         self.population_space = PopulationSpace(self.pop_size)
         self.population_space.initialize(self._center, self._stdev)
 
-        self.belief_space = BeliefSpace(pop_size=self.pop_size)
+        self.belief_space = BeliefSpace(population_size=self.pop_size)
         self.belief_space.assign_indexes_to_knowledge_sources()
 
     def ask(self) -> jnp.ndarray:
+        stdev = self._stdev
+        center = self._center
         # Retrieve updated center and stdev from the belief space if available
-        if self._best_score > self._previous_best_score:
-            center, stdev = self.belief_space.get_updated_params(self._center, self._stdev)
+        if self._previous_best_score is not None:
+            if self._best_score > self._previous_best_score:
+                center, stdev = self.belief_space.get_updated_params(self._center, self._stdev)
         else:
             center, stdev = self._center, self._stdev
-        self._key, self._scaled_noises, self._solutions = ask_func(
-            self._key,
-            stdev,
-            center,
-            self._num_directions,
-            self._center.size,
-            self.belief_space.influence,
-        )
+        
+        #current_influence_func = self.belief_space.generate_influence_func.influence()
+ 
+        #self._key, self._scaled_noises, self._solutions = ask_func(
+        #    self._key,
+        #    stdev,
+        #    center,
+        #    self._num_directions,
+        #    self._center.size,
+        #    current_influence_func,
+        #)
+        next_key, key = random.split(self._key)
+        scaled_noises = random.normal(key, [self._num_directions, self._center.size]) * stdev
+        
+        # Apply the influence adjustments to the scaled noises
+        self._scaled_noises = self.belief_space.influence(scaled_noises)
+        
+        self._solutions = jnp.hstack(
+            [center + self._scaled_noises, center - self._scaled_noises]
+        ).reshape(-1, self._center.size)
+        
+        # Calculate and store noise magnitudes in the population space
+        for i, noise in enumerate(self._scaled_noises):
+            magnitude = jnp.linalg.norm(noise)
+            self.population_space.individuals[i].noise_magnitude = magnitude
+        
+        self._key = next_key
         return self._solutions
 
     def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:
