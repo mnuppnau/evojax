@@ -219,13 +219,19 @@ class PGPE(NEAlgorithm):
         self.belief_space.assign_indexes_to_knowledge_sources()
 
     def ask(self) -> jnp.ndarray:
-        stdev = self._stdev
-        center = self._center
+        stdev = 0
+        center = 0
+        #stdev = self._stdev
+        #center = self._center
         # Retrieve updated center and stdev from the belief space if available
-        if self._previous_best_score is not None:
+        if self._previous_best_score is not None and self._best_score is not None:
             if self._best_score < self._previous_best_score:
-                print("Updating center and stdev")
+                #print("Updating center and stdev")
                 center, stdev = self.belief_space.get_updated_params(self._center, self._stdev)
+                self._center = center
+                self._stdev = stdev
+            else:
+                center, stdev = self._center, self._stdev
         else:
             center, stdev = self._center, self._stdev
         
@@ -250,19 +256,30 @@ class PGPE(NEAlgorithm):
         ).reshape(-1, self._center.size)
         
         # Calculate and store noise magnitudes in the population space
-        for i, noise in enumerate(self._scaled_noises):
-            magnitude = jnp.linalg.norm(noise)
-            self.population_space.individuals[i].noise_magnitude = magnitude
-        
+        #for i, noise in enumerate(self._scaled_noises):
+        #    magnitude = jnp.linalg.norm(noise)
+        #    self.population_space.individuals[i].noise_magnitude = magnitude
+        # 
         self._key = next_key
         return self._solutions
 
     def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:
         fitness_scores = process_scores(fitness, self._solution_ranking)
         self._previous_best_score = np.array(fitness).max() if self._best_score is None else self._best_score
-        print(f"Previous best score: {self._previous_best_score}")
+        #print(f"Previous best score: {self._previous_best_score}")
         self._best_score = np.array(fitness).max()
-        print(f"Current best score: {self._best_score}")
+        #print(f"Current best score: {self._best_score}")
+       
+        self.population_space.update(np.array(fitness), self._center, self._stdev, self._scaled_noises)
+
+        self.belief_space.accept(self.population_space.individuals)
+        
+        self.belief_space.update()
+
+        print("Domain KS:", self.belief_space.domain_ks)
+        print("Situational KS:", self.belief_space.situational_ks)
+        print("History KS:", self.belief_space.history_ks)
+        
         grad_center, grad_stdev = compute_reinforce_update(
             fitness_scores=fitness_scores,
             scaled_noises=self._scaled_noises,
@@ -279,12 +296,6 @@ class PGPE(NEAlgorithm):
             max_change=self._stdev_max_change,
             grad=grad_stdev,
         )
-
-        self.population_space.update(np.array(fitness), self._center, self._stdev, self._scaled_noises)
-
-        self.belief_space.accept(self.population_space.individuals)
-        
-        self.belief_space.update()
 
     @property
     def best_params(self) -> jnp.ndarray:

@@ -141,8 +141,12 @@ class Trainer(object):
                 self.solver.best_params = params
 
             best_score = -float('Inf')
+            
+            i = 0
 
             for i in range(self._max_iter):
+                #print(f"Training iteration {i}")
+                i += 1
                 start_time = time.perf_counter()
                 params = self.solver.ask()
                 self._logger.debug('solver.ask time: {0:.4f}s'.format(

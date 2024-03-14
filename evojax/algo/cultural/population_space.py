@@ -8,6 +8,9 @@ class Individual:
         self.noise_magnitude = noise_magnitude
         self.fitness_score = fitness_score
 
+    def __repr__(self):
+         return f"Individual(fitness_score={self.fitness_score}, noise_magnitude={self.noise_magnitude})"
+
 class PopulationSpace:
     def __init__(self, pop_size: int):
         self.pop_size = pop_size

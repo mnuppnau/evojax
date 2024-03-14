@@ -11,15 +11,22 @@ class DomainKS:
         self.assigned_indexes = None
         self.individual_count = 0
 
+    def __repr__(self):
+        if self.individual is None:
+            return "DomainKS(individual=None)"
+        else:
+            return f"DomainKS(individual={self.individual})"
+
     def accept(self, individual: Individual):
         self.individual = individual
-        self.individual_count += 1
+        self.individual_count = 1
 
     def update(self):
         pass
 
     def get_center_guidance(self) -> Optional[jnp.ndarray]:
         if self.individual is not None:
+            #print("center guidance : ", self.individual.center)
             return self.individual.center
         return None
 
@@ -41,27 +48,48 @@ class SituationalKS:
         self.assigned_indexes = None
         self.individual_count = 0
 
+    def __repr__(self):
+        individual_str = "\n".join([str(individual) for individual in self.individuals])
+        return f"SituationalKS(max_individuals={self.max_individuals}, individuals=[\n{individual_str}\n])"
+
     def accept(self, individual: Individual):
         self.individuals.append(individual)
-        self.individual_count += 1
+        #self.individual_count += 1
+        self.individual_count = min(len(self.individuals), self.max_individuals)
+        #print("individual count in situational KS : ", self.individual_count)
 
     def update(self):
-        self.individuals.sort(key=lambda x: x.fitness_score, reverse=True)
+        self.individuals.sort(key=lambda x: x.fitness_score)
         self.individuals = self.individuals[:self.max_individuals]
 
     def get_center_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             centers = jnp.array([ind.center for ind in self.individuals])
-            weights = jnp.array([ind.fitness_score for ind in self.individuals])
+            weights = jnp.array([1000000 - ind.fitness_score for ind in self.individuals])
             return jnp.average(centers, weights=weights, axis=0)
         return None
-
+    
     def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             stdevs = jnp.array([ind.stdev for ind in self.individuals])
-            weights = jnp.array([ind.fitness_score for ind in self.individuals])
+            weights = jnp.array([1000000 - ind.fitness_score for ind in self.individuals])
             return jnp.average(stdevs, weights=weights, axis=0)
         return None
+
+    #def get_center_guidance(self) -> Optional[jnp.ndarray]:
+    #    if self.individuals:
+    #        centers = jnp.array([ind.center for ind in self.individuals])
+    #        weights = jnp.array([jnp.absolute(ind.fitness_score) for ind in self.individuals])
+    #        #print("average center : ", jnp.average(centers, weights=weights, axis=0))
+    #        return jnp.average(centers, weights=weights, axis=0)
+    #    return None
+
+    #def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
+    #    if self.individuals:
+    #        stdevs = jnp.array([ind.stdev for ind in self.individuals])
+    #        weights = jnp.array([jnp.absolute(ind.fitness_score) for ind in self.individuals])
+    #        return jnp.average(stdevs, weights=weights, axis=0)
+    #    return None
 
     def adjust_noise(self, scaled_noises: jnp.ndarray, index: int) -> jnp.ndarray:
         if index < len(self.individuals):
@@ -70,15 +98,21 @@ class SituationalKS:
         return scaled_noises
 
 class HistoryKS:
-    def __init__(self, decay_factor: float = 0.9):
+    def __init__(self, decay_factor: float = 0.6):
         self.individuals: List[Individual] = []
         self.decay_factor = decay_factor
         self.assigned_indexes = None
         self.individual_count = 0
 
+    def __repr__(self):
+        individual_str = "\n".join([str(individual) for individual in self.individuals])
+        return f"HistoryKS(decay_factor={self.decay_factor}, individuals=[\n{individual_str}\n])"
+
     def accept(self, individual: Individual):
         self.individuals.append(individual)
-        self.individual_count += 1
+        self.individual_count = len(self.individuals)
+        #self.individual_count += 1
+        #print("individual count in history KS : ", self.individual_count)
 
     def update(self):
         pass
@@ -86,14 +120,14 @@ class HistoryKS:
     def get_center_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             centers = jnp.array([ind.center for ind in self.individuals])
-            weights = jnp.power(self.decay_factor, jnp.arange(len(self.individuals)))
+            weights = jnp.array([1000000 - ind.fitness_score for ind in self.individuals])
             return jnp.average(centers, weights=weights, axis=0)
         return None
-
+    
     def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             stdevs = jnp.array([ind.stdev for ind in self.individuals])
-            weights = jnp.power(self.decay_factor, jnp.arange(len(self.individuals)))
+            weights = jnp.array([1000000 - ind.fitness_score for ind in self.individuals])
             return jnp.average(stdevs, weights=weights, axis=0)
         return None
 
