@@ -221,8 +221,8 @@ class PGPE(NEAlgorithm):
     def ask(self) -> jnp.ndarray:
         stdev = 0
         center = 0
-        #stdev = self._stdev
-        #center = self._center
+        stdev = self._stdev
+        center = self._center
         # Retrieve updated center and stdev from the belief space if available
         if self._previous_best_score is not None and self._best_score is not None:
             if self._best_score < self._previous_best_score:
@@ -246,10 +246,10 @@ class PGPE(NEAlgorithm):
         #    current_influence_func,
         #)
         next_key, key = random.split(self._key)
-        self._scaled_noises = random.normal(key, [self._num_directions, self._center.size]) * stdev
+        scaled_noises = random.normal(key, [self._num_directions, self._center.size]) * stdev
         
         # Apply the influence adjustments to the scaled noises
-        #self._scaled_noises = self.belief_space.influence(scaled_noises)
+        self._scaled_noises = self.belief_space.influence(scaled_noises)
         
         self._solutions = jnp.hstack(
             [center + self._scaled_noises, center - self._scaled_noises]
@@ -270,15 +270,15 @@ class PGPE(NEAlgorithm):
         self._best_score = np.array(fitness).max()
         #print(f"Current best score: {self._best_score}")
        
-        self.population_space.update(np.array(fitness), self._center, self._stdev, self._scaled_noises)
+        self.population_space.update(fitness_scores, self._center, self._stdev, self._scaled_noises)
 
         self.belief_space.accept(self.population_space.individuals)
         
         self.belief_space.update()
 
-        print("Domain KS:", self.belief_space.domain_ks)
-        print("Situational KS:", self.belief_space.situational_ks)
-        print("History KS:", self.belief_space.history_ks)
+        #print("Domain KS:", self.belief_space.domain_ks)
+        #print("Situational KS:", self.belief_space.situational_ks)
+        #print("History KS:", self.belief_space.history_ks)
         
         grad_center, grad_stdev = compute_reinforce_update(
             fitness_scores=fitness_scores,

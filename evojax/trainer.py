@@ -165,7 +165,7 @@ class Trainer(object):
                 self._logger.debug('solver.tell time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
-                if i > 0 and i % self._log_interval == 0:
+                if i > 0: #and i % self._log_interval == 0:
                     scores = np.array(scores)
                     self._logger.info(
                         'Iter={0}, size={1}, max={2:.4f}, '

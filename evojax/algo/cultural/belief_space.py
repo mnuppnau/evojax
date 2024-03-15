@@ -13,18 +13,18 @@ class BeliefSpace:
         self.topographic_ks = TopographicKS(num_clusters)
         self.normative_ks = NormativeKS()
         self.assign_indexes_to_knowledge_sources()
-        self.learning_rate = 0.09
+        self.learning_rate = 0.2
 
     def assign_indexes_to_knowledge_sources(self):
         indexes = list(range(1, self.population_size))  # Exclude index 0
         for ks in [self.situational_ks, self.history_ks]:
-            ks.assigned_indexes = random.sample(indexes, k=len(indexes) // 6)
+            ks.assigned_indexes = random.sample(indexes, k=len(indexes) // 16)
             indexes = [i for i in indexes if i not in ks.assigned_indexes]
         self.domain_ks.assigned_indexes = [0]  # Assign index 0 to DomainKS
 
     def accept(self, individuals: List[Dict]):
         # Accept individuals into the belief space based on certain criteria
-        best_individual = max(individuals, key=lambda x: x.fitness_score)
+        best_individual = min(individuals, key=lambda x: x.fitness_score)
         #print("best individual : ", best_individual)
         #print("accepting individual into domain_ks,...")
         self.domain_ks.accept(best_individual)
@@ -54,9 +54,9 @@ class BeliefSpace:
     def influence(self, scaled_noises: jnp.ndarray) -> jnp.ndarray:
         for ks in [self.domain_ks, self.situational_ks, self.history_ks]:
             index_counter = 0
-            for i in range(ks.individual_count):
-                if index_counter < scaled_noises.shape[0]:
-                    scaled_noises = ks.adjust_noise(scaled_noises, index_counter)
+            for i in ks.assigned_indexes:
+                if index_counter < ks.individual_count:
+                    scaled_noises = ks.adjust_noise(scaled_noises, i, index_counter)
                     index_counter += 1
         return scaled_noises
 

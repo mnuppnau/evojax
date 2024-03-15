@@ -35,14 +35,14 @@ class DomainKS:
             return self.individual.stdev
         return None
 
-    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int) -> jnp.ndarray:
+    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
         if self.individual is not None and index == 0:
             # Adjust the noise for the first index if an individual is available
             scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individual.noise_magnitude)
         return scaled_noises
 
 class SituationalKS:
-    def __init__(self, max_individuals: int = 10):
+    def __init__(self, max_individuals: int = 40):
         self.max_individuals = max_individuals
         self.individuals: List[Individual] = []
         self.assigned_indexes = None
@@ -65,14 +65,16 @@ class SituationalKS:
     def get_center_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             centers = jnp.array([ind.center for ind in self.individuals])
-            weights = jnp.array([1000000 - ind.fitness_score for ind in self.individuals])
+            weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
+            weights /= jnp.sum(weights)  # Normalize the weights
             return jnp.average(centers, weights=weights, axis=0)
         return None
     
     def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             stdevs = jnp.array([ind.stdev for ind in self.individuals])
-            weights = jnp.array([1000000 - ind.fitness_score for ind in self.individuals])
+            weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
+            weights /= jnp.sum(weights)  # Normalize the weights
             return jnp.average(stdevs, weights=weights, axis=0)
         return None
 
@@ -91,14 +93,14 @@ class SituationalKS:
     #        return jnp.average(stdevs, weights=weights, axis=0)
     #    return None
 
-    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int) -> jnp.ndarray:
-        if index < len(self.individuals):
+    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
+        #if index < len(self.individuals):
             # Adjust the noise for the assigned index if an individual is available
-            scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individuals[index].noise_magnitude)
+        scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individuals[index_counter].noise_magnitude)
         return scaled_noises
 
 class HistoryKS:
-    def __init__(self, decay_factor: float = 0.6):
+    def __init__(self, decay_factor: float = 0.8):
         self.individuals: List[Individual] = []
         self.decay_factor = decay_factor
         self.assigned_indexes = None
@@ -120,21 +122,23 @@ class HistoryKS:
     def get_center_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             centers = jnp.array([ind.center for ind in self.individuals])
-            weights = jnp.array([1000000 - ind.fitness_score for ind in self.individuals])
+            weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
+            weights /= jnp.sum(weights)  # Normalize the weights
             return jnp.average(centers, weights=weights, axis=0)
         return None
     
     def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             stdevs = jnp.array([ind.stdev for ind in self.individuals])
-            weights = jnp.array([1000000 - ind.fitness_score for ind in self.individuals])
+            weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
+            weights /= jnp.sum(weights)  # Normalize the weights
             return jnp.average(stdevs, weights=weights, axis=0)
         return None
 
-    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int) -> jnp.ndarray:
-        if index < len(self.individuals):
+    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
+        #if index < len(self.individuals):
             # Adjust the noise for the assigned index if an individual is available
-            scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individuals[index].noise_magnitude)
+        scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individuals[index_counter].noise_magnitude)
         return scaled_noises
 
 class TopographicKS:
