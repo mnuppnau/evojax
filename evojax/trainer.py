@@ -172,6 +172,8 @@ class Trainer(object):
                         'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
                             i, scores.size, scores.max(), scores.mean(),
                             scores.min(), scores.std()))
+                    with open('/home/gh0st/Downloads/pgpe_cultural.csv', 'a') as file:
+                        file.write(f'Iter: {i}, Max: {scores.max()}, Mean: {scores.mean()}, Std: {scores.std()}, Min: {scores.min()}\n')
                     self._log_scores_fn(i, scores, "train")
 
                 if i > 0 and i % self._test_interval == 0:

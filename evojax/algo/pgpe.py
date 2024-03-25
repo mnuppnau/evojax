@@ -86,23 +86,18 @@ def update_stdev(
     max_allowed = stdev + allowed_delta
     return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
 
-@partial(jax.jit, static_argnums=(3, 4, 6))
+@partial(jax.jit, static_argnums=(2,3))
 def ask_func(
     key: jnp.ndarray,
     stdev: jnp.ndarray,
-    center: jnp.ndarray,
     num_directions: int,
     solution_size: int,
-    influence_func: Callable[[jnp.ndarray], jnp.ndarray],
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> jnp.ndarray:
     next_key, key = random.split(key)
     scaled_noises = random.normal(key, [num_directions, solution_size]) * stdev
     # Apply the influence adjustments to the scaled noises
-    scaled_noises = influence_func(scaled_noises)
-    solutions = jnp.hstack(
-        [center + scaled_noises, center - scaled_noises]
-    ).reshape(-1, solution_size)
-    return next_key, scaled_noises, solutions
+    
+    return next_key, scaled_noises
 
 class PGPE(NEAlgorithm):
     """Policy Gradient with Parameter-based Exploration (PGPE) algorithm.
@@ -216,7 +211,7 @@ class PGPE(NEAlgorithm):
         self.population_space.initialize(self._center, self._stdev)
 
         self.belief_space = BeliefSpace(population_size=self.pop_size)
-        self.belief_space.assign_indexes_to_knowledge_sources()
+        #self.belief_space.assign_indexes_to_knowledge_sources()
 
     def ask(self) -> jnp.ndarray:
         stdev = 0
@@ -226,7 +221,7 @@ class PGPE(NEAlgorithm):
         # Retrieve updated center and stdev from the belief space if available
         if self._previous_best_score is not None and self._best_score is not None:
             if self._best_score < self._previous_best_score:
-                #print("Updating center and stdev")
+                print("Updating center and stdev")
                 center, stdev = self.belief_space.get_updated_params(self._center, self._stdev)
                 self._center = center
                 self._stdev = stdev
@@ -235,32 +230,30 @@ class PGPE(NEAlgorithm):
         else:
             center, stdev = self._center, self._stdev
         
-        #current_influence_func = self.belief_space.generate_influence_func.influence()
- 
-        #self._key, self._scaled_noises, self._solutions = ask_func(
-        #    self._key,
-        #    stdev,
-        #    center,
-        #    self._num_directions,
-        #    self._center.size,
-        #    current_influence_func,
-        #)
-        next_key, key = random.split(self._key)
-        scaled_noises = random.normal(key, [self._num_directions, self._center.size]) * stdev
+        self._key, scaled_noises, = ask_func(
+            self._key,
+            stdev,
+            self._num_directions,
+            self._center.size,
+        )
+        #next_key, key = random.split(self._key)
+        #scaled_noises = random.normal(key, [self._num_directions, self._center.size]) * stdev
         
-        # Apply the influence adjustments to the scaled noises
         self._scaled_noises = self.belief_space.influence(scaled_noises)
         
-        self._solutions = jnp.hstack(
-            [center + self._scaled_noises, center - self._scaled_noises]
-        ).reshape(-1, self._center.size)
+        self._solutions = jnp.hstack([center + self._scaled_noises, center - self._scaled_noises]).reshape(-1, self._center.size)    
+        # Apply the influence adjustments to the scaled noises
+       
+        #self._solutions = jnp.hstack(
+        #    [center + self._scaled_noises, center - self._scaled_noises]
+        #).reshape(-1, self._center.size)
         
         # Calculate and store noise magnitudes in the population space
         #for i, noise in enumerate(self._scaled_noises):
         #    magnitude = jnp.linalg.norm(noise)
         #    self.population_space.individuals[i].noise_magnitude = magnitude
         # 
-        self._key = next_key
+        #self._key = next_key
         return self._solutions
 
     def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:

@@ -42,7 +42,7 @@ class DomainKS:
         return scaled_noises
 
 class SituationalKS:
-    def __init__(self, max_individuals: int = 40):
+    def __init__(self, max_individuals: int = 100):
         self.max_individuals = max_individuals
         self.individuals: List[Individual] = []
         self.assigned_indexes = None
@@ -65,7 +65,7 @@ class SituationalKS:
     def get_center_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             centers = jnp.array([ind.center for ind in self.individuals])
-            weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
+            weights = jnp.array([1.0 - jnp.abs(ind.fitness_score) for ind in self.individuals])
             weights /= jnp.sum(weights)  # Normalize the weights
             return jnp.average(centers, weights=weights, axis=0)
         return None
@@ -73,7 +73,7 @@ class SituationalKS:
     def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             stdevs = jnp.array([ind.stdev for ind in self.individuals])
-            weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
+            weights = jnp.array([1.0 - jnp.abs(ind.fitness_score) for ind in self.individuals])
             weights /= jnp.sum(weights)  # Normalize the weights
             return jnp.average(stdevs, weights=weights, axis=0)
         return None
@@ -122,16 +122,18 @@ class HistoryKS:
     def get_center_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             centers = jnp.array([ind.center for ind in self.individuals])
-            weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
-            weights /= jnp.sum(weights)  # Normalize the weights
+            #weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
+            #weights /= jnp.sum(weights)  # Normalize the weights
+            weights = jnp.power(self.decay_factor, jnp.arange(len(self.individuals))) 
             return jnp.average(centers, weights=weights, axis=0)
         return None
     
     def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
         if self.individuals:
             stdevs = jnp.array([ind.stdev for ind in self.individuals])
-            weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
-            weights /= jnp.sum(weights)  # Normalize the weights
+            #weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
+            #weights /= jnp.sum(weights)  # Normalize the weights
+            weights = jnp.power(self.decay_factor, jnp.arange(len(self.individuals))) 
             return jnp.average(stdevs, weights=weights, axis=0)
         return None
 
