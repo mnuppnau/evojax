@@ -1,8 +1,89 @@
 import random
 import jax.numpy as jnp
 import jax
+
+from jax import random
 from typing import List, Tuple ,Dict
-from evojax.algo.cultural.knowledge_sources import DomainKS, SituationalKS, HistoryKS, TopographicKS, NormativeKS
+from evojax.algo.cultural.knowledge_sources import initialize_domain_ks, initialize_situational_ks, initialize_history_ks, adjust_noise
+from evojax.algo.cultural.knowledge_sources import accept_domain_ks, accept_situational_ks, accept_history_ks, get_center_guidance, get_stdev_guidance
+
+
+def initialize_belief_space(population_size: int, key: int, num_clusters: int = 3):
+    belief_space = {
+        'population_size': population_size,
+        'domain_ks': initialize_domain_ks(),
+        'situational_ks': initialize_situational_ks(),
+        'history_ks': initialize_history_ks(),
+        #'topographic_ks': initialize_topographic_ks(num_clusters),
+        #'normative_ks': initialize_normative_ks(),
+        'learning_rate': 0.45
+    }
+    return assign_indexes_to_knowledge_sources(belief_space, key)
+
+def assign_indexes_to_knowledge_sources(belief_space, key):
+    population_size = belief_space['population_size']
+    indexes = jnp.arange(1, population_size)  # Exclude index 0
+
+    shuffled_numbers = jax.random.shuffle(key, indexes)
+
+    set1 = shuffled_numbers[:5]
+    set2 = shuffled_numbers[5:10]
+
+    belief_space['domain_ks']['assigned_indexes'] = [0]  # Domain KS gets the first index
+    # Update other KS based on your logic; here's an example for situational and history:
+    belief_space['situational_ks']['assigned_indexes'] = set1.tolist()
+    belief_space['history_ks']['assigned_indexes'] = set2.tolist()
+    # If there are more KS, assign them indexes in similar fashion.
+
+    # Return the updated belief space
+    return belief_space
+
+# Mapping functions to their corresponding KS
+accept_function_mapping = {
+    'domain_ks': accept_domain_ks,
+    'situational_ks': accept_situational_ks,
+    'history_ks': accept_history_ks
+}
+
+
+def influence(belief_space, scaled_noises):
+    for ks_name in ['domain_ks','situational_ks','history_ks']:  # Add or remove KS names as necessary
+        ks_data = belief_space[ks_name]
+        index_counter = 0
+        for i in ks_data['assigned_indexes']:
+            scaled_noises = adjust_noise(ks_data,scaled_noises, i, index_counter)
+            index_counter += 1
+    return scaled_noises
+
+def get_updated_params(belief_space, center, stdev):
+    combined_guidance_center = combine_guidance(belief_space, center, "center")
+    combined_guidance_stdev = combine_guidance(belief_space, stdev, "stdev")
+
+    new_center = (1 - belief_space['learning_rate']) * center + belief_space['learning_rate'] * combined_guidance_center
+    new_stdev = (1 - belief_space['learning_rate']) * stdev + belief_space['learning_rate'] * combined_guidance_stdev
+
+    return new_center, new_stdev
+
+def combine_guidance(belief_space, current_value, param_type):
+    guidance_values = []
+
+    for ks_name in ['domain_ks','situational_ks','history_ks']:  # Add or remove KS names as necessary
+        ks_data = belief_space[ks_name]
+        guidance_value = None
+        if param_type == "center":
+            guidance_value = get_center_guidance(ks_data, ks_name)
+        elif param_type == "stdev":
+            guidance_value = get_stdev_guidance(ks_data, ks_name)
+        
+        if guidance_value is not None:
+            guidance_values.append(guidance_value)
+
+    if guidance_values:
+        combined_guidance = jnp.mean(jnp.stack(guidance_values), axis=0)
+    else:
+        combined_guidance = current_value
+
+    return combined_guidance
 
 class BeliefSpace:
     def __init__(self, population_size: int, num_clusters: int = 3):

@@ -28632,3 +28632,293 @@ MNIST: 2024-03-24 20:46:27,902 [INFO] Iter=123, size=64, max=-0.5712, avg=-0.624
 MNIST: 2024-03-24 20:46:28,042 [INFO] Iter=124, size=64, max=-0.5537, avg=-0.5943, min=-0.6894, std=0.0294
 MNIST: 2024-03-24 20:46:28,186 [INFO] Iter=125, size=64, max=-0.5945, avg=-0.6405, min=-0.7300, std=0.0290
 MNIST: 2024-03-24 20:46:28,494 [INFO] Iter=126, size=64, max=-0.5686, avg=-0.6090, min=-0.6827, std=0.0263
+MNIST: 2024-03-27 17:22:19,621 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 17:22:19,621 [INFO] ==============================
+MNIST: 2024-03-27 17:22:23,984 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 17:22:55,727 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 17:22:55,727 [INFO] ==============================
+MNIST: 2024-03-27 17:23:00,098 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 19:39:43,726 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 19:39:43,726 [INFO] ==============================
+MNIST: 2024-03-27 19:39:48,084 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 19:40:12,786 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 19:40:12,786 [INFO] ==============================
+MNIST: 2024-03-27 19:40:17,143 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 19:40:18,249 [INFO] use_for_loop=False
+MNIST: 2024-03-27 19:40:18,272 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 20:02:31,924 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 20:02:31,924 [INFO] ==============================
+MNIST: 2024-03-27 20:02:36,314 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 20:02:37,443 [INFO] use_for_loop=False
+MNIST: 2024-03-27 20:02:37,467 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 20:10:45,466 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 20:10:45,466 [INFO] ==============================
+MNIST: 2024-03-27 20:10:49,863 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 20:10:50,978 [INFO] use_for_loop=False
+MNIST: 2024-03-27 20:10:51,001 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 20:13:30,382 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 20:13:30,382 [INFO] ==============================
+MNIST: 2024-03-27 20:13:34,741 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 20:13:35,858 [INFO] use_for_loop=False
+MNIST: 2024-03-27 20:13:35,882 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 20:21:24,025 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 20:21:24,025 [INFO] ==============================
+MNIST: 2024-03-27 20:21:28,410 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 20:21:29,515 [INFO] use_for_loop=False
+MNIST: 2024-03-27 20:21:29,538 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 20:27:25,535 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 20:27:25,535 [INFO] ==============================
+MNIST: 2024-03-27 20:27:29,893 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 20:27:31,000 [INFO] use_for_loop=False
+MNIST: 2024-03-27 20:27:31,023 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 20:29:05,972 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 20:29:05,972 [INFO] ==============================
+MNIST: 2024-03-27 20:29:10,363 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 20:29:11,472 [INFO] use_for_loop=False
+MNIST: 2024-03-27 20:29:11,495 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 20:35:25,465 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 20:35:25,465 [INFO] ==============================
+MNIST: 2024-03-27 20:35:29,861 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 20:35:30,967 [INFO] use_for_loop=False
+MNIST: 2024-03-27 20:35:30,990 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 20:44:03,536 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 20:44:03,536 [INFO] ==============================
+MNIST: 2024-03-27 20:44:07,902 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 20:44:09,016 [INFO] use_for_loop=False
+MNIST: 2024-03-27 20:44:09,040 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 21:00:01,602 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 21:00:01,602 [INFO] ==============================
+MNIST: 2024-03-27 21:00:05,988 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 21:00:07,106 [INFO] use_for_loop=False
+MNIST: 2024-03-27 21:00:07,130 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 21:00:31,597 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 21:00:31,597 [INFO] ==============================
+MNIST: 2024-03-27 21:00:35,948 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 21:00:37,062 [INFO] use_for_loop=False
+MNIST: 2024-03-27 21:00:37,085 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 21:12:45,002 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 21:12:45,002 [INFO] ==============================
+MNIST: 2024-03-27 21:12:49,383 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 21:12:50,499 [INFO] use_for_loop=False
+MNIST: 2024-03-27 21:12:50,522 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 21:14:14,298 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 21:14:14,298 [INFO] ==============================
+MNIST: 2024-03-27 21:14:18,671 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 21:14:19,777 [INFO] use_for_loop=False
+MNIST: 2024-03-27 21:14:19,800 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 21:15:24,977 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 21:15:24,977 [INFO] ==============================
+MNIST: 2024-03-27 21:15:29,343 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 21:15:30,454 [INFO] use_for_loop=False
+MNIST: 2024-03-27 21:15:30,477 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 21:16:45,934 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 21:16:45,934 [INFO] ==============================
+MNIST: 2024-03-27 21:16:50,307 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 21:16:51,416 [INFO] use_for_loop=False
+MNIST: 2024-03-27 21:16:51,439 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 22:55:30,162 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 22:55:30,162 [INFO] ==============================
+MNIST: 2024-03-27 22:55:34,541 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 22:55:35,659 [INFO] use_for_loop=False
+MNIST: 2024-03-27 22:55:35,682 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 22:56:06,900 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 22:56:06,900 [INFO] ==============================
+MNIST: 2024-03-27 22:56:11,251 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 22:56:12,370 [INFO] use_for_loop=False
+MNIST: 2024-03-27 22:56:12,393 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 22:57:02,515 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 22:57:02,515 [INFO] ==============================
+MNIST: 2024-03-27 22:57:06,886 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 22:57:08,004 [INFO] use_for_loop=False
+MNIST: 2024-03-27 22:57:08,027 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 22:57:13,765 [INFO] Iter=1, size=64, max=-2.2969, avg=-2.3044, min=-2.3113, std=0.0032
+MNIST: 2024-03-27 22:57:14,268 [INFO] Iter=2, size=64, max=-2.2966, avg=-2.3049, min=-2.3155, std=0.0042
+MNIST: 2024-03-27 22:57:14,479 [INFO] Iter=3, size=64, max=-2.2965, avg=-2.3036, min=-2.3130, std=0.0038
+MNIST: 2024-03-27 22:57:14,706 [INFO] Iter=4, size=64, max=-2.2966, avg=-2.3045, min=-2.3181, std=0.0038
+MNIST: 2024-03-27 22:57:15,025 [INFO] Iter=5, size=64, max=-2.2929, avg=-2.3029, min=-2.3131, std=0.0034
+MNIST: 2024-03-27 22:57:15,283 [INFO] Iter=6, size=64, max=-2.2962, avg=-2.3045, min=-2.3141, std=0.0037
+MNIST: 2024-03-27 22:57:15,506 [INFO] Iter=7, size=64, max=-2.2951, avg=-2.3024, min=-2.3073, std=0.0029
+MNIST: 2024-03-27 22:57:15,727 [INFO] Iter=8, size=64, max=-2.2850, avg=-2.3021, min=-2.3133, std=0.0054
+MNIST: 2024-03-27 22:57:15,950 [INFO] Iter=9, size=64, max=-2.2899, avg=-2.3008, min=-2.3130, std=0.0044
+MNIST: 2024-03-27 22:57:16,175 [INFO] Iter=10, size=64, max=-2.2933, avg=-2.3010, min=-2.3081, std=0.0033
+MNIST: 2024-03-27 22:57:16,401 [INFO] Iter=11, size=64, max=-2.2918, avg=-2.2997, min=-2.3086, std=0.0042
+MNIST: 2024-03-27 22:57:16,623 [INFO] Iter=12, size=64, max=-2.2818, avg=-2.2930, min=-2.3054, std=0.0056
+MNIST: 2024-03-27 22:57:16,848 [INFO] Iter=13, size=64, max=-2.2474, avg=-2.2840, min=-2.3047, std=0.0088
+MNIST: 2024-03-27 22:57:17,073 [INFO] Iter=14, size=64, max=-2.2702, avg=-2.2954, min=-2.3310, std=0.0102
+MNIST: 2024-03-27 22:57:17,300 [INFO] Iter=15, size=64, max=-2.2869, avg=-2.2966, min=-2.3062, std=0.0039
+MNIST: 2024-03-27 22:57:17,527 [INFO] Iter=16, size=64, max=-2.2820, avg=-2.2952, min=-2.3070, std=0.0059
+MNIST: 2024-03-27 22:57:17,752 [INFO] Iter=17, size=64, max=-2.2275, avg=-2.2652, min=-2.2948, std=0.0140
+MNIST: 2024-03-27 22:57:17,977 [INFO] Iter=18, size=64, max=-2.2282, avg=-2.2640, min=-2.2976, std=0.0153
+MNIST: 2024-03-27 22:57:18,201 [INFO] Iter=19, size=64, max=-2.2628, avg=-2.2929, min=-2.3064, std=0.0073
+MNIST: 2024-03-27 22:57:18,426 [INFO] Iter=20, size=64, max=-2.2753, avg=-2.2910, min=-2.3079, std=0.0069
+MNIST: 2024-03-27 22:57:18,654 [INFO] Iter=21, size=64, max=-2.2518, avg=-2.2832, min=-2.3019, std=0.0090
+MNIST: 2024-03-27 22:57:18,877 [INFO] Iter=22, size=64, max=-2.1499, avg=-2.1964, min=-2.2472, std=0.0214
+MNIST: 2024-03-27 22:57:19,100 [INFO] Iter=23, size=64, max=-2.1360, avg=-2.1777, min=-2.2732, std=0.0280
+MNIST: 2024-03-27 22:57:19,323 [INFO] Iter=24, size=64, max=-2.1213, avg=-2.1633, min=-2.2356, std=0.0268
+MNIST: 2024-03-27 22:57:19,549 [INFO] Iter=25, size=64, max=-2.0870, avg=-2.1493, min=-2.2515, std=0.0365
+MNIST: 2024-03-27 22:57:19,774 [INFO] Iter=26, size=64, max=-2.0624, avg=-2.1089, min=-2.1872, std=0.0321
+MNIST: 2024-03-27 22:57:20,066 [INFO] Iter=27, size=64, max=-2.0025, avg=-2.0887, min=-2.1933, std=0.0405
+MNIST: 2024-03-27 22:57:20,292 [INFO] Iter=28, size=64, max=-1.9940, avg=-2.0595, min=-2.1502, std=0.0385
+MNIST: 2024-03-27 22:57:20,519 [INFO] Iter=29, size=64, max=-1.9646, avg=-2.0427, min=-2.1510, std=0.0472
+MNIST: 2024-03-27 22:57:20,743 [INFO] Iter=30, size=64, max=-1.9157, avg=-2.0207, min=-2.1319, std=0.0536
+MNIST: 2024-03-27 22:57:20,970 [INFO] Iter=31, size=64, max=-1.9217, avg=-2.0050, min=-2.1609, std=0.0584
+MNIST: 2024-03-27 22:57:21,198 [INFO] Iter=32, size=64, max=-2.1890, avg=-2.2331, min=-2.2617, std=0.0156
+MNIST: 2024-03-27 22:57:21,424 [INFO] Iter=33, size=64, max=-2.1741, avg=-2.2253, min=-2.2684, std=0.0159
+MNIST: 2024-03-27 22:57:21,651 [INFO] Iter=34, size=64, max=-1.8104, avg=-1.9167, min=-2.0434, std=0.0614
+MNIST: 2024-03-27 22:57:21,876 [INFO] Iter=35, size=64, max=-1.7910, avg=-1.8970, min=-2.1193, std=0.0647
+MNIST: 2024-03-27 22:57:22,103 [INFO] Iter=36, size=64, max=-1.7345, avg=-1.8376, min=-2.0351, std=0.0671
+MNIST: 2024-03-27 22:57:22,331 [INFO] Iter=37, size=64, max=-1.7238, avg=-1.8322, min=-2.0079, std=0.0704
+MNIST: 2024-03-27 22:57:22,559 [INFO] Iter=38, size=64, max=-1.6973, avg=-1.8324, min=-2.0618, std=0.0839
+MNIST: 2024-03-27 22:57:22,786 [INFO] Iter=39, size=64, max=-1.6549, avg=-1.7750, min=-2.0027, std=0.0763
+MNIST: 2024-03-27 22:57:23,012 [INFO] Iter=40, size=64, max=-1.5932, avg=-1.7297, min=-1.9431, std=0.0850
+MNIST: 2024-03-27 22:57:23,239 [INFO] Iter=41, size=64, max=-1.5694, avg=-1.7265, min=-1.9549, std=0.0879
+MNIST: 2024-03-27 22:57:23,462 [INFO] Iter=42, size=64, max=-1.5123, avg=-1.6774, min=-1.8981, std=0.0852
+MNIST: 2024-03-27 22:57:23,687 [INFO] Iter=43, size=64, max=-1.5071, avg=-1.6598, min=-1.8244, std=0.0830
+MNIST: 2024-03-27 22:57:23,913 [INFO] Iter=44, size=64, max=-1.4827, avg=-1.6416, min=-1.8580, std=0.0864
+MNIST: 2024-03-27 22:57:24,142 [INFO] Iter=45, size=64, max=-1.4648, avg=-1.6252, min=-1.9791, std=0.0998
+MNIST: 2024-03-27 22:57:24,369 [INFO] Iter=46, size=64, max=-1.4445, avg=-1.6389, min=-2.1843, std=0.1337
+MNIST: 2024-03-27 22:57:24,595 [INFO] Iter=47, size=64, max=-1.4629, avg=-1.6393, min=-1.9169, std=0.1025
+MNIST: 2024-03-27 22:57:24,826 [INFO] Iter=48, size=64, max=-2.0120, avg=-2.1045, min=-2.1879, std=0.0326
+MNIST: 2024-03-27 22:57:25,055 [INFO] Iter=49, size=64, max=-2.0048, avg=-2.1055, min=-2.1821, std=0.0353
+MNIST: 2024-03-27 22:57:25,284 [INFO] Iter=50, size=64, max=-1.3220, avg=-1.5443, min=-1.8175, std=0.1280
+MNIST: 2024-03-27 22:57:25,512 [INFO] Iter=51, size=64, max=-1.2967, avg=-1.5123, min=-1.9653, std=0.1346
+MNIST: 2024-03-27 22:57:25,738 [INFO] Iter=52, size=64, max=-1.3028, avg=-1.4956, min=-1.8139, std=0.1170
+MNIST: 2024-03-27 22:57:25,968 [INFO] Iter=53, size=64, max=-1.9991, avg=-2.0831, min=-2.1455, std=0.0311
+MNIST: 2024-03-27 22:57:26,198 [INFO] Iter=54, size=64, max=-1.9887, avg=-2.0582, min=-2.1586, std=0.0395
+MNIST: 2024-03-27 22:57:26,425 [INFO] Iter=55, size=64, max=-1.1879, avg=-1.4150, min=-1.8641, std=0.1374
+MNIST: 2024-03-27 22:57:26,733 [INFO] Iter=56, size=64, max=-1.2000, avg=-1.4344, min=-1.7925, std=0.1349
+MNIST: 2024-03-27 22:57:26,965 [INFO] Iter=57, size=64, max=-1.9602, avg=-2.0443, min=-2.1523, std=0.0414
+MNIST: 2024-03-27 22:57:27,196 [INFO] Iter=58, size=64, max=-1.9275, avg=-2.0149, min=-2.1025, std=0.0410
+MNIST: 2024-03-27 22:57:27,423 [INFO] Iter=59, size=64, max=-1.1600, avg=-1.4120, min=-1.7862, std=0.1435
+MNIST: 2024-03-27 22:57:27,652 [INFO] Iter=60, size=64, max=-1.1833, avg=-1.4440, min=-1.9518, std=0.1839
+MNIST: 2024-03-27 22:57:27,881 [INFO] Iter=61, size=64, max=-1.9189, avg=-1.9929, min=-2.0882, std=0.0434
+MNIST: 2024-03-27 22:57:28,110 [INFO] Iter=62, size=64, max=-1.8725, avg=-1.9718, min=-2.0509, std=0.0443
+MNIST: 2024-03-27 22:57:28,336 [INFO] Iter=63, size=64, max=-1.1365, avg=-1.4081, min=-2.4249, std=0.2155
+MNIST: 2024-03-27 22:57:28,566 [INFO] Iter=64, size=64, max=-1.0161, avg=-1.2696, min=-1.6471, std=0.1620
+MNIST: 2024-03-27 22:57:28,797 [INFO] Iter=65, size=64, max=-1.0459, avg=-1.3337, min=-1.8274, std=0.1820
+MNIST: 2024-03-27 22:57:29,026 [INFO] Iter=66, size=64, max=-1.8222, avg=-1.9441, min=-2.0578, std=0.0496
+MNIST: 2024-03-27 22:57:29,255 [INFO] Iter=67, size=64, max=-1.8765, avg=-1.9448, min=-2.0389, std=0.0444
+MNIST: 2024-03-27 22:57:29,485 [INFO] Iter=68, size=64, max=-1.8436, avg=-1.9284, min=-2.0395, std=0.0509
+MNIST: 2024-03-27 22:57:29,713 [INFO] Iter=69, size=64, max=-0.9780, avg=-1.2831, min=-1.5628, std=0.1596
+MNIST: 2024-03-27 22:57:29,943 [INFO] Iter=70, size=64, max=-1.0000, avg=-1.3190, min=-1.9266, std=0.1920
+MNIST: 2024-03-27 22:57:30,174 [INFO] Iter=71, size=64, max=-1.7837, avg=-1.8814, min=-1.9844, std=0.0520
+MNIST: 2024-03-27 22:57:30,407 [INFO] Iter=72, size=64, max=-1.7316, avg=-1.9007, min=-2.0355, std=0.0590
+MNIST: 2024-03-27 22:57:30,639 [INFO] Iter=73, size=64, max=-0.9406, avg=-1.2956, min=-1.8113, std=0.2054
+MNIST: 2024-03-27 22:57:30,866 [INFO] Iter=74, size=64, max=-0.9600, avg=-1.2671, min=-1.7759, std=0.1974
+MNIST: 2024-03-27 22:57:31,097 [INFO] Iter=75, size=64, max=-1.7543, avg=-1.8652, min=-2.0022, std=0.0574
+MNIST: 2024-03-27 22:57:31,419 [INFO] Iter=76, size=64, max=-1.7658, avg=-1.8589, min=-1.9821, std=0.0586
+MNIST: 2024-03-27 22:57:31,652 [INFO] Iter=77, size=64, max=-1.7404, avg=-1.8468, min=-1.9853, std=0.0620
+MNIST: 2024-03-27 23:03:43,852 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 23:03:43,852 [INFO] ==============================
+MNIST: 2024-03-27 23:03:48,208 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 23:03:49,324 [INFO] use_for_loop=False
+MNIST: 2024-03-27 23:03:49,347 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-27 23:03:55,097 [INFO] Iter=1, size=64, max=-2.2969, avg=-2.3044, min=-2.3113, std=0.0032
+MNIST: 2024-03-27 23:03:55,602 [INFO] Iter=2, size=64, max=-2.2966, avg=-2.3049, min=-2.3155, std=0.0042
+MNIST: 2024-03-27 23:03:55,813 [INFO] Iter=3, size=64, max=-2.2965, avg=-2.3036, min=-2.3130, std=0.0038
+MNIST: 2024-03-27 23:03:56,041 [INFO] Iter=4, size=64, max=-2.2966, avg=-2.3045, min=-2.3181, std=0.0038
+MNIST: 2024-03-27 23:03:56,362 [INFO] Iter=5, size=64, max=-2.2929, avg=-2.3029, min=-2.3131, std=0.0034
+MNIST: 2024-03-27 23:03:56,615 [INFO] Iter=6, size=64, max=-2.2962, avg=-2.3045, min=-2.3141, std=0.0037
+MNIST: 2024-03-27 23:03:56,840 [INFO] Iter=7, size=64, max=-2.2951, avg=-2.3024, min=-2.3073, std=0.0029
+MNIST: 2024-03-27 23:03:57,062 [INFO] Iter=8, size=64, max=-2.2850, avg=-2.3021, min=-2.3133, std=0.0054
+MNIST: 2024-03-27 23:03:57,286 [INFO] Iter=9, size=64, max=-2.2899, avg=-2.3008, min=-2.3130, std=0.0044
+MNIST: 2024-03-27 23:03:57,510 [INFO] Iter=10, size=64, max=-2.2933, avg=-2.3010, min=-2.3081, std=0.0033
+MNIST: 2024-03-27 23:03:57,735 [INFO] Iter=11, size=64, max=-2.2918, avg=-2.2997, min=-2.3086, std=0.0042
+MNIST: 2024-03-27 23:03:57,958 [INFO] Iter=12, size=64, max=-2.2818, avg=-2.2930, min=-2.3054, std=0.0056
+MNIST: 2024-03-27 23:03:58,180 [INFO] Iter=13, size=64, max=-2.2474, avg=-2.2840, min=-2.3047, std=0.0088
+MNIST: 2024-03-27 23:03:58,404 [INFO] Iter=14, size=64, max=-2.2702, avg=-2.2954, min=-2.3310, std=0.0102
+MNIST: 2024-03-27 23:03:58,629 [INFO] Iter=15, size=64, max=-2.2869, avg=-2.2966, min=-2.3062, std=0.0039
+MNIST: 2024-03-27 23:03:58,853 [INFO] Iter=16, size=64, max=-2.2820, avg=-2.2952, min=-2.3070, std=0.0059
+MNIST: 2024-03-27 23:03:59,076 [INFO] Iter=17, size=64, max=-2.2275, avg=-2.2652, min=-2.2948, std=0.0140
+MNIST: 2024-03-27 23:03:59,298 [INFO] Iter=18, size=64, max=-2.2282, avg=-2.2640, min=-2.2976, std=0.0153
+MNIST: 2024-03-27 23:03:59,521 [INFO] Iter=19, size=64, max=-2.2628, avg=-2.2929, min=-2.3064, std=0.0073
+MNIST: 2024-03-27 23:03:59,747 [INFO] Iter=20, size=64, max=-2.2753, avg=-2.2910, min=-2.3079, std=0.0069
+MNIST: 2024-03-27 23:03:59,974 [INFO] Iter=21, size=64, max=-2.2518, avg=-2.2832, min=-2.3019, std=0.0090
+MNIST: 2024-03-27 23:04:00,199 [INFO] Iter=22, size=64, max=-2.1499, avg=-2.1964, min=-2.2472, std=0.0214
+MNIST: 2024-03-27 23:04:00,425 [INFO] Iter=23, size=64, max=-2.1360, avg=-2.1777, min=-2.2732, std=0.0280
+MNIST: 2024-03-27 23:04:00,649 [INFO] Iter=24, size=64, max=-2.1213, avg=-2.1633, min=-2.2356, std=0.0268
+MNIST: 2024-03-27 23:04:00,873 [INFO] Iter=25, size=64, max=-2.0870, avg=-2.1493, min=-2.2515, std=0.0365
+MNIST: 2024-03-27 23:04:01,099 [INFO] Iter=26, size=64, max=-2.0624, avg=-2.1089, min=-2.1872, std=0.0321
+MNIST: 2024-03-27 23:04:01,390 [INFO] Iter=27, size=64, max=-2.0025, avg=-2.0887, min=-2.1933, std=0.0405
+MNIST: 2024-03-27 23:04:01,615 [INFO] Iter=28, size=64, max=-1.9940, avg=-2.0595, min=-2.1502, std=0.0385
+MNIST: 2024-03-27 23:04:01,837 [INFO] Iter=29, size=64, max=-1.9646, avg=-2.0427, min=-2.1510, std=0.0472
+MNIST: 2024-03-27 23:04:02,062 [INFO] Iter=30, size=64, max=-1.9157, avg=-2.0207, min=-2.1319, std=0.0536
+MNIST: 2024-03-27 23:04:02,286 [INFO] Iter=31, size=64, max=-1.9217, avg=-2.0050, min=-2.1609, std=0.0584
+MNIST: 2024-03-27 23:04:02,513 [INFO] Iter=32, size=64, max=-2.1890, avg=-2.2331, min=-2.2617, std=0.0156
+MNIST: 2024-03-27 23:04:02,738 [INFO] Iter=33, size=64, max=-2.1741, avg=-2.2253, min=-2.2684, std=0.0159
+MNIST: 2024-03-27 23:04:02,964 [INFO] Iter=34, size=64, max=-1.8104, avg=-1.9167, min=-2.0434, std=0.0614
+MNIST: 2024-03-27 23:04:03,190 [INFO] Iter=35, size=64, max=-1.7910, avg=-1.8970, min=-2.1193, std=0.0647
+MNIST: 2024-03-27 23:04:03,416 [INFO] Iter=36, size=64, max=-1.7345, avg=-1.8376, min=-2.0351, std=0.0671
+MNIST: 2024-03-27 23:04:03,642 [INFO] Iter=37, size=64, max=-1.7238, avg=-1.8322, min=-2.0079, std=0.0704
+MNIST: 2024-03-27 23:04:03,869 [INFO] Iter=38, size=64, max=-1.6973, avg=-1.8324, min=-2.0618, std=0.0839
+MNIST: 2024-03-27 23:04:04,096 [INFO] Iter=39, size=64, max=-1.6549, avg=-1.7750, min=-2.0027, std=0.0763
+MNIST: 2024-03-27 23:04:04,325 [INFO] Iter=40, size=64, max=-1.5932, avg=-1.7297, min=-1.9431, std=0.0850
+MNIST: 2024-03-27 23:04:04,551 [INFO] Iter=41, size=64, max=-1.5694, avg=-1.7265, min=-1.9549, std=0.0879
+MNIST: 2024-03-27 23:04:04,775 [INFO] Iter=42, size=64, max=-1.5123, avg=-1.6774, min=-1.8981, std=0.0852
+MNIST: 2024-03-27 23:04:05,002 [INFO] Iter=43, size=64, max=-1.5071, avg=-1.6598, min=-1.8244, std=0.0830
+MNIST: 2024-03-27 23:04:05,231 [INFO] Iter=44, size=64, max=-1.4827, avg=-1.6416, min=-1.8580, std=0.0864
+MNIST: 2024-03-27 23:04:05,457 [INFO] Iter=45, size=64, max=-1.4648, avg=-1.6252, min=-1.9791, std=0.0998
+MNIST: 2024-03-27 23:04:05,685 [INFO] Iter=46, size=64, max=-1.4445, avg=-1.6389, min=-2.1843, std=0.1337
+MNIST: 2024-03-27 23:04:05,909 [INFO] Iter=47, size=64, max=-1.4629, avg=-1.6393, min=-1.9169, std=0.1025
+MNIST: 2024-03-27 23:04:06,138 [INFO] Iter=48, size=64, max=-2.0120, avg=-2.1045, min=-2.1879, std=0.0326
+MNIST: 2024-03-27 23:04:06,365 [INFO] Iter=49, size=64, max=-2.0048, avg=-2.1055, min=-2.1821, std=0.0353
+MNIST: 2024-03-27 23:04:06,593 [INFO] Iter=50, size=64, max=-1.3220, avg=-1.5443, min=-1.8175, std=0.1280
+MNIST: 2024-03-27 23:04:06,820 [INFO] Iter=51, size=64, max=-1.2967, avg=-1.5123, min=-1.9653, std=0.1346
+MNIST: 2024-03-27 23:04:07,048 [INFO] Iter=52, size=64, max=-1.3028, avg=-1.4956, min=-1.8139, std=0.1170
+MNIST: 2024-03-27 23:04:07,275 [INFO] Iter=53, size=64, max=-1.9991, avg=-2.0831, min=-2.1455, std=0.0311
+MNIST: 2024-03-27 23:04:07,503 [INFO] Iter=54, size=64, max=-1.9887, avg=-2.0582, min=-2.1586, std=0.0395
+MNIST: 2024-03-27 23:04:07,731 [INFO] Iter=55, size=64, max=-1.1879, avg=-1.4150, min=-1.8641, std=0.1374
+MNIST: 2024-03-27 23:04:08,034 [INFO] Iter=56, size=64, max=-1.2000, avg=-1.4344, min=-1.7925, std=0.1349
+MNIST: 2024-03-27 23:04:08,266 [INFO] Iter=57, size=64, max=-1.9602, avg=-2.0443, min=-2.1523, std=0.0414
+MNIST: 2024-03-27 23:04:08,496 [INFO] Iter=58, size=64, max=-1.9275, avg=-2.0149, min=-2.1025, std=0.0410
+MNIST: 2024-03-27 23:04:08,725 [INFO] Iter=59, size=64, max=-1.1600, avg=-1.4120, min=-1.7862, std=0.1435
+MNIST: 2024-03-27 23:04:08,953 [INFO] Iter=60, size=64, max=-1.1833, avg=-1.4440, min=-1.9518, std=0.1839
+MNIST: 2024-03-27 23:04:09,183 [INFO] Iter=61, size=64, max=-1.9189, avg=-1.9929, min=-2.0882, std=0.0434
+MNIST: 2024-03-27 23:04:09,411 [INFO] Iter=62, size=64, max=-1.8725, avg=-1.9718, min=-2.0509, std=0.0443
+MNIST: 2024-03-27 23:04:09,641 [INFO] Iter=63, size=64, max=-1.1365, avg=-1.4081, min=-2.4249, std=0.2155
+MNIST: 2024-03-27 23:04:09,870 [INFO] Iter=64, size=64, max=-1.0161, avg=-1.2696, min=-1.6471, std=0.1620
+MNIST: 2024-03-27 23:04:10,100 [INFO] Iter=65, size=64, max=-1.0459, avg=-1.3337, min=-1.8274, std=0.1820
+MNIST: 2024-03-27 23:04:10,326 [INFO] Iter=66, size=64, max=-1.8222, avg=-1.9441, min=-2.0578, std=0.0496
+MNIST: 2024-03-27 23:04:10,555 [INFO] Iter=67, size=64, max=-1.8765, avg=-1.9448, min=-2.0389, std=0.0444
+MNIST: 2024-03-27 23:04:10,784 [INFO] Iter=68, size=64, max=-1.8436, avg=-1.9284, min=-2.0395, std=0.0509
+MNIST: 2024-03-27 23:04:11,012 [INFO] Iter=69, size=64, max=-0.9780, avg=-1.2831, min=-1.5628, std=0.1596
+MNIST: 2024-03-27 23:04:11,239 [INFO] Iter=70, size=64, max=-1.0000, avg=-1.3190, min=-1.9266, std=0.1920
+MNIST: 2024-03-27 23:04:11,471 [INFO] Iter=71, size=64, max=-1.7837, avg=-1.8814, min=-1.9844, std=0.0520
+MNIST: 2024-03-27 23:04:11,703 [INFO] Iter=72, size=64, max=-1.7316, avg=-1.9007, min=-2.0355, std=0.0590
+MNIST: 2024-03-27 23:04:11,932 [INFO] Iter=73, size=64, max=-0.9406, avg=-1.2956, min=-1.8113, std=0.2054
+MNIST: 2024-03-27 23:04:12,160 [INFO] Iter=74, size=64, max=-0.9600, avg=-1.2671, min=-1.7759, std=0.1974
+MNIST: 2024-03-27 23:04:12,392 [INFO] Iter=75, size=64, max=-1.7543, avg=-1.8652, min=-2.0022, std=0.0574
+MNIST: 2024-03-27 23:04:12,713 [INFO] Iter=76, size=64, max=-1.7658, avg=-1.8589, min=-1.9821, std=0.0586
+MNIST: 2024-03-27 23:04:12,944 [INFO] Iter=77, size=64, max=-1.7404, avg=-1.8468, min=-1.9853, std=0.0620
+MNIST: 2024-03-27 23:04:13,173 [INFO] Iter=78, size=64, max=-0.8920, avg=-1.2272, min=-1.7585, std=0.2067
+MNIST: 2024-03-27 23:04:13,405 [INFO] Iter=79, size=64, max=-0.8708, avg=-1.3234, min=-2.2195, std=0.2968
+MNIST: 2024-03-27 23:04:13,635 [INFO] Iter=80, size=64, max=-0.8586, avg=-1.2391, min=-1.8142, std=0.2162
+MNIST: 2024-03-27 23:04:13,866 [INFO] Iter=81, size=64, max=-0.9078, avg=-1.2598, min=-1.7722, std=0.2009
+MNIST: 2024-03-27 23:04:14,099 [INFO] Iter=82, size=64, max=-1.6673, avg=-1.8235, min=-1.9475, std=0.0631
+MNIST: 2024-03-27 23:04:14,328 [INFO] Iter=83, size=64, max=-1.6715, avg=-1.7992, min=-1.9548, std=0.0687
+MNIST: 2024-03-27 23:04:14,560 [INFO] Iter=84, size=64, max=-1.6864, avg=-1.7974, min=-1.9410, std=0.0679
+MNIST: 2024-03-27 23:05:35,254 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-27 23:05:35,254 [INFO] ==============================
+MNIST: 2024-03-27 23:05:39,634 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-27 23:05:40,756 [INFO] use_for_loop=False
+MNIST: 2024-03-27 23:05:40,779 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-28 17:04:44,823 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-28 17:04:44,823 [INFO] ==============================
+MNIST: 2024-03-28 17:04:49,207 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-28 17:04:50,321 [INFO] use_for_loop=False
+MNIST: 2024-03-28 17:04:50,345 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-28 17:10:39,082 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-28 17:10:39,082 [INFO] ==============================
+MNIST: 2024-03-28 17:10:43,446 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-28 17:10:44,579 [INFO] use_for_loop=False
+MNIST: 2024-03-28 17:10:44,602 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-28 17:22:06,481 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-28 17:22:06,481 [INFO] ==============================
+MNIST: 2024-03-28 17:22:10,849 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-28 17:22:11,972 [INFO] use_for_loop=False
+MNIST: 2024-03-28 17:22:11,996 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-03-28 17:25:25,865 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-03-28 17:25:25,865 [INFO] ==============================
+MNIST: 2024-03-28 17:25:30,229 [INFO] ConvNetPolicy.num_params = 11274
+MNIST: 2024-03-28 17:25:31,355 [INFO] use_for_loop=False
+MNIST: 2024-03-28 17:25:31,377 [INFO] Start to train for 5000 iterations.

@@ -37,8 +37,9 @@ except ModuleNotFoundError:
 from evojax.algo.base import NEAlgorithm
 from evojax.util import create_logger
 
-from evojax.algo.cultural.population_space import PopulationSpace
-from evojax.algo.cultural.belief_space import BeliefSpace
+from evojax.algo.cultural.population_space import initialize_population, update_population
+
+from evojax.algo.cultural.belief_space import initialize_belief_space, accept_function_mapping, get_updated_params, influence
 
 @partial(jax.jit, static_argnums=(1,))
 def process_scores(
@@ -86,18 +87,42 @@ def update_stdev(
     max_allowed = stdev + allowed_delta
     return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
 
-@partial(jax.jit, static_argnums=(2,3))
+@jax.jit
+def update_center_and_stdev(
+    center: jnp.ndarray, 
+    stdev: jnp.ndarray, 
+    belief_space: dict, 
+    previous_best_score: float, 
+    best_score: float, 
+    get_updated_params: Callable
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def update():
+        return get_updated_params(belief_space, center, stdev)
+    
+    def no_update():
+        return center, stdev
+
+    update_needed = (previous_best_score is not None) & (best_score is not None) & (best_score < previous_best_score)
+    return jax.lax.cond(update_needed, update, no_update)
+
+
+@partial(jax.jit, static_argnums=(3,4))
 def ask_func(
     key: jnp.ndarray,
     stdev: jnp.ndarray,
+    center: jnp.ndarray,
     num_directions: int,
     solution_size: int,
-) -> jnp.ndarray:
+    belief_space: dict,
+) -> Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]:
     next_key, key = random.split(key)
     scaled_noises = random.normal(key, [num_directions, solution_size]) * stdev
     # Apply the influence adjustments to the scaled noises
-    
-    return next_key, scaled_noises
+    scaled_noises = influence(belief_space,scaled_noises)
+        
+    solutions = jnp.hstack([center + scaled_noises, center - scaled_noises]).reshape(-1, solution_size)    
+ 
+    return next_key, scaled_noises, solutions
 
 class PGPE(NEAlgorithm):
     """Policy Gradient with Parameter-based Exploration (PGPE) algorithm.
@@ -207,42 +232,51 @@ class PGPE(NEAlgorithm):
         self._previous_best_score = None
         self._best_score = None
 
-        self.population_space = PopulationSpace(self.pop_size)
-        self.population_space.initialize(self._center, self._stdev)
+        self.population_space = initialize_population(self.pop_size, self._center, self._stdev)
 
-        self.belief_space = BeliefSpace(population_size=self.pop_size)
+        self.belief_space = initialize_belief_space(population_size=self.pop_size, key=self._key)
         #self.belief_space.assign_indexes_to_knowledge_sources()
 
-    def ask(self) -> jnp.ndarray:
+        #self._get_updated_params = jax.jit(get_updated_params)
+        self._influence = jax.jit(influence)
+
         stdev = 0
         center = 0
-        stdev = self._stdev
-        center = self._center
+
+    def ask(self) -> jnp.ndarray:
+        self._center, self._stdev = update_center_and_stdev(
+            self._center, 
+            self._stdev, 
+            self.belief_space, 
+            self._previous_best_score, 
+            self._best_score, 
+            get_updated_params,
+        )
         # Retrieve updated center and stdev from the belief space if available
-        if self._previous_best_score is not None and self._best_score is not None:
-            if self._best_score < self._previous_best_score:
-                print("Updating center and stdev")
-                center, stdev = self.belief_space.get_updated_params(self._center, self._stdev)
-                self._center = center
-                self._stdev = stdev
-            else:
-                center, stdev = self._center, self._stdev
-        else:
-            center, stdev = self._center, self._stdev
+        #if self._previous_best_score is not None and self._best_score is not None:
+        #    if self._best_score < self._previous_best_score:
+        #        print("Updating center and stdev")
+        #        center, stdev = get_updated_params(self.belief_space ,self._center, self._stdev)
+        #        self._center = center
+        #        self._stdev = stdev
+        #    else:
+        #        center, stdev = self._center, self._stdev
+        #else:
+        #    center, stdev = self._center, self._stdev
         
-        self._key, scaled_noises, = ask_func(
+        #belief_space = self.belief_space
+        self._key, self._scaled_noises, self._solutions = ask_func(
             self._key,
             stdev,
+            center,
             self._num_directions,
             self._center.size,
+            self.belief_space,
         )
         #next_key, key = random.split(self._key)
         #scaled_noises = random.normal(key, [self._num_directions, self._center.size]) * stdev
         
-        self._scaled_noises = self.belief_space.influence(scaled_noises)
-        
-        self._solutions = jnp.hstack([center + self._scaled_noises, center - self._scaled_noises]).reshape(-1, self._center.size)    
-        # Apply the influence adjustments to the scaled noises
+                # Apply the influence adjustments to the scaled noises
        
         #self._solutions = jnp.hstack(
         #    [center + self._scaled_noises, center - self._scaled_noises]
@@ -257,24 +291,59 @@ class PGPE(NEAlgorithm):
         return self._solutions
 
     def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:
-        fitness_scores = process_scores(fitness, self._solution_ranking)
+        self.fitness_scores = process_scores(fitness, self._solution_ranking)
         self._previous_best_score = np.array(fitness).max() if self._best_score is None else self._best_score
         #print(f"Previous best score: {self._previous_best_score}")
         self._best_score = np.array(fitness).max()
         #print(f"Current best score: {self._best_score}")
        
-        self.population_space.update(fitness_scores, self._center, self._stdev, self._scaled_noises)
+        update_population(
+            fitness_scores=self.fitness_scores,
+            center=self._center,
+            stdev=self._stdev,
+            scaled_noises=self._scaled_noises
+        )
 
-        self.belief_space.accept(self.population_space.individuals)
+        #individuals_fitness_score = [{'individual': ind, 'fitness_score': score} 
+        #                     for ind, score in zip(self.population_space, self.population_space['fitness_scores'])]
         
-        self.belief_space.update()
+
+        #best_individual = min(individuals_fitness_score, key=lambda x: x['fitness_score'])
+
+        # Assuming self.population_space is your list of dictionaries
+        population_space = self.population_space  # Example, replace with your actual list
+        
+        # Initialize a variable to hold the dict with the fitness value closest to zero
+        best_individual = None
+        
+        # Initialize a variable to store the smallest difference found so far; start with infinity for comparison
+        smallest_difference = float('inf')
+        
+        for individual in population_space:
+            # Calculate the absolute difference from zero
+            difference = abs(individual['fitness_score'] - 0)
+            
+            # If this difference is smaller than the smallest found so far, update the closest_to_zero
+            if difference < smallest_difference:
+                best_individual = individual
+                smallest_difference = difference
+        
+        # closest_to_zero now holds the dict with the fitness value closest to zero
+
+        #self.belief_space.accept(self.population_space.individuals)
+        
+        #self.belief_space.update()
+
+        for ks_type in ['domain_ks', 'situational_ks', 'history_ks']:
+            self.belief_space[ks_type] = accept_function_mapping[ks_type](self.belief_space[ks_type], best_individual)
+            #self.belief_space[ks_type] = update_belief_space(self.belief_space, ks_type)
 
         #print("Domain KS:", self.belief_space.domain_ks)
         #print("Situational KS:", self.belief_space.situational_ks)
         #print("History KS:", self.belief_space.history_ks)
         
         grad_center, grad_stdev = compute_reinforce_update(
-            fitness_scores=fitness_scores,
+            fitness_scores=self.fitness_scores,
             scaled_noises=self._scaled_noises,
             stdev=self._stdev,
         )
