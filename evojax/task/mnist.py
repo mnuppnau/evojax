@@ -72,8 +72,24 @@ class MNIST(VectorizedTask):
             sys.exit(1)
 
         dataset = datasets.MNIST('./data', train=not test, download=True)
-        data = np.expand_dims(dataset.data.numpy() / 255., axis=-1)
-        labels = dataset.targets.numpy()
+
+        if not test:
+            data_full = dataset.data.numpy()
+            labels_full = dataset.targets.numpy()
+            
+            # Calculate indices for 10% of the dataset
+            indices = np.random.choice(len(data_full), int(len(data_full) * 0.02), replace=False)
+            
+            # Extract the data and labels for the subset
+            data_subset = data_full[indices] / 255.  # Normalize the data
+            data = np.expand_dims(data_subset, axis=-1)  # Add channel dimension
+            labels = labels_full[indices]
+
+        else:
+            data = np.expand_dims(dataset.data.numpy() / 255., axis=-1)
+            labels = dataset.targets.numpy()
+
+        print(f"Data shape: {data.shape}")
 
         def reset_fn(key):
             if test:
