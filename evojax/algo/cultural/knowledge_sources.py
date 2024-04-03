@@ -2,324 +2,334 @@
 
 from typing import Dict, List, Optional
 import jax.numpy as jnp
+import jax
+import jax.tree_util
+import jax.lax
+import numpy as np
+import copy
 
 from evojax.algo.cultural.population_space import Individual
 
-def initialize_domain_ks():
-    return {
-        'individuals': [],  # List to store historical individuals; consider using a JAX-friendly structure if needed.
-        'assigned_indexes': None,  
-        'individual_count': 0,
-    }
+def initialize_domain_ks(param_size: int):
+    return (
+        jnp.zeros(param_size), # center
+        jnp.ones(param_size), # stdev
+        jnp.array([1.0]), # noise_magnitude
+        jnp.array([0.0]) # fitness_score
+        )
 
-def initialize_situational_ks(max_individuals: int = 100):
-    return {
-        'individuals': [],  # List to store historical individuals; consider using a JAX-friendly structure if needed.
-        'assigned_indexes': None,
-        'individual_count': 0,
-        'max_individuals': max_individuals,
-    }
+def initialize_situational_ks(param_size: int, max_individuals: int = 100):
+    # Pre-allocate arrays with zeros for each individual property, given max_individuals
+    # Assuming 'center' and 'stdev' are of size 'param_size'
+    return (
+        jnp.zeros((param_size, max_individuals)), # center
+        jnp.zeros((param_size, max_individuals)), # stdev
+        jnp.ones(max_individuals), # noise_magnitude
+        jnp.zeros(max_individuals) # fitness_score
+    )
 
-def initialize_history_ks(decay_factor=0.8):
-    return {
-        'individuals': [],  # List to store historical individuals; consider using a JAX-friendly structure if needed.
-        'assigned_indexes': None,
-        'individual_count': 0,
-        'decay_factor': decay_factor,  # Decay factor to reduce the influence of older individuals.
-    }
+def initialize_history_ks(param_size: int, decay_factor: float = 0.8, num_iterations: int = 5000):
+    # Pre-allocate arrays with zeros for each individual property, given num_iterations
+    # Assuming 'center' and 'stdev' are of size 'param_size'
+    return (
+        jnp.zeros((param_size, num_iterations)), # center
+        jnp.zeros((param_size, num_iterations)), # stdev
+        jnp.ones(num_iterations), # noise_magnitude
+        jnp.zeros(num_iterations) # fitness_score
+    )
 
-def accept_domain_ks(ks, individual):
-    ks_updated = ks.copy()  # Copy for immutability
-    ks_updated['individual'] = individual
-    ks_updated['individual_count'] = 1
-    ks_updated = update_domain_ks(ks_updated)
-    return ks_updated
-
-def accept_situational_ks(ks, individual):
-    ks_updated = ks.copy()
-    ks_updated['individuals'].append(individual)
-    if len(ks_updated['individuals']) > ks_updated['max_individuals']:
-        ks_updated = update_situational_ks(ks_updated)
-    return ks_updated
-
-def accept_history_ks(ks, individual):
-    ks_updated = ks.copy()
-    ks_updated['individuals'].append(individual)
-    ks_updated = update_history_ks(ks_updated)
-    return ks_updated
-
-def update_domain_ks(ks):
-    return ks
-
-def update_situational_ks(ks):
-    ks['individuals'] = sorted(ks['individuals'], key=lambda x: x['fitness_score'])[:ks['max_individuals']]
-    return ks
-
-def update_history_ks(ks):
-    return ks
-
-def update_belief_space(belief_space, ks):
-    if ks == 'situational':
-        return update_situational_ks(belief_space['situational'])
-    elif ks == 'history':
-        return update_history_ks(belief_space['history'])
-    else:
-        return update_domain_ks(belief_space['domain'])
-
-
-def get_center_guidance(ks_data, ks_name):
-    def get_center_guidance_domain_ks(ks_data):
-        if ks_data.get('individual') is not None:
-            return ks_data['individual']['center']
-        return None
+@jax.jit
+def update_knowledge_sources(belief_space, best_individual, max_individuals=100):
     
-    def get_center_guidance_situational_ks(ks_data):
-        if ks_data.get('individuals'):
-            centers = jnp.array([ind['center'] for ind in ks_data['individuals']])
-            # Assuming situational KS uses fitness-based weights for averaging
-            weights = jnp.array([1.0 - jnp.abs(ind['fitness_score']) for ind in ks_data['individuals']])
-            weights /= jnp.sum(weights)  # Normalize the weights
-            return jnp.average(centers, weights=weights, axis=0)
-        return None
+    updated_belief_space_domain = belief_space[:1] + (best_individual,) + belief_space[2:]
+
+    center, stdev, noise_magnitude, fitness_value = updated_belief_space_domain[2]
+       
+    best_center, best_stdev, best_noise_magnitude, best_fitness_value = best_individual
+   
+    #print('center shape : ', center.shape)
+    #print('best center shape : ', best_center.shape)
+
+    best_center_reshaped = best_center.reshape(-1, 1)
+
+    updated_center = jnp.concatenate([best_center_reshaped, center], axis=1)[:, :max_individuals]
+    #print('updated center shape : ', updated_center.shape) 
+    updated_stdev = jnp.concatenate([best_stdev[:, None], stdev], axis=1)[:, :max_individuals]
     
-    def get_center_guidance_history_ks(ks_data):
-        if ks_data.get('individuals'):
-            centers = jnp.array([ind['center'] for ind in ks_data['individuals']])
-            # Assuming history KS uses time-based decay for weighting
-            weights = jnp.power(ks_data['decay_factor'], jnp.arange(len(ks_data['individuals'])))
-            return jnp.average(centers, weights=weights, axis=0)
-        return None
+    updated_noise_magnitude = jnp.concatenate([best_noise_magnitude, noise_magnitude], axis=0)[:max_individuals]
     
-    if ks_name == 'situational':
-        return get_center_guidance_situational_ks(ks_data)
-    elif ks_name == 'history':
-        return get_center_guidance_history_ks(ks_data)
-    else:
-        return get_center_guidance_domain_ks(ks_data)
-
-def get_stdev_guidance(ks_data, ks_name):
-    # Similarly, define stdev guidance functions for each KS
-    def get_stdev_guidance_domain_ks(ks_data):
-        if ks_data.get('individual') is not None:
-            return ks_data['individual']['stdev']
-        return None
+    updated_fitness_value = jnp.concatenate([best_fitness_value, fitness_value], axis=0)[:max_individuals]
+     
     
-    def get_stdev_guidance_situational_ks(ks_data):
-        if ks_data.get('individuals'):
-            stdevs = jnp.array([ind['stdev'] for ind in ks_data['individuals']])
-            weights = jnp.array([1.0 - jnp.abs(ind['fitness_score']) for ind in ks_data['individuals']])
-            weights /= jnp.sum(weights)  # Normalize the weights
-            return jnp.average(stdevs, weights=weights, axis=0)
-        return None
+    # Construct the updated situational knowledge source
+    updated_situational_ks = (updated_center, updated_stdev, updated_noise_magnitude, updated_fitness_value)
     
-    def get_stdev_guidance_history_ks(ks_data):
-        if ks_data.get('individuals'):
-            stdevs = jnp.array([ind['stdev'] for ind in ks_data['individuals']])
-            weights = jnp.power(ks_data['decay_factor'], jnp.arange(len(ks_data['individuals'])))
-            return jnp.average(stdevs, weights=weights, axis=0)
-        return None
-
-    if ks_name == 'situational':
-        return get_stdev_guidance_situational_ks(ks_data)
-    elif ks_name == 'history':
-        return get_stdev_guidance_history_ks(ks_data)
-    else:
-        return get_stdev_guidance_domain_ks(ks_data)
-
-def adjust_noise(ks_data, scaled_noises, index, index_counter):
-    if index_counter < len(ks_data['individuals']) and ks_data['individuals'][index_counter] is not None:
-        # Adjust the noise for the first index if an individual is available
-        return scaled_noises.at[index].set(scaled_noises[index] * ks_data['individuals'][index_counter]['noise_magnitude'])
-    return scaled_noises
-
-def adjust_noise_domain_ks(scaled_noises, individual, assigned_indexes):
-    # Check if the individual exists and assigned_indexes includes the first position
-    if individual is not None and 0 in assigned_indexes:
-        # Adjust noise only for the specific index
-        index_to_adjust = assigned_indexes.index(0)  # Get the actual index to adjust
-        adjusted_noise = scaled_noises.at[index_to_adjust].set(scaled_noises[index_to_adjust] * individual['noise_magnitude'])
-        return adjusted_noise
-    return scaled_noises
-
-def adjust_noise_situational_ks(scaled_noises, individual, assigned_indexes):
-    # Check if the individual exists and assigned_indexes includes the first position
-    if individual is not None and 0 in assigned_indexes:
-        # Adjust noise only for the specific index
-        index_to_adjust = assigned_indexes.index(0)  # Get the actual index to adjust
-        adjusted_noise = scaled_noises.at[index_to_adjust].set(scaled_noises[index_to_adjust] * individual['noise_magnitude'])
-        return adjusted_noise
-    return scaled_noises
-
-def adjust_noise_history_ks(scaled_noises, individual, assigned_indexes):
-    # Check if the individual exists and assigned_indexes includes the first position
-    if individual is not None and 0 in assigned_indexes:
-        # Adjust noise only for the specific index
-        index_to_adjust = assigned_indexes.index(0)  # Get the actual index to adjust
-        adjusted_noise = scaled_noises.at[index_to_adjust].set(scaled_noises[index_to_adjust] * individual['noise_magnitude'])
-        return adjusted_noise
-    return scaled_noises
-
-class DomainKS:
-    def __init__(self):
-        self.individual = None
-        self.assigned_indexes = None
-        self.individual_count = 0
-
-    def __repr__(self):
-        if self.individual is None:
-            return "DomainKS(individual=None)"
-        else:
-            return f"DomainKS(individual={self.individual})"
-
-    def accept(self, individual: Individual):
-        self.individual = individual
-        self.individual_count = 1
-
-    def update(self):
-        pass
-
-    def get_center_guidance(self) -> Optional[jnp.ndarray]:
-        if self.individual is not None:
-            #print("center guidance : ", self.individual.center)
-            return self.individual.center
-        return None
-
-    def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
-        if self.individual is not None:
-            return self.individual.stdev
-        return None
-
-    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
-        if self.individual is not None and index == 0:
-            # Adjust the noise for the first index if an individual is available
-            scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individual.noise_magnitude)
-        return scaled_noises
-
-class SituationalKS:
-    def __init__(self, max_individuals: int = 100):
-        self.max_individuals = max_individuals
-        self.individuals: List[Individual] = []
-        self.assigned_indexes = None
-        self.individual_count = 0
-
-    def __repr__(self):
-        individual_str = "\n".join([str(individual) for individual in self.individuals])
-        return f"SituationalKS(max_individuals={self.max_individuals}, individuals=[\n{individual_str}\n])"
-
-    def accept(self, individual: Individual):
-        self.individuals.append(individual)
-        #self.individual_count += 1
-        self.individual_count = min(len(self.individuals), self.max_individuals)
-        #print("individual count in situational KS : ", self.individual_count)
-
-    def update(self):
-        self.individuals.sort(key=lambda x: x.fitness_score)
-        self.individuals = self.individuals[:self.max_individuals]
-
-    def get_center_guidance(self) -> Optional[jnp.ndarray]:
-        if self.individuals:
-            centers = jnp.array([ind.center for ind in self.individuals])
-            weights = jnp.array([1.0 - jnp.abs(ind.fitness_score) for ind in self.individuals])
-            weights /= jnp.sum(weights)  # Normalize the weights
-            return jnp.average(centers, weights=weights, axis=0)
-        return None
+    # Reconstruct the belief space with the updated situational KS
+    updated_belief_space_situational = updated_belief_space_domain[:2] + (updated_situational_ks,) + updated_belief_space_domain[3:]
     
-    def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
-        if self.individuals:
-            stdevs = jnp.array([ind.stdev for ind in self.individuals])
-            weights = jnp.array([1.0 - jnp.abs(ind.fitness_score) for ind in self.individuals])
-            weights /= jnp.sum(weights)  # Normalize the weights
-            return jnp.average(stdevs, weights=weights, axis=0)
-        return None
-
-    #def get_center_guidance(self) -> Optional[jnp.ndarray]:
-    #    if self.individuals:
-    #        centers = jnp.array([ind.center for ind in self.individuals])
-    #        weights = jnp.array([jnp.absolute(ind.fitness_score) for ind in self.individuals])
-    #        #print("average center : ", jnp.average(centers, weights=weights, axis=0))
-    #        return jnp.average(centers, weights=weights, axis=0)
-    #    return None
-
-    #def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
-    #    if self.individuals:
-    #        stdevs = jnp.array([ind.stdev for ind in self.individuals])
-    #        weights = jnp.array([jnp.absolute(ind.fitness_score) for ind in self.individuals])
-    #        return jnp.average(stdevs, weights=weights, axis=0)
-    #    return None
-
-    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
-        #if index < len(self.individuals):
-            # Adjust the noise for the assigned index if an individual is available
-        scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individuals[index_counter].noise_magnitude)
-        return scaled_noises
-
-class HistoryKS:
-    def __init__(self, decay_factor: float = 0.8):
-        self.individuals: List[Individual] = []
-        self.decay_factor = decay_factor
-        self.assigned_indexes = None
-        self.individual_count = 0
-
-    def __repr__(self):
-        individual_str = "\n".join([str(individual) for individual in self.individuals])
-        return f"HistoryKS(decay_factor={self.decay_factor}, individuals=[\n{individual_str}\n])"
-
-    def accept(self, individual: Individual):
-        self.individuals.append(individual)
-        self.individual_count = len(self.individuals)
-        #self.individual_count += 1
-        #print("individual count in history KS : ", self.individual_count)
-
-    def update(self):
-        pass
-
-    def get_center_guidance(self) -> Optional[jnp.ndarray]:
-        if self.individuals:
-            centers = jnp.array([ind.center for ind in self.individuals])
-            #weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
-            #weights /= jnp.sum(weights)  # Normalize the weights
-            weights = jnp.power(self.decay_factor, jnp.arange(len(self.individuals))) 
-            return jnp.average(centers, weights=weights, axis=0)
-        return None
+    updated_history_ks = belief_space[3]  # Placeholder operation
+    updated_belief_space_history = updated_belief_space_situational[:3] + (updated_history_ks,) + updated_belief_space_situational[4:]
     
-    def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
-        if self.individuals:
-            stdevs = jnp.array([ind.stdev for ind in self.individuals])
-            #weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
-            #weights /= jnp.sum(weights)  # Normalize the weights
-            weights = jnp.power(self.decay_factor, jnp.arange(len(self.individuals))) 
-            return jnp.average(stdevs, weights=weights, axis=0)
-        return None
+    return updated_belief_space_history
 
-    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
-        #if index < len(self.individuals):
-            # Adjust the noise for the assigned index if an individual is available
-        scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individuals[index_counter].noise_magnitude)
-        return scaled_noises
+def get_center_guidance(belief_space,t):
+    decay_factor = 0.8
 
-class TopographicKS:
-    def __init__(self, num_clusters: int = 5):
-        self.center = None
-        self.stdev = None 
-        self.num_clusters = num_clusters
+    arr = jnp.array([t,100])
+    n = jnp.min(arr)
 
-    def accept(self, individual: Dict):
-        # Implement the acceptance criteria and update logic for TopographicKS
-        pass
+    #print("n : ", n)
+    #print("t : ", t)
+    domain_ks_center = belief_space[1][0]
+    situational_ks_center = belief_space[2][0] #[:,:n]
+    history_ks_center = belief_space[3][0] #[:,:t]
 
-    def update(self):
-        # Implement the update logic for TopographicKS (e.g., clustering)
-        pass
 
-class NormativeKS:
-    def __init__(self):
-        self.center = None
-        self.stdev = None
+    situational_valid_columns_mask = jnp.arange(situational_ks_center.shape[1]) < t
+    
+    # Apply the mask to zero out columns beyond the current iteration.
+    situational_masked_data = situational_ks_center * situational_valid_columns_mask
 
-    def accept(self, individual: Dict):
-        # Implement the acceptance criteria and update logic for NormativeKS
-        pass
+    situational_row_sums = situational_masked_data.sum(axis=1)
 
-    def update(self):
-        # Implement the update logic for NormativeKS (e.g., updating statistics)
-        pass
+    situational_row_averages = situational_row_sums / t
+
+    #print('situation center : ', situational_ks_center)
+    #print('situation center shape : ', situational_ks_center.shape)
+
+    # Compute the weighted average of the centers
+    #situational_ks_center_weights = jnp.array([1.0 - jnp.abs(fitness_score) for fitness_score in belief_space[2][3][:n]])
+    #situational_ks_center_weights /= jnp.sum(situational_ks_center_weights)  # Normalize the weights
+    #situational_ks_center_avg = jnp.average(situational_ks_center, weights=situational_ks_center_weights, axis=1)
+
+    history_valid_columns_mask = jnp.arange(history_ks_center.shape[1]) < t
+    
+    # Apply the mask to zero out columns beyond the current iteration.
+    history_masked_data = history_ks_center * history_valid_columns_mask
+
+    history_row_sums = history_masked_data.sum(axis=1)
+
+    history_row_averages = history_row_sums / t
+
+
+    #history_ks_center_weights = jnp.power(decay_factor, jnp.arange(t))
+    #history_ks_center_avg = jnp.average(history_ks_center, weights=history_ks_center_weights, axis=1)
+
+    return jnp.mean(jnp.array([domain_ks_center, situational_row_averages, history_row_averages]), axis=0)
+    #return history_row_averages
+
+def get_stdev_guidance(belief_space,t):
+    decay_factor = 0.8
+
+    arr = jnp.array([t,100])
+    n = jnp.min(arr)
+
+    domain_ks_stdev = belief_space[1][1]
+    situational_ks_stdev = belief_space[2][1]#[:,:n]
+    history_ks_stdev = belief_space[3][1]#[:,:t]
+
+
+    situational_valid_columns_mask = jnp.arange(situational_ks_stdev.shape[1]) < t
+    
+    # Apply the mask to zero out columns beyond the current iteration.
+    situational_masked_data = situational_ks_stdev * situational_valid_columns_mask
+
+    situational_row_sums = situational_masked_data.sum(axis=1)
+
+    situational_row_averages = situational_row_sums / t
+
+    #print('situation stdev : ', situational_ks_stdev)
+    #print('situation stdev shape : ', situational_ks_stdev.shape)
+
+    # Compute the weighted average of the stdevs
+    #situational_ks_stdev_weights = jnp.array([1.0 - jnp.abs(fitness_score) for fitness_score in belief_space[2][3][:n]])
+    #situational_ks_stdev_weights /= jnp.sum(situational_ks_stdev_weights)  # Normalize the weights
+    #situational_ks_stdev_avg = jnp.average(situational_ks_stdev, weights=situational_ks_stdev_weights, axis=1)
+
+    history_valid_columns_mask = jnp.arange(history_ks_stdev.shape[1]) < t
+    
+    # Apply the mask to zero out columns beyond the current iteration.
+    history_masked_data = history_ks_stdev * history_valid_columns_mask
+
+    history_row_sums = history_masked_data.sum(axis=1)
+
+    history_row_averages = history_row_sums / t
+
+
+
+
+    # Compute the weighted average of the standard deviations
+    #situational_ks_stdev_weights = jnp.array([1.0 - jnp.abs(fitness_score) for fitness_score in belief_space[2][3][:n]])
+    #situational_ks_stdev_weights /= jnp.sum(situational_ks_stdev_weights)  # Normalize the weights
+    #situational_ks_stdev_avg = jnp.average(situational_ks_stdev, axis=1)
+
+    #history_ks_stdev_weights = jnp.power(decay_factor, jnp.arange(t))
+    #history_ks_stdev_avg = jnp.average(history_ks_stdev, weights=history_ks_stdev_weights, axis=1)
+
+    return jnp.mean(jnp.array([domain_ks_stdev, situational_row_averages, history_row_averages]), axis=0)
+    #return domain_ks_stdev
+
+#class DomainKS:
+#    def __init__(self):
+#        self.individual = None
+#        self.assigned_indexes = None
+#        self.individual_count = 0
+#
+#    def __repr__(self):
+#        if self.individual is None:
+#            return "DomainKS(individual=None)"
+#        else:
+#            return f"DomainKS(individual={self.individual})"
+#
+#    def accept(self, individual: Individual):
+#        self.individual = individual
+#        self.individual_count = 1
+#
+#    def update(self):
+#        pass
+#
+#    def get_center_guidance(self) -> Optional[jnp.ndarray]:
+#        if self.individual is not None:
+#            #print("center guidance : ", self.individual.center)
+#            return self.individual.center
+#        return None
+#
+#    def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
+#        if self.individual is not None:
+#            return self.individual.stdev
+#        return None
+#
+#    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
+#        if self.individual is not None and index == 0:
+#            # Adjust the noise for the first index if an individual is available
+#            scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individual.noise_magnitude)
+#        return scaled_noises
+#
+#class SituationalKS:
+#    def __init__(self, max_individuals: int = 100):
+#        self.max_individuals = max_individuals
+#        self.individuals: List[Individual] = []
+#        self.assigned_indexes = None
+#        self.individual_count = 0
+#
+#    def __repr__(self):
+#        individual_str = "\n".join([str(individual) for individual in self.individuals])
+#        return f"SituationalKS(max_individuals={self.max_individuals}, individuals=[\n{individual_str}\n])"
+#
+#    def accept(self, individual: Individual):
+#        self.individuals.append(individual)
+#        #self.individual_count += 1
+#        self.individual_count = min(len(self.individuals), self.max_individuals)
+#        #print("individual count in situational KS : ", self.individual_count)
+#
+#    def update(self):
+#        self.individuals.sort(key=lambda x: x.fitness_score)
+#        self.individuals = self.individuals[:self.max_individuals]
+#
+#    def get_center_guidance(self) -> Optional[jnp.ndarray]:
+#        if self.individuals:
+#            centers = jnp.array([ind.center for ind in self.individuals])
+#            weights = jnp.array([1.0 - jnp.abs(ind.fitness_score) for ind in self.individuals])
+#            weights /= jnp.sum(weights)  # Normalize the weights
+#            return jnp.average(centers, weights=weights, axis=0)
+#        return None
+#    
+#    def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
+#        if self.individuals:
+#            stdevs = jnp.array([ind.stdev for ind in self.individuals])
+#            weights = jnp.array([1.0 - jnp.abs(ind.fitness_score) for ind in self.individuals])
+#            weights /= jnp.sum(weights)  # Normalize the weights
+#            return jnp.average(stdevs, weights=weights, axis=0)
+#        return None
+#
+#    #def get_center_guidance(self) -> Optional[jnp.ndarray]:
+#    #    if self.individuals:
+#    #        centers = jnp.array([ind.center for ind in self.individuals])
+#    #        weights = jnp.array([jnp.absolute(ind.fitness_score) for ind in self.individuals])
+#    #        #print("average center : ", jnp.average(centers, weights=weights, axis=0))
+#    #        return jnp.average(centers, weights=weights, axis=0)
+#    #    return None
+#
+#    #def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
+#    #    if self.individuals:
+#    #        stdevs = jnp.array([ind.stdev for ind in self.individuals])
+#    #        weights = jnp.array([jnp.absolute(ind.fitness_score) for ind in self.individuals])
+#    #        return jnp.average(stdevs, weights=weights, axis=0)
+#    #    return None
+#
+#    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
+#        #if index < len(self.individuals):
+#            # Adjust the noise for the assigned index if an individual is available
+#        scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individuals[index_counter].noise_magnitude)
+#        return scaled_noises
+#
+#class HistoryKS:
+#    def __init__(self, decay_factor: float = 0.8):
+#        self.individuals: List[Individual] = []
+#        self.decay_factor = decay_factor
+#        self.assigned_indexes = None
+#        self.individual_count = 0
+#
+#    def __repr__(self):
+#        individual_str = "\n".join([str(individual) for individual in self.individuals])
+#        return f"HistoryKS(decay_factor={self.decay_factor}, individuals=[\n{individual_str}\n])"
+#
+#    def accept(self, individual: Individual):
+#        self.individuals.append(individual)
+#        self.individual_count = len(self.individuals)
+#        #self.individual_count += 1
+#        #print("individual count in history KS : ", self.individual_count)
+#
+#    def update(self):
+#        pass
+#
+#    def get_center_guidance(self) -> Optional[jnp.ndarray]:
+#        if self.individuals:
+#            centers = jnp.array([ind.center for ind in self.individuals])
+#            #weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
+#            #weights /= jnp.sum(weights)  # Normalize the weights
+#            weights = jnp.power(self.decay_factor, jnp.arange(len(self.individuals))) 
+#            return jnp.average(centers, weights=weights, axis=0)
+#        return None
+#    
+#    def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
+#        if self.individuals:
+#            stdevs = jnp.array([ind.stdev for ind in self.individuals])
+#            #weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
+#            #weights /= jnp.sum(weights)  # Normalize the weights
+#            weights = jnp.power(self.decay_factor, jnp.arange(len(self.individuals))) 
+#            return jnp.average(stdevs, weights=weights, axis=0)
+#        return None
+#
+#    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
+#        #if index < len(self.individuals):
+#            # Adjust the noise for the assigned index if an individual is available
+#        scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individuals[index_counter].noise_magnitude)
+#        return scaled_noises
+#
+#class TopographicKS:
+#    def __init__(self, num_clusters: int = 5):
+#        self.center = None
+#        self.stdev = None 
+#        self.num_clusters = num_clusters
+#
+#    def accept(self, individual: Dict):
+#        # Implement the acceptance criteria and update logic for TopographicKS
+#        pass
+#
+#    def update(self):
+#        # Implement the update logic for TopographicKS (e.g., clustering)
+#        pass
+#
+#class NormativeKS:
+#    def __init__(self):
+#        self.center = None
+#        self.stdev = None
+#
+#    def accept(self, individual: Dict):
+#        # Implement the acceptance criteria and update logic for NormativeKS
+#        pass
+#
+#    def update(self):
+#        # Implement the update logic for NormativeKS (e.g., updating statistics)
+#        pass

@@ -37,9 +37,11 @@ except ModuleNotFoundError:
 from evojax.algo.base import NEAlgorithm
 from evojax.util import create_logger
 
-from evojax.algo.cultural.population_space import initialize_population, update_population
+from evojax.algo.cultural.population_space import update_population
 
-from evojax.algo.cultural.belief_space import initialize_belief_space, accept_function_mapping, get_updated_params, influence
+from evojax.algo.cultural.belief_space import initialize_belief_space, influence, get_updated_params
+
+from evojax.algo.cultural.knowledge_sources import update_knowledge_sources
 
 @partial(jax.jit, static_argnums=(1,))
 def process_scores(
@@ -51,9 +53,9 @@ def process_scores(
     if use_ranking:
         ranks = jnp.zeros(x.size, dtype=int)
         ranks = ranks.at[x.argsort()].set(jnp.arange(x.size)).reshape(x.shape)
-        return ranks / ranks.max() - 0.5
+        return ranks / ranks.max() - 0.5, jnp.array(x).max()
     else:
-        return x
+        return x, jnp.array(x).max()
 
 
 @jax.jit
@@ -87,24 +89,28 @@ def update_stdev(
     max_allowed = stdev + allowed_delta
     return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
 
-@jax.jit
-def update_center_and_stdev(
-    center: jnp.ndarray, 
-    stdev: jnp.ndarray, 
-    belief_space: dict, 
-    previous_best_score: float, 
-    best_score: float, 
-    get_updated_params: Callable
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    def update():
-        return get_updated_params(belief_space, center, stdev)
-    
-    def no_update():
-        return center, stdev
 
-    update_needed = (previous_best_score is not None) & (best_score is not None) & (best_score < previous_best_score)
-    return jax.lax.cond(update_needed, update, no_update)
-
+#def update_center_and_stdev(
+#    center: jnp.ndarray,
+#    stdev: jnp.ndarray, belief_space: dict,
+#    previous_best_score: float,
+#    best_score: float,
+#    t: int
+#) -> Tuple[jnp.ndarray, jnp.ndarray]:
+#    def update():
+#        print("In ask_func Updating center and stdev")
+#        return get_updated_params(belief_space, center, stdev, t)
+#
+#    def no_update():
+#        print("No update needed")
+#        return center, stdev
+#
+#    update_needed = jnp.logical_and(
+#        jnp.logical_and(previous_best_score is not None, best_score is not None),
+#        best_score < previous_best_score
+#    )
+#
+#    return jax.lax.cond(update_needed, update, no_update)
 
 @partial(jax.jit, static_argnums=(3,4))
 def ask_func(
@@ -229,29 +235,43 @@ class PGPE(NEAlgorithm):
         self._solutions = None
         self._scaled_noises = None
 
-        self._previous_best_score = None
-        self._best_score = None
+        self._previous_best_score = -11.0
+        self._best_score = -10.0
 
-        self.population_space = initialize_population(self.pop_size, self._center, self._stdev)
+        self._scaled_noises_adjustment_rate = 0.2
 
-        self.belief_space = initialize_belief_space(population_size=self.pop_size, key=self._key)
+        #self.population_space = initialize_population(self.pop_size, self._center, self._stdev)
+
+        self.belief_space = initialize_belief_space(population_size=self.pop_size, key=self._key, scaled_noises_adjustment_rate=self._scaled_noises_adjustment_rate, param_size=param_size)
         #self.belief_space.assign_indexes_to_knowledge_sources()
 
         #self._get_updated_params = jax.jit(get_updated_params)
-        self._influence = jax.jit(influence)
-
-        stdev = 0
-        center = 0
+        #self._influence = jax.jit(influence)
 
     def ask(self) -> jnp.ndarray:
-        self._center, self._stdev = update_center_and_stdev(
-            self._center, 
-            self._stdev, 
-            self.belief_space, 
-            self._previous_best_score, 
-            self._best_score, 
-            get_updated_params,
-        )
+        if self._t > 5:
+       
+           #self._center, self._stdev = update_center_and_stdev(
+           #     self._center, 
+           #     self._stdev, 
+           #     self.belief_space, 
+           #     self._previous_best_score, 
+           #     self._best_score,
+           #     self._t
+           # )
+           if self._previous_best_score is not None and self._best_score is not None:
+               if self._best_score < self._previous_best_score:
+                   print("Updating center and stdev")
+                   center, stdev = get_updated_params(self.belief_space ,self._center, self._stdev, self._t)
+                   self._center = center
+                   self._stdev = stdev
+               else:
+                   center, stdev = self._center, self._stdev
+           else:
+               center, stdev = self._center, self._stdev
+        else:
+            center, stdev = self._center, self._stdev
+
         # Retrieve updated center and stdev from the belief space if available
         #if self._previous_best_score is not None and self._best_score is not None:
         #    if self._best_score < self._previous_best_score:
@@ -291,13 +311,10 @@ class PGPE(NEAlgorithm):
         return self._solutions
 
     def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:
-        self.fitness_scores = process_scores(fitness, self._solution_ranking)
-        self._previous_best_score = np.array(fitness).max() if self._best_score is None else self._best_score
-        #print(f"Previous best score: {self._previous_best_score}")
-        self._best_score = np.array(fitness).max()
-        #print(f"Current best score: {self._best_score}")
+        self._previous_best_score = self._best_score
+        self.fitness_scores, self._best_score = process_scores(fitness, self._solution_ranking)
        
-        update_population(
+        self.population, best_individual = update_population(
             fitness_scores=self.fitness_scores,
             center=self._center,
             stdev=self._stdev,
@@ -311,22 +328,10 @@ class PGPE(NEAlgorithm):
         #best_individual = min(individuals_fitness_score, key=lambda x: x['fitness_score'])
 
         # Assuming self.population_space is your list of dictionaries
-        population_space = self.population_space  # Example, replace with your actual list
+        #population_space = self.population_space  # Example, replace with your actual list
         
         # Initialize a variable to hold the dict with the fitness value closest to zero
-        best_individual = None
         
-        # Initialize a variable to store the smallest difference found so far; start with infinity for comparison
-        smallest_difference = float('inf')
-        
-        for individual in population_space:
-            # Calculate the absolute difference from zero
-            difference = abs(individual['fitness_score'] - 0)
-            
-            # If this difference is smaller than the smallest found so far, update the closest_to_zero
-            if difference < smallest_difference:
-                best_individual = individual
-                smallest_difference = difference
         
         # closest_to_zero now holds the dict with the fitness value closest to zero
 
@@ -334,9 +339,8 @@ class PGPE(NEAlgorithm):
         
         #self.belief_space.update()
 
-        for ks_type in ['domain_ks', 'situational_ks', 'history_ks']:
-            self.belief_space[ks_type] = accept_function_mapping[ks_type](self.belief_space[ks_type], best_individual)
-            #self.belief_space[ks_type] = update_belief_space(self.belief_space, ks_type)
+        self.belief_space = update_knowledge_sources(self.belief_space, best_individual)   
+        #self.belief_space[ks_type] = update_belief_space(self.belief_space, ks_type)
 
         #print("Domain KS:", self.belief_space.domain_ks)
         #print("Situational KS:", self.belief_space.situational_ks)
