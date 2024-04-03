@@ -62,18 +62,31 @@ class MNIST(VectorizedTask):
         self.obs_shape = tuple([28, 28, 1])
         self.act_shape = tuple([10, ])
 
+        percentage_of_dataset = 10
+
         # Delayed importing of torchvision
 
         try:
-            from torchvision import datasets
+            from torchvision import datasets, transforms
+            from torch.utils.data import Subset, DataLoader
         except ModuleNotFoundError:
             print('You need to install torchvision for this task.')
             print('  pip install torchvision')
             sys.exit(1)
 
         dataset = datasets.MNIST('./data', train=not test, download=True)
-        data = np.expand_dims(dataset.data.numpy() / 255., axis=-1)
-        labels = dataset.targets.numpy()
+      
+        # Convert entire dataset to NumPy arrays
+        data_full = dataset.data.numpy()
+        labels_full = dataset.targets.numpy()
+        
+        # Calculate indices for 10% of the dataset
+        indices = np.random.choice(len(data_full), int(len(data_full) * 0.1), replace=False)
+        
+        # Extract the data and labels for the subset
+        data_subset = data_full[indices] / 255.  # Normalize the data
+        data = np.expand_dims(data_subset, axis=-1)  # Add channel dimension
+        labels = labels_full[indices]
 
         def reset_fn(key):
             if test:
