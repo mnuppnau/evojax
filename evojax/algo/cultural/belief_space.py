@@ -13,7 +13,7 @@ def initialize_belief_space(population_size: int, param_size: int, key: int , sc
         initialize_domain_ks(param_size),
         initialize_situational_ks(param_size),
         initialize_history_ks(param_size),
-        jnp.array([0.08]),
+        jnp.array([0.10]),
         generate_scaled_noises_indexes(population_size, key, scaled_noises_adjustment_rate),
     )
     return belief_space

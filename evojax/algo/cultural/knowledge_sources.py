@@ -73,11 +73,15 @@ def update_knowledge_sources(belief_space, best_individual, max_individuals=100)
     return updated_belief_space_history
 
 def get_center_guidance(belief_space,t):
-    decay_factor = 0.8
+    decay_factor_history = 0.20
+    decay_factor_situational = 0.08
+
+    max_iterations = 5000
 
     arr = jnp.array([t,100])
     n = jnp.min(arr)
 
+    ks_weights = jnp.array([.2, .4, .4])
     #print("n : ", n)
     #print("t : ", t)
     domain_ks_center = belief_space[1][0]
@@ -90,9 +94,19 @@ def get_center_guidance(belief_space,t):
     # Apply the mask to zero out columns beyond the current iteration.
     situational_masked_data = situational_ks_center * situational_valid_columns_mask
 
-    situational_row_sums = situational_masked_data.sum(axis=1)
+    column_indices_situational = jnp.arange(100)
+    weights_situational = jnp.exp(-decay_factor_situational * column_indices_situational)
+    
+    masked_weights_situational = weights_situational * situational_valid_columns_mask
 
-    situational_row_averages = situational_row_sums / t
+    # Compute weighted sums and the sum of masked weights for normalization
+    weighted_sums_situational = jnp.sum(situational_masked_data * masked_weights_situational, axis=1)
+    sum_of_masked_weights_situational = jnp.sum(masked_weights_situational)
+
+    # Calculate the weighted average
+    situational_weighted_averages = weighted_sums_situational / sum_of_masked_weights_situational
+
+
 
     #print('situation center : ', situational_ks_center)
     #print('situation center shape : ', situational_ks_center.shape)
@@ -107,20 +121,42 @@ def get_center_guidance(belief_space,t):
     # Apply the mask to zero out columns beyond the current iteration.
     history_masked_data = history_ks_center * history_valid_columns_mask
 
-    history_row_sums = history_masked_data.sum(axis=1)
+    column_indices = jnp.arange(max_iterations)
+    weights = jnp.exp(-decay_factor_situational * column_indices)
+    
+    masked_weights = weights * history_valid_columns_mask
 
-    history_row_averages = history_row_sums / t
+    # Compute weighted sums and the sum of masked weights for normalization
+    weighted_sums = jnp.sum(history_masked_data * masked_weights, axis=1)
+    sum_of_masked_weights = jnp.sum(masked_weights)
+
+    # Calculate the weighted average
+    history_weighted_averages = weighted_sums / sum_of_masked_weights
+
+    domain_ks_center_weighted = domain_ks_center * ks_weights[0]
+    situational_row_averages_weighted = situational_weighted_averages * ks_weights[1]
+    history_row_averages_weighted = history_weighted_averages * ks_weights[2]
+    
+    #history_row_sums = history_masked_data.sum(axis=1)
+
+    #history_row_averages = history_row_sums / t
 
 
     #history_ks_center_weights = jnp.power(decay_factor, jnp.arange(t))
     #history_ks_center_avg = jnp.average(history_ks_center, weights=history_ks_center_weights, axis=1)
 
-    return jnp.mean(jnp.array([domain_ks_center, situational_row_averages, history_row_averages]), axis=0)
-    #return history_row_averages
+    return domain_ks_center_weighted + situational_row_averages_weighted + history_row_averages_weighted
+    #return jnp.mean(jnp.array([domain_ks_center_weighted, situational_row_averages_weighted, history_row_averages_weighted]), axis=0)
+    #return domain_ks_center
 
 def get_stdev_guidance(belief_space,t):
-    decay_factor = 0.8
+    decay_factor_historical = 0.20
+    decay_factor_situational = 0.08
 
+    max_iterations = 5000
+
+    ks_weights = jnp.array([.2, .4, .4])
+    
     arr = jnp.array([t,100])
     n = jnp.min(arr)
 
@@ -134,9 +170,17 @@ def get_stdev_guidance(belief_space,t):
     # Apply the mask to zero out columns beyond the current iteration.
     situational_masked_data = situational_ks_stdev * situational_valid_columns_mask
 
-    situational_row_sums = situational_masked_data.sum(axis=1)
+    column_indices_situational = jnp.arange(100)
+    weights_situational = jnp.exp(-decay_factor_situational * column_indices_situational)
+    
+    masked_weights_situational = weights_situational * situational_valid_columns_mask
 
-    situational_row_averages = situational_row_sums / t
+    # Compute weighted sums and the sum of masked weights for normalization
+    weighted_sums_situational = jnp.sum(situational_masked_data * masked_weights_situational, axis=1)
+    sum_of_masked_weights_situational = jnp.sum(masked_weights_situational)
+
+    # Calculate the weighted average
+    situational_weighted_averages = weighted_sums_situational / sum_of_masked_weights_situational
 
     #print('situation stdev : ', situational_ks_stdev)
     #print('situation stdev shape : ', situational_ks_stdev.shape)
@@ -151,12 +195,17 @@ def get_stdev_guidance(belief_space,t):
     # Apply the mask to zero out columns beyond the current iteration.
     history_masked_data = history_ks_stdev * history_valid_columns_mask
 
-    history_row_sums = history_masked_data.sum(axis=1)
+    column_indices = jnp.arange(max_iterations)
+    weights = jnp.exp(-decay_factor_historical * column_indices)
+    
+    masked_weights = weights * history_valid_columns_mask
 
-    history_row_averages = history_row_sums / t
+    # Compute weighted sums and the sum of masked weights for normalization
+    weighted_sums = jnp.sum(history_masked_data * masked_weights, axis=1)
+    sum_of_masked_weights = jnp.sum(masked_weights)
 
-
-
+    # Calculate the weighted average
+    history_weighted_averages = weighted_sums / sum_of_masked_weights
 
     # Compute the weighted average of the standard deviations
     #situational_ks_stdev_weights = jnp.array([1.0 - jnp.abs(fitness_score) for fitness_score in belief_space[2][3][:n]])
@@ -166,7 +215,12 @@ def get_stdev_guidance(belief_space,t):
     #history_ks_stdev_weights = jnp.power(decay_factor, jnp.arange(t))
     #history_ks_stdev_avg = jnp.average(history_ks_stdev, weights=history_ks_stdev_weights, axis=1)
 
-    return jnp.mean(jnp.array([domain_ks_stdev, situational_row_averages, history_row_averages]), axis=0)
+    domain_ks_stdev_weighted = domain_ks_stdev * weights[0]
+    situational_row_averages_weighted = situational_weighted_averages * weights[1]
+    history_row_averages_weighted = history_weighted_averages * weights[2]
+
+    return domain_ks_stdev_weighted + situational_row_averages_weighted + history_row_averages_weighted
+    #return jnp.mean(jnp.array([domain_ks_stdev_weighted, situational_row_averages_weighted, history_row_averages_weighted]), axis=0)
     #return domain_ks_stdev
 
 #class DomainKS:
