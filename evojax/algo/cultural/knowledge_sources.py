@@ -106,7 +106,7 @@ def update_topographic_ks(belief_space, max_individuals=1000):
 
     reshaped_random_center = random_center.reshape(transposed_topographic_ks_center.shape[1])
 
-    print('reshaped random center : ', reshaped_random_center.shape)
+    #print('reshaped random center : ', reshaped_random_center.shape)
 
     updated_topographic_ks = (topographic_ks[0], topographic_ks[1], topographic_ks[2], centroids, reshaped_random_center, assignments)
     updated_belief_space_topographic = belief_space[:4] + (updated_topographic_ks,) + belief_space[5:]
@@ -152,6 +152,8 @@ def get_center_guidance(belief_space,t):
     stagnation_slope = normative_ks[6]
 
     ks_weights = update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope) 
+
+    print('ks weights : ', ks_weights)
 
     decay_factor_history = 0.20
     decay_factor_situational = 0.08

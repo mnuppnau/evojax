@@ -300,7 +300,7 @@ class PGPE(NEAlgorithm):
              center, stdev = self._center, self._stdev
 
         #print("Center:", center)
-        print("Center shape:", center.shape)
+        #print("Center shape:", center.shape)
         #print("stdev:", stdev)
         #print("stdev shape:", stdev.shape)
        
