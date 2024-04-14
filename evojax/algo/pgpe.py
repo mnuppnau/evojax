@@ -41,7 +41,9 @@ from evojax.algo.cultural.population_space import update_population
 
 from evojax.algo.cultural.belief_space import initialize_belief_space, influence, get_updated_params
 
-from evojax.algo.cultural.knowledge_sources import update_knowledge_sources
+from evojax.algo.cultural.knowledge_sources import update_knowledge_sources, update_topographic_ks, update_normative_ks
+
+from evojax.algo.cultural.helper_functions import calculate_entropy
 
 @partial(jax.jit, static_argnums=(1,))
 def process_scores(
@@ -130,23 +132,21 @@ def ask_func_infl(
  
     return next_key, scaled_noises, solutions
 
-
-@partial(jax.jit, static_argnums=(3,4))
+@partial(jax.jit, static_argnums=(3, 4))
 def ask_func(
     key: jnp.ndarray,
     stdev: jnp.ndarray,
     center: jnp.ndarray,
     num_directions: int,
     solution_size: int,
-    belief_space: dict,
-) -> Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]:
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """A function that samples a population of parameters from Gaussian."""
+
     next_key, key = random.split(key)
     scaled_noises = random.normal(key, [num_directions, solution_size]) * stdev
-    # Apply the influence adjustments to the scaled noises
-    #scaled_noises = influence(belief_space,scaled_noises)
-        
-    solutions = jnp.hstack([center + scaled_noises, center - scaled_noises]).reshape(-1, solution_size)    
- 
+    solutions = jnp.hstack(
+        [center + scaled_noises, center - scaled_noises]
+    ).reshape(-1, solution_size)
     return next_key, scaled_noises, solutions
 
 class PGPE(NEAlgorithm):
@@ -168,6 +168,7 @@ class PGPE(NEAlgorithm):
         stdev_max_change: float = 0.2,
         solution_ranking: bool = True,
         seed: int = 0,
+        max_iter: int = 1000,
         logger: logging.Logger = None,
     ):
         """Initialization function.
@@ -254,10 +255,17 @@ class PGPE(NEAlgorithm):
         self._solutions = None
         self._scaled_noises = None
 
+        self._max_iter = max_iter
+
         self._previous_best_score = -11.0
         self._best_score = -10.0
 
-        self._scaled_noises_adjustment_rate = 0.2
+        self._scaled_noises_adjustment_rate = 0.1
+        self._kmeans_rate = 0.02
+        self._adjust_kmeans_rate = 0.001
+
+        self._kmeans_iterations = self._max_iter * self._kmeans_rate
+        self._adjust_kmeans_iterations = self._max_iter * self._adjust_kmeans_rate
 
         #self.population_space = initialize_population(self.pop_size, self._center, self._stdev)
 
@@ -268,7 +276,7 @@ class PGPE(NEAlgorithm):
         #self._influence = jax.jit(influence)
 
     def ask(self) -> jnp.ndarray:
-        if self._t % 30 == 0:
+        if self._t > 100:
        
            #self._center, self._stdev = update_center_and_stdev(
            #     self._center, 
@@ -278,19 +286,28 @@ class PGPE(NEAlgorithm):
            #     self._best_score,
            #     self._t
            # )
-           if self._previous_best_score is not None and self._best_score is not None:
-               if self._best_score < self._previous_best_score:
+           #if self._previous_best_score is not None and self._best_score is not None:
+           #    if self._best_score < self._previous_best_score:
                    #print("Updating center and stdev")
-                   center, stdev = get_updated_params(self.belief_space ,self._center, self._stdev, self._t)
-                   self._center = center
-                   self._stdev = stdev
-               else:
-                   center, stdev = self._center, self._stdev
-           else:
-               center, stdev = self._center, self._stdev
+            center, stdev = get_updated_params(self.belief_space ,self._center, self._stdev, self._t)
+           #        self._center = center
+           #        self._stdev = stdev
+           #    else:
+           #        center, stdev = self._center, self._stdev
+           #else:
+           #    center, stdev = self._center, self._stdev
         else:
-            center, stdev = self._center, self._stdev
+             center, stdev = self._center, self._stdev
 
+        #print("Center:", center)
+        print("Center shape:", center.shape)
+        #print("stdev:", stdev)
+        #print("stdev shape:", stdev.shape)
+       
+        #if self._t > 4:
+        #    print("scaled noises: ", self._scaled_noises)
+        #    print("scaled noises shape: ", self._scaled_noises.shape)
+        
         # Retrieve updated center and stdev from the belief space if available
         #if self._previous_best_score is not None and self._best_score is not None:
         #    if self._best_score < self._previous_best_score:
@@ -305,23 +322,12 @@ class PGPE(NEAlgorithm):
         
         #belief_space = self.belief_space
    
-        if self._t % 30 == 0:
-            self._key, self._scaled_noises, self._solutions = ask_func_infl(
-                self._key,
-                stdev,
-                center,
-                self._num_directions,
-                self._center.size,
-                self.belief_space,
-            )
-        else:
-            self._key, self._scaled_noises, self._solutions = ask_func(
+        self._key, self._scaled_noises, self._solutions = ask_func(
             self._key,
             stdev,
             center,
             self._num_directions,
             self._center.size,
-            self.belief_space,
             )
 
         #next_key, key = random.split(self._key)
@@ -344,7 +350,11 @@ class PGPE(NEAlgorithm):
     def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:
         self._previous_best_score = self._best_score
         self.fitness_scores, self._best_score = process_scores(fitness, self._solution_ranking)
-       
+      
+        self._avg_score = jnp.array(fitness).mean()
+
+        norm_entropy = calculate_entropy(self._center, self._stdev)
+
         self.population, best_individual = update_population(
             fitness_scores=self.fitness_scores,
             center=self._center,
@@ -371,6 +381,16 @@ class PGPE(NEAlgorithm):
         #self.belief_space.update()
 
         self.belief_space = update_knowledge_sources(self.belief_space, best_individual)   
+        
+        if self._t == 10:
+            self.belief_space = update_topographic_ks(self.belief_space)
+        elif self._t % self._kmeans_iterations == 0:
+            self.belief_space = update_topographic_ks(self.belief_space)
+
+        self.belief_space, self._adjust_kmeans_iterations = update_normative_ks(self.belief_space, best_fitness=self._best_score, avg_fitness=self._avg_score, norm_entropy=norm_entropy, adjust_kmeans_iterations=self._adjust_kmeans_iterations)
+
+        self._kmeans_iterations += self._adjust_kmeans_iterations
+
         #self.belief_space[ks_type] = update_belief_space(self.belief_space, ks_type)
 
         #print("Domain KS:", self.belief_space.domain_ks)

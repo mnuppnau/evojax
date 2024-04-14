@@ -9,6 +9,7 @@ import numpy as np
 import copy
 
 from evojax.algo.cultural.population_space import Individual
+from evojax.algo.cultural.helper_functions import kmeans, calculate_slopes, update_weights, least_frequent_cluster
 
 def initialize_domain_ks(param_size: int):
     return (
@@ -36,6 +37,27 @@ def initialize_history_ks(param_size: int, decay_factor: float = 0.8, num_iterat
         jnp.zeros((param_size, num_iterations)), # stdev
         jnp.ones(num_iterations), # noise_magnitude
         jnp.zeros(num_iterations) # fitness_score
+    )
+
+def initialize_topographic_ks(param_size: int, num_clusters: int = 10, max_individuals: int = 1000):
+    return (
+        jnp.zeros((param_size, max_individuals)), # center
+        jnp.zeros((param_size, max_individuals)), # stdev
+        jnp.ones(max_individuals), # fitness_score
+        jnp.zeros(max_individuals), # cluster_centroids
+        jnp.zeros(param_size), # low_density_center
+        jnp.zeros(max_individuals) # cluster_assignments
+    )
+
+def initialize_normative_ks(param_size: int):
+    return (
+        jnp.ones(20), # rolling_avg_fitness
+        jnp.ones(20), # rolling_best_fitness
+        jnp.ones(20), # rolling_norm_entropy
+        jnp.array([0.0]), # avg_fitness_slope
+        jnp.array([0.0]), # best_fitness_slope
+        jnp.array([0.0]), # norm_entropy_slope
+        jnp.array([0.0]) # stagnation_slope
     )
 
 @jax.jit
@@ -72,7 +94,65 @@ def update_knowledge_sources(belief_space, best_individual, max_individuals=100)
     
     return updated_belief_space_history
 
+
+def update_topographic_ks(belief_space, max_individuals=1000):
+    topographic_ks = belief_space[4]
+    transposed_topographic_ks_center = topographic_ks[0].T
+    centroids, assignments = kmeans(transposed_topographic_ks_center)
+
+    lowest_density_cluster, center_index = least_frequent_cluster(assignments)
+
+    random_center = transposed_topographic_ks_center[center_index]
+
+    reshaped_random_center = random_center.reshape(transposed_topographic_ks_center.shape[1])
+
+    print('reshaped random center : ', reshaped_random_center.shape)
+
+    updated_topographic_ks = (topographic_ks[0], topographic_ks[1], topographic_ks[2], centroids, reshaped_random_center, assignments)
+    updated_belief_space_topographic = belief_space[:4] + (updated_topographic_ks,) + belief_space[5:]
+    return updated_belief_space_topographic
+   
+@jax.jit
+def update_normative_ks(belief_space, best_fitness, avg_fitness, norm_entropy, adjust_kmeans_iterations):
+    normative_ks = belief_space[5]
+
+    one_dim_avg_fitness = jnp.array([avg_fitness])
+    one_dim_best_fitness = jnp.array([best_fitness])
+    one_dim_norm_entropy = jnp.array([norm_entropy])
+
+    updated_rolling_avg_fitness = jnp.concatenate([one_dim_avg_fitness, normative_ks[0]], axis=0)[:20]
+    #jax.debug.print('updated rolling avg fitness : {} ', updated_rolling_avg_fitness)
+    updated_rolling_best_fitness = jnp.concatenate([one_dim_best_fitness, normative_ks[1]], axis=0)[:20]
+    updated_rolling_norm_entropy = jnp.concatenate([one_dim_norm_entropy, normative_ks[2]], axis=0)[:20]
+
+    avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope = calculate_slopes(avg_fitness_window=updated_rolling_avg_fitness, best_fitness_window=updated_rolling_best_fitness, norm_entropy_window=updated_rolling_norm_entropy)
+
+    ks_weights = update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope)
+
+    neg_kmeans_adjustment = ks_weights[0] * -adjust_kmeans_iterations
+    neg_kmeans_adjustment += ks_weights[1] * -adjust_kmeans_iterations
+    neg_kmeans_adjustment += ks_weights[2] * -adjust_kmeans_iterations
+    pos_kmeans_adjustment = ks_weights[3] * adjust_kmeans_iterations
+
+    net_kmeans_adjustment = neg_kmeans_adjustment + pos_kmeans_adjustment
+
+    updated_normative_ks = (updated_rolling_avg_fitness, updated_rolling_best_fitness, updated_rolling_norm_entropy, avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope)    
+
+    updated_belief_space_normative = belief_space[:5] + (updated_normative_ks,) + belief_space[6:]
+
+    return updated_belief_space_normative, net_kmeans_adjustment
+
 def get_center_guidance(belief_space,t):
+    topographic_ks = belief_space[4]
+    normative_ks = belief_space[5]
+
+    avg_fitness_slope = normative_ks[3]
+    best_fitness_slope = normative_ks[4]
+    norm_entropy_slope = normative_ks[5]
+    stagnation_slope = normative_ks[6]
+
+    ks_weights = update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope) 
+
     decay_factor_history = 0.20
     decay_factor_situational = 0.08
 
@@ -81,13 +161,14 @@ def get_center_guidance(belief_space,t):
     arr = jnp.array([t,100])
     n = jnp.min(arr)
 
-    ks_weights = jnp.array([.2, .4, .4])
+    #ks_weights = jnp.array([.1, .8, .1])
     #print("n : ", n)
     #print("t : ", t)
     domain_ks_center = belief_space[1][0]
     situational_ks_center = belief_space[2][0] #[:,:n]
     history_ks_center = belief_space[3][0] #[:,:t]
 
+    topographic_ks_center = topographic_ks[4]
 
     situational_valid_columns_mask = jnp.arange(situational_ks_center.shape[1]) < t
     
@@ -136,7 +217,8 @@ def get_center_guidance(belief_space,t):
     domain_ks_center_weighted = domain_ks_center * ks_weights[0]
     situational_row_averages_weighted = situational_weighted_averages * ks_weights[1]
     history_row_averages_weighted = history_weighted_averages * ks_weights[2]
-    
+    topographic_ks_center_weighted = topographic_ks_center * ks_weights[3]
+
     #history_row_sums = history_masked_data.sum(axis=1)
 
     #history_row_averages = history_row_sums / t
@@ -145,24 +227,35 @@ def get_center_guidance(belief_space,t):
     #history_ks_center_weights = jnp.power(decay_factor, jnp.arange(t))
     #history_ks_center_avg = jnp.average(history_ks_center, weights=history_ks_center_weights, axis=1)
 
-    return domain_ks_center_weighted + situational_row_averages_weighted + history_row_averages_weighted
+    return domain_ks_center_weighted + situational_row_averages_weighted + history_row_averages_weighted + topographic_ks_center_weighted
     #return jnp.mean(jnp.array([domain_ks_center_weighted, situational_row_averages_weighted, history_row_averages_weighted]), axis=0)
     #return domain_ks_center
 
-def get_stdev_guidance(belief_space,t):
+def get_stdev_guidance(belief_space,t, stdev):
+    topographic_ks = belief_space[4]
+    normative_ks = belief_space[5]
+
     decay_factor_historical = 0.20
     decay_factor_situational = 0.08
 
     max_iterations = 5000
 
-    ks_weights = jnp.array([.2, .4, .4])
+    #ks_weights = jnp.array([.1, .8, .1])
     
+    avg_fitness_slope = normative_ks[3]
+    best_fitness_slope = normative_ks[4]
+    norm_entropy_slope = normative_ks[5]
+    stagnation_slope = normative_ks[6]
+
+    ks_weights = update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope)
+
     arr = jnp.array([t,100])
     n = jnp.min(arr)
 
     domain_ks_stdev = belief_space[1][1]
     situational_ks_stdev = belief_space[2][1]#[:,:n]
     history_ks_stdev = belief_space[3][1]#[:,:t]
+
 
 
     situational_valid_columns_mask = jnp.arange(situational_ks_stdev.shape[1]) < t
@@ -215,11 +308,13 @@ def get_stdev_guidance(belief_space,t):
     #history_ks_stdev_weights = jnp.power(decay_factor, jnp.arange(t))
     #history_ks_stdev_avg = jnp.average(history_ks_stdev, weights=history_ks_stdev_weights, axis=1)
 
-    domain_ks_stdev_weighted = domain_ks_stdev * weights[0]
-    situational_row_averages_weighted = situational_weighted_averages * weights[1]
-    history_row_averages_weighted = history_weighted_averages * weights[2]
+    domain_ks_stdev_weighted = domain_ks_stdev * ks_weights[0]
+    situational_row_averages_weighted = situational_weighted_averages * ks_weights[1]
+    history_row_averages_weighted = history_weighted_averages * ks_weights[2]
 
-    return domain_ks_stdev_weighted + situational_row_averages_weighted + history_row_averages_weighted
+    topographic_ks_stdev = stdev * ks_weights[3]
+
+    return domain_ks_stdev_weighted + situational_row_averages_weighted + history_row_averages_weighted + topographic_ks_stdev
     #return jnp.mean(jnp.array([domain_ks_stdev_weighted, situational_row_averages_weighted, history_row_averages_weighted]), axis=0)
     #return domain_ks_stdev
 

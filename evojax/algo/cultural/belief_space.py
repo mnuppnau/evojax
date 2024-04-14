@@ -4,7 +4,7 @@ import jax
 
 #from jax import jrandom
 from typing import List, Tuple ,Dict
-from evojax.algo.cultural.knowledge_sources import initialize_domain_ks, initialize_situational_ks, initialize_history_ks, get_center_guidance, get_stdev_guidance
+from evojax.algo.cultural.knowledge_sources import initialize_domain_ks, initialize_situational_ks, initialize_history_ks, initialize_topographic_ks, initialize_normative_ks, get_center_guidance, get_stdev_guidance
 #from evojax.algo.cultural.knowledge_sources import accept_domain_ks, accept_situational_ks, accept_history_ks, get_center_guidance, get_stdev_guidance
 
 def initialize_belief_space(population_size: int, param_size: int, key: int , scaled_noises_adjustment_rate: float ,num_clusters: int = 3):
@@ -13,7 +13,9 @@ def initialize_belief_space(population_size: int, param_size: int, key: int , sc
         initialize_domain_ks(param_size),
         initialize_situational_ks(param_size),
         initialize_history_ks(param_size),
-        jnp.array([0.10]),
+        initialize_topographic_ks(param_size, num_clusters),
+        initialize_normative_ks(param_size),
+        jnp.array([0.2]),
         generate_scaled_noises_indexes(population_size, key, scaled_noises_adjustment_rate),
     )
     return belief_space
@@ -51,9 +53,9 @@ def influence(belief_space, scaled_noises):
 
 @jax.jit
 def get_updated_params(belief_space, center, stdev, t):
-    learning_rate = belief_space[4][0] 
+    learning_rate = belief_space[6][0] 
     combined_guidance_center = combine_center_guidance(belief_space, t)
-    combined_guidance_stdev = combine_stdev_guidance(belief_space, t)
+    combined_guidance_stdev = combine_stdev_guidance(belief_space, t, stdev)
 
     new_center = (1 - learning_rate) * center + learning_rate * combined_guidance_center
     new_stdev = (1 - learning_rate) * stdev + learning_rate * combined_guidance_stdev
@@ -63,8 +65,8 @@ def get_updated_params(belief_space, center, stdev, t):
 def combine_center_guidance(belief_space, t):
     return get_center_guidance(belief_space, t)
 
-def combine_stdev_guidance(belief_space,t):
-    return get_stdev_guidance(belief_space, t)
+def combine_stdev_guidance(belief_space,t, stdev):
+    return get_stdev_guidance(belief_space, t, stdev)
 
 #class BeliefSpace:
 #    def __init__(self, population_size: int, num_clusters: int = 3):
