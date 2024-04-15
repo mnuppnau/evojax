@@ -15,7 +15,7 @@ def initialize_belief_space(population_size: int, param_size: int, key: int , sc
         initialize_history_ks(param_size),
         initialize_topographic_ks(param_size, num_clusters),
         initialize_normative_ks(param_size),
-        jnp.array([0.2]),
+        jnp.array([0.13]),
         generate_scaled_noises_indexes(population_size, key, scaled_noises_adjustment_rate),
     )
     return belief_space

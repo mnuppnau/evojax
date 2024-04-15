@@ -103,31 +103,20 @@ def least_frequent_cluster(arr):
     return least_frequent_element, first_index
 
 @jit
-def calculate_entropy(centers, stdevs, num_bins=10):
-    # Flatten the centers and stdevs
-    flattened_centers = jnp.reshape(centers, (-1,))
-    flattened_stdevs = jnp.reshape(stdevs, (-1,))
+def calculate_entropy(population):
+    # Normalize the population matrix
+    population_norm = population / jnp.linalg.norm(population, axis=1, keepdims=True)
     
-    # Combine centers and stdevs into a single array
-    combined_data = jnp.concatenate([flattened_centers, flattened_stdevs])
+    # Calculate the cosine similarity matrix
+    cosine_sim = jnp.dot(population_norm, population_norm.T)
     
-    # Estimate the probability distribution for the combined data
-    min_val = jnp.min(combined_data)
-    max_val = jnp.max(combined_data)
-    bin_edges = jnp.linspace(min_val, max_val, num_bins + 1)
-    bin_indices = jnp.searchsorted(bin_edges, combined_data)
-    bin_counts = jnp.zeros((num_bins,))
-    bin_counts.at[bin_indices].add(1)
-    histogram = bin_counts / jnp.sum(bin_counts)
+    # Calculate the mean cosine similarity
+    mean_cosine_sim = jnp.mean(cosine_sim)
     
-    # Calculate the entropy
-    entropy = -jnp.sum(histogram * jnp.log(histogram + 1e-8))
+    # Convert cosine similarity to cosine distance
+    mean_cosine_distance = 1 - mean_cosine_sim
     
-    # Normalize the entropy
-    max_entropy = jnp.log(centers.size + stdevs.size)
-    normalized_entropy = entropy / max_entropy
-    
-    return normalized_entropy
+    return mean_cosine_distance
 
 #@jit
 #def calculate_slope(values):
@@ -147,8 +136,23 @@ def calculate_slopes(avg_fitness_window, best_fitness_window, norm_entropy_windo
     avg_fitness_slope = calculate_slope(avg_fitness_window)
     best_fitness_slope = calculate_slope(best_fitness_window)
     norm_entropy_slope = calculate_slope(norm_entropy_window)
+    
+    # Normalize the slope values
+    slope_values = jnp.array([avg_fitness_slope, best_fitness_slope, norm_entropy_slope])
+    normalized_slopes = normalize_slopes(slope_values)
+
+    avg_fitness_slope = normalized_slopes[0]
+    best_fitness_slope = normalized_slopes[1]
+    norm_entropy_slope = normalized_slopes[2]
+
     stagnation_slope = 1 - best_fitness_slope
     return avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope
+
+def normalize_slopes(slope_values):
+    min_value = jnp.min(slope_values)
+    max_value = jnp.max(slope_values)
+    normalized_slopes = (slope_values - min_value) / (max_value - min_value)
+    return normalized_slopes
 
 @jit
 def calculate_slope(window):

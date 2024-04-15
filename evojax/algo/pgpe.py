@@ -276,7 +276,7 @@ class PGPE(NEAlgorithm):
         #self._influence = jax.jit(influence)
 
     def ask(self) -> jnp.ndarray:
-        if self._t > 100:
+        if self._t > 20:
        
            #self._center, self._stdev = update_center_and_stdev(
            #     self._center, 
@@ -353,8 +353,9 @@ class PGPE(NEAlgorithm):
       
         self._avg_score = jnp.array(fitness).mean()
 
-        norm_entropy = calculate_entropy(self._center, self._stdev)
+        norm_entropy = calculate_entropy(self._solutions)
 
+        #norm_entropy = 0.2
         self.population, best_individual = update_population(
             fitness_scores=self.fitness_scores,
             center=self._center,

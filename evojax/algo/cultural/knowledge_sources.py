@@ -151,11 +151,16 @@ def get_center_guidance(belief_space,t):
     norm_entropy_slope = normative_ks[5]
     stagnation_slope = normative_ks[6]
 
+    #jax.debug.print('avg fitness slope : {} ', avg_fitness_slope)
+    #jax.debug.print('best fitness slope : {} ', best_fitness_slope)
+    #jax.debug.print('norm entropy slope : {} ', norm_entropy_slope)
+    #jax.debug.print('stagnation slope : {} ', stagnation_slope)
+
     ks_weights = update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope) 
 
-    print('ks weights : ', ks_weights)
+    jax.debug.print('ks weights : {} ', ks_weights)
 
-    decay_factor_history = 0.20
+    decay_factor_history = 0.80
     decay_factor_situational = 0.08
 
     max_iterations = 5000
