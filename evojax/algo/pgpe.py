@@ -92,46 +92,6 @@ def update_stdev(
     return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
 
 
-#def update_center_and_stdev(
-#    center: jnp.ndarray,
-#    stdev: jnp.ndarray, belief_space: dict,
-#    previous_best_score: float,
-#    best_score: float,
-#    t: int
-#) -> Tuple[jnp.ndarray, jnp.ndarray]:
-#    def update():
-#        print("In ask_func Updating center and stdev")
-#        return get_updated_params(belief_space, center, stdev, t)
-#
-#    def no_update():
-#        print("No update needed")
-#        return center, stdev
-#
-#    update_needed = jnp.logical_and(
-#        jnp.logical_and(previous_best_score is not None, best_score is not None),
-#        best_score < previous_best_score
-#    )
-#
-#    return jax.lax.cond(update_needed, update, no_update)
-
-@partial(jax.jit, static_argnums=(3,4))
-def ask_func_infl(
-    key: jnp.ndarray,
-    stdev: jnp.ndarray,
-    center: jnp.ndarray,
-    num_directions: int,
-    solution_size: int,
-    belief_space: dict,
-) -> Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]:
-    next_key, key = random.split(key)
-    scaled_noises = random.normal(key, [num_directions, solution_size]) * stdev
-    # Apply the influence adjustments to the scaled noises
-    scaled_noises = influence(belief_space,scaled_noises)
-        
-    solutions = jnp.hstack([center + scaled_noises, center - scaled_noises]).reshape(-1, solution_size)    
- 
-    return next_key, scaled_noises, solutions
-
 @partial(jax.jit, static_argnums=(3, 4))
 def ask_func(
     key: jnp.ndarray,
@@ -261,67 +221,20 @@ class PGPE(NEAlgorithm):
         self._best_score = -10.0
 
         self._scaled_noises_adjustment_rate = 0.1
-        self._kmeans_rate = 0.02
+        self._kmeans_rate = 0.005
         self._adjust_kmeans_rate = 0.001
 
         self._kmeans_iterations = self._max_iter * self._kmeans_rate
         self._adjust_kmeans_iterations = self._max_iter * self._adjust_kmeans_rate
 
-        #self.population_space = initialize_population(self.pop_size, self._center, self._stdev)
-
         self.belief_space = initialize_belief_space(population_size=self.pop_size, key=self._key, scaled_noises_adjustment_rate=self._scaled_noises_adjustment_rate, param_size=param_size)
-        #self.belief_space.assign_indexes_to_knowledge_sources()
-
-        #self._get_updated_params = jax.jit(get_updated_params)
-        #self._influence = jax.jit(influence)
 
     def ask(self) -> jnp.ndarray:
         if self._t > 20:
-       
-           #self._center, self._stdev = update_center_and_stdev(
-           #     self._center, 
-           #     self._stdev, 
-           #     self.belief_space, 
-           #     self._previous_best_score, 
-           #     self._best_score,
-           #     self._t
-           # )
-           #if self._previous_best_score is not None and self._best_score is not None:
-           #    if self._best_score < self._previous_best_score:
-                   #print("Updating center and stdev")
-            center, stdev = get_updated_params(self.belief_space ,self._center, self._stdev, self._t)
-           #        self._center = center
-           #        self._stdev = stdev
-           #    else:
-           #        center, stdev = self._center, self._stdev
-           #else:
-           #    center, stdev = self._center, self._stdev
+           center, stdev = get_updated_params(self.belief_space, self._stdev, self._t)
         else:
              center, stdev = self._center, self._stdev
 
-        #print("Center:", center)
-        #print("Center shape:", center.shape)
-        #print("stdev:", stdev)
-        #print("stdev shape:", stdev.shape)
-       
-        #if self._t > 4:
-        #    print("scaled noises: ", self._scaled_noises)
-        #    print("scaled noises shape: ", self._scaled_noises.shape)
-        
-        # Retrieve updated center and stdev from the belief space if available
-        #if self._previous_best_score is not None and self._best_score is not None:
-        #    if self._best_score < self._previous_best_score:
-        #        print("Updating center and stdev")
-        #        center, stdev = get_updated_params(self.belief_space ,self._center, self._stdev)
-        #        self._center = center
-        #        self._stdev = stdev
-        #    else:
-        #        center, stdev = self._center, self._stdev
-        #else:
-        #    center, stdev = self._center, self._stdev
-        
-        #belief_space = self.belief_space
-   
         self._key, self._scaled_noises, self._solutions = ask_func(
             self._key,
             stdev,
@@ -330,21 +243,6 @@ class PGPE(NEAlgorithm):
             self._center.size,
             )
 
-        #next_key, key = random.split(self._key)
-        #scaled_noises = random.normal(key, [self._num_directions, self._center.size]) * stdev
-        
-                # Apply the influence adjustments to the scaled noises
-       
-        #self._solutions = jnp.hstack(
-        #    [center + self._scaled_noises, center - self._scaled_noises]
-        #).reshape(-1, self._center.size)
-        
-        # Calculate and store noise magnitudes in the population space
-        #for i, noise in enumerate(self._scaled_noises):
-        #    magnitude = jnp.linalg.norm(noise)
-        #    self.population_space.individuals[i].noise_magnitude = magnitude
-        # 
-        #self._key = next_key
         return self._solutions
 
     def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:
@@ -355,58 +253,17 @@ class PGPE(NEAlgorithm):
 
         norm_entropy = calculate_entropy(self._solutions)
 
-        #norm_entropy = 0.2
-        self.population, best_individual = update_population(
-            fitness_scores=self.fitness_scores,
-            center=self._center,
-            stdev=self._stdev,
-            scaled_noises=self._scaled_noises
-        )
-
-        #individuals_fitness_score = [{'individual': ind, 'fitness_score': score} 
-        #                     for ind, score in zip(self.population_space, self.population_space['fitness_scores'])]
-        
-
-        #best_individual = min(individuals_fitness_score, key=lambda x: x['fitness_score'])
-
-        # Assuming self.population_space is your list of dictionaries
-        #population_space = self.population_space  # Example, replace with your actual list
-        
-        # Initialize a variable to hold the dict with the fitness value closest to zero
-        
-        
-        # closest_to_zero now holds the dict with the fitness value closest to zero
-
-        #self.belief_space.accept(self.population_space.individuals)
-        
-        #self.belief_space.update()
-
-        self.belief_space = update_knowledge_sources(self.belief_space, best_individual)   
-        
-        if self._t == 10:
-            self.belief_space = update_topographic_ks(self.belief_space)
-        elif self._t % self._kmeans_iterations == 0:
-            self.belief_space = update_topographic_ks(self.belief_space)
-
-        self.belief_space, self._adjust_kmeans_iterations = update_normative_ks(self.belief_space, best_fitness=self._best_score, avg_fitness=self._avg_score, norm_entropy=norm_entropy, adjust_kmeans_iterations=self._adjust_kmeans_iterations)
-
-        self._kmeans_iterations += self._adjust_kmeans_iterations
-
-        #self.belief_space[ks_type] = update_belief_space(self.belief_space, ks_type)
-
-        #print("Domain KS:", self.belief_space.domain_ks)
-        #print("Situational KS:", self.belief_space.situational_ks)
-        #print("History KS:", self.belief_space.history_ks)
-        
         grad_center, grad_stdev = compute_reinforce_update(
             fitness_scores=self.fitness_scores,
             scaled_noises=self._scaled_noises,
             stdev=self._stdev,
         )
+
         self._opt_state = self._opt_update(
             self._t // self._lr_decay_steps, -grad_center, self._opt_state
         )
         self._t += 1
+        
         self._center = self._get_params(self._opt_state)
         self._stdev = update_stdev(
             stdev=self._stdev,
@@ -414,6 +271,24 @@ class PGPE(NEAlgorithm):
             max_change=self._stdev_max_change,
             grad=grad_stdev,
         )
+
+        self.population, best_individual = update_population(
+            fitness_scores=self.fitness_scores,
+            center=self._center,
+            stdev=self._stdev,
+            scaled_noises=self._scaled_noises
+        )
+
+        self.belief_space = update_knowledge_sources(self.belief_space, best_individual)   
+        
+        if self._t == 10:
+            self.belief_space = update_topographic_ks(self.belief_space, best_individual)
+        elif self._t > 10 and self._t % 3 == 0:
+            self.belief_space = update_topographic_ks(self.belief_space, best_individual)
+
+        self.belief_space, self._adjust_kmeans_iterations = update_normative_ks(self.belief_space, best_fitness=self._best_score, avg_fitness=self._avg_score, norm_entropy=norm_entropy, adjust_kmeans_iterations=self._adjust_kmeans_iterations)
+
+        self._kmeans_iterations += self._adjust_kmeans_iterations
 
     @property
     def best_params(self) -> jnp.ndarray:

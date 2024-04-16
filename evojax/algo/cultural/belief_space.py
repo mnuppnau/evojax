@@ -15,7 +15,7 @@ def initialize_belief_space(population_size: int, param_size: int, key: int , sc
         initialize_history_ks(param_size),
         initialize_topographic_ks(param_size, num_clusters),
         initialize_normative_ks(param_size),
-        jnp.array([0.13]),
+        jnp.array([0.6]),
         generate_scaled_noises_indexes(population_size, key, scaled_noises_adjustment_rate),
     )
     return belief_space
@@ -34,31 +34,34 @@ def generate_scaled_noises_indexes(population_size, key, scaled_noises_adjustmen
 def influence(belief_space, scaled_noises):
     # Extracted and concatenated noise magnitudes
     domain_noise = belief_space[1][2]  # Domain KS noise magnitude
-    situational_noise = belief_space[2][2][:len(belief_space[5]) // 2]  # Half from situational KS
-    history_noise = belief_space[3][2][:(len(belief_space[5]) + 1) // 2]  # Half (rounded up) from history KS
+    situational_noise = belief_space[2][2][:len(belief_space[7]) // 2]  # Half from situational KS
+    history_noise = belief_space[3][2][:(len(belief_space[7]) + 1) // 2]  # Half (rounded up) from history KS
     
     noise_magnitudes = jnp.concatenate([domain_noise, situational_noise, history_noise])
     
-    noise_magnitudes = noise_magnitudes[:len(belief_space[5])]
+    noise_magnitudes = noise_magnitudes[:len(belief_space[7])]
     
     noise_magnitudes = noise_magnitudes[:, None]  # Properly broadcasting across columns
     
-    selected_rows = scaled_noises[belief_space[5], :]
+    selected_rows = scaled_noises[belief_space[7], :]
     
     adjusted_rows = selected_rows * noise_magnitudes
     
-    adjusted_scaled_noises = scaled_noises.at[belief_space[5], :].set(adjusted_rows)
+    adjusted_scaled_noises = scaled_noises.at[belief_space[7], :].set(adjusted_rows)
 
     return adjusted_scaled_noises
 
 @jax.jit
-def get_updated_params(belief_space, center, stdev, t):
+def get_updated_params(belief_space, stdev, t):
     learning_rate = belief_space[6][0] 
-    combined_guidance_center = combine_center_guidance(belief_space, t)
-    combined_guidance_stdev = combine_stdev_guidance(belief_space, t, stdev)
+    combined_guidance_center, topographic_center_weight = combine_center_guidance(belief_space, t)
+    combined_guidance_stdev, topographic_stdev_weight = combine_stdev_guidance(belief_space, t, stdev)
 
-    new_center = (1 - learning_rate) * center + learning_rate * combined_guidance_center
-    new_stdev = (1 - learning_rate) * stdev + learning_rate * combined_guidance_stdev
+    #new_center = (1 - ((learning_rate//2)-(.1*topographic_center_weight))) * center + ((learning_rate//2)-(.1*topographic_center_weight)) * combined_guidance_center
+    #new_stdev = ((1 - ((learning_rate)+(.3*topographic_stdev_weight))) * stdev + ((learning_rate)+(0.7*topographic_stdev_weight)) * combined_guidance_stdev)
+
+    new_center = combined_guidance_center
+    new_stdev = combined_guidance_stdev
 
     return new_center, new_stdev
 
