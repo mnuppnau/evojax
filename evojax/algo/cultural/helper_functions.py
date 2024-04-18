@@ -166,7 +166,7 @@ def calculate_slope(window):
 def update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope):
     domain_weight = best_fitness_slope
     situational_weight = avg_fitness_slope
-    history_weight = best_fitness_slope
+    history_weight = norm_entropy_slope
     topographic_weight = stagnation_slope
 
     total_weight = domain_weight + situational_weight + history_weight + topographic_weight
@@ -174,5 +174,7 @@ def update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, st
     situational_weight /= total_weight
     history_weight /= total_weight
     topographic_weight /= total_weight
+
+    history_weight = history_weight * 0.9
 
     return jnp.array([domain_weight, situational_weight, history_weight, topographic_weight])

@@ -61,8 +61,8 @@ def initialize_normative_ks(param_size: int):
     )
 
 @jax.jit
-def update_knowledge_sources(belief_space, best_individual, max_individuals=100):
-    
+def update_knowledge_sources(belief_space, best_individual, num_iterations=5000, max_individuals=100):
+   
     updated_belief_space_domain = belief_space[:1] + (best_individual,) + belief_space[2:]
 
     center, stdev, noise_magnitude, fitness_value = updated_belief_space_domain[2]
@@ -88,8 +88,19 @@ def update_knowledge_sources(belief_space, best_individual, max_individuals=100)
     
     # Reconstruct the belief space with the updated situational KS
     updated_belief_space_situational = updated_belief_space_domain[:2] + (updated_situational_ks,) + updated_belief_space_domain[3:]
+   
+    center, stdev, noise_magnitude, fitness_value = updated_belief_space_domain[3]
+       
+    updated_center = jnp.concatenate([best_center_reshaped, center], axis=1)[:, :num_iterations]
+    updated_stdev = jnp.concatenate([best_stdev[:, None], stdev], axis=1)[:, :num_iterations]
     
-    updated_history_ks = belief_space[3]  # Placeholder operation
+    updated_noise_magnitude = jnp.concatenate([best_noise_magnitude, noise_magnitude], axis=0)[:num_iterations]
+    
+    updated_fitness_value = jnp.concatenate([best_fitness_value, fitness_value], axis=0)[:num_iterations]
+    
+    # Construct the updated situational knowledge source
+    updated_history_ks = (updated_center, updated_stdev, updated_noise_magnitude, updated_fitness_value)
+    
     updated_belief_space_history = updated_belief_space_situational[:3] + (updated_history_ks,) + updated_belief_space_situational[4:]
     
     return updated_belief_space_history
@@ -181,7 +192,7 @@ def get_center_guidance(belief_space,t):
 
     jax.debug.print('ks weights : {} ', ks_weights)
 
-    decay_factor_history = 0.90
+    decay_factor_history = 0.95
     decay_factor_situational = 0.90
 
     max_iterations = 5000
@@ -231,7 +242,7 @@ def get_center_guidance(belief_space,t):
     history_masked_data = history_ks_center * history_valid_columns_mask
 
     column_indices = jnp.arange(max_iterations)
-    weights = jnp.exp(-decay_factor_situational * column_indices)
+    weights = jnp.exp(-decay_factor_history * column_indices)
     
     masked_weights = weights * history_valid_columns_mask
 

@@ -231,7 +231,7 @@ class PGPE(NEAlgorithm):
 
     def ask(self) -> jnp.ndarray:
         if self._t > 20:
-           center, stdev = get_updated_params(self.belief_space, self._stdev, self._t)
+           center, stdev = get_updated_params(self.belief_space, self._center, self._stdev, self._t)
         else:
              center, stdev = self._center, self._stdev
 
@@ -283,7 +283,7 @@ class PGPE(NEAlgorithm):
         
         if self._t == 10:
             self.belief_space = update_topographic_ks(self.belief_space, best_individual)
-        elif self._t > 10 and self._t % 3 == 0:
+        elif self._t > 10:
             self.belief_space = update_topographic_ks(self.belief_space, best_individual)
 
         self.belief_space, self._adjust_kmeans_iterations = update_normative_ks(self.belief_space, best_fitness=self._best_score, avg_fitness=self._avg_score, norm_entropy=norm_entropy, adjust_kmeans_iterations=self._adjust_kmeans_iterations)

@@ -15,7 +15,7 @@ def initialize_belief_space(population_size: int, param_size: int, key: int , sc
         initialize_history_ks(param_size),
         initialize_topographic_ks(param_size, num_clusters),
         initialize_normative_ks(param_size),
-        jnp.array([0.6]),
+        jnp.array([0.8]),
         generate_scaled_noises_indexes(population_size, key, scaled_noises_adjustment_rate),
     )
     return belief_space
@@ -52,7 +52,7 @@ def influence(belief_space, scaled_noises):
     return adjusted_scaled_noises
 
 @jax.jit
-def get_updated_params(belief_space, stdev, t):
+def get_updated_params(belief_space, center, stdev, t):
     learning_rate = belief_space[6][0] 
     combined_guidance_center, topographic_center_weight = combine_center_guidance(belief_space, t)
     combined_guidance_stdev, topographic_stdev_weight = combine_stdev_guidance(belief_space, t, stdev)
@@ -63,6 +63,9 @@ def get_updated_params(belief_space, stdev, t):
     new_center = combined_guidance_center
     new_stdev = combined_guidance_stdev
 
+    #new_center = (1 - learning_rate//2) * center + learning_rate//2 * combined_guidance_center
+    #new_stdev = (1 - learning_rate) * stdev + learning_rate * combined_guidance_stdev
+    
     return new_center, new_stdev
 
 def combine_center_guidance(belief_space, t):
