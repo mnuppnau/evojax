@@ -29,7 +29,7 @@ def initialize_situational_ks(param_size: int, max_individuals: int = 100):
         jnp.zeros(max_individuals) # fitness_score
     )
 
-def initialize_history_ks(param_size: int, decay_factor: float = 0.8, num_iterations: int = 5000):
+def initialize_history_ks(param_size: int, decay_factor: float = 0.8, num_iterations: int = 500):
     # Pre-allocate arrays with zeros for each individual property, given num_iterations
     # Assuming 'center' and 'stdev' are of size 'param_size'
     return (
@@ -39,7 +39,7 @@ def initialize_history_ks(param_size: int, decay_factor: float = 0.8, num_iterat
         jnp.zeros(num_iterations) # fitness_score
     )
 
-def initialize_topographic_ks(param_size: int, num_clusters: int = 10, max_individuals: int = 1000):
+def initialize_topographic_ks(param_size: int, num_clusters: int = 10, max_individuals: int = 500):
     return (
         jnp.zeros((param_size, max_individuals)), # center
         jnp.zeros((param_size, max_individuals)), # stdev
@@ -51,9 +51,9 @@ def initialize_topographic_ks(param_size: int, num_clusters: int = 10, max_indiv
 
 def initialize_normative_ks(param_size: int):
     return (
-        jnp.ones(20), # rolling_avg_fitness
-        jnp.ones(20), # rolling_best_fitness
-        jnp.ones(20), # rolling_norm_entropy
+        jnp.ones(60), # rolling_avg_fitness
+        jnp.ones(60), # rolling_best_fitness
+        jnp.ones(60), # rolling_norm_entropy
         jnp.array([0.0]), # avg_fitness_slope
         jnp.array([0.0]), # best_fitness_slope
         jnp.array([0.0]), # norm_entropy_slope
@@ -61,7 +61,7 @@ def initialize_normative_ks(param_size: int):
     )
 
 @jax.jit
-def update_knowledge_sources(belief_space, best_individual, num_iterations=5000, max_individuals=100):
+def update_knowledge_sources(belief_space, best_individual, num_iterations=500, max_individuals=100):
    
     updated_belief_space_domain = belief_space[:1] + (best_individual,) + belief_space[2:]
 
@@ -106,7 +106,7 @@ def update_knowledge_sources(belief_space, best_individual, num_iterations=5000,
     return updated_belief_space_history
 
 
-def update_topographic_ks(belief_space, best_individual, max_individuals=1000):
+def update_topographic_ks(belief_space, best_individual, max_individuals=500):
     topographic_ks = belief_space[4]
 
     center, stdev = topographic_ks[:2]
@@ -144,10 +144,10 @@ def update_normative_ks(belief_space, best_fitness, avg_fitness, norm_entropy, a
     one_dim_best_fitness = jnp.array([best_fitness])
     one_dim_norm_entropy = jnp.array([norm_entropy])
 
-    updated_rolling_avg_fitness = jnp.concatenate([one_dim_avg_fitness, normative_ks[0]], axis=0)[:20]
+    updated_rolling_avg_fitness = jnp.concatenate([one_dim_avg_fitness, normative_ks[0]], axis=0)[:60]
     #jax.debug.print('updated rolling avg fitness : {} ', updated_rolling_avg_fitness)
-    updated_rolling_best_fitness = jnp.concatenate([one_dim_best_fitness, normative_ks[1]], axis=0)[:20]
-    updated_rolling_norm_entropy = jnp.concatenate([one_dim_norm_entropy, normative_ks[2]], axis=0)[:20]
+    updated_rolling_best_fitness = jnp.concatenate([one_dim_best_fitness, normative_ks[1]], axis=0)[:60]
+    updated_rolling_norm_entropy = jnp.concatenate([one_dim_norm_entropy, normative_ks[2]], axis=0)[:60]
 
     avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope = calculate_slopes(avg_fitness_window=updated_rolling_avg_fitness, best_fitness_window=updated_rolling_best_fitness, norm_entropy_window=updated_rolling_norm_entropy)
 
@@ -184,18 +184,18 @@ def get_center_guidance(belief_space,t):
 
     #ks_weights = ks_weights[:3]
 
-    jax.debug.print('ks weights : {} ', ks_weights)
+    #jax.debug.print('ks weights : {} ', ks_weights)
 
     max_index = jnp.argmax(ks_weights)
     result = jnp.zeros_like(ks_weights, dtype=jnp.int32)
     ks_weights = result.at[max_index].set(1)
 
-    jax.debug.print('ks weights : {} ', ks_weights)
+    #jax.debug.print('ks weights : {} ', ks_weights)
 
     decay_factor_history = 0.95
     decay_factor_situational = 0.90
 
-    max_iterations = 5000
+    max_iterations = 500
 
     arr = jnp.array([t,100])
     n = jnp.min(arr)
@@ -277,7 +277,7 @@ def get_stdev_guidance(belief_space,t, stdev):
     decay_factor_historical = 0.90
     decay_factor_situational = 0.90
 
-    max_iterations = 5000
+    max_iterations = 500
 
     #ks_weights = jnp.array([.1, .8, .1])
     
@@ -290,13 +290,13 @@ def get_stdev_guidance(belief_space,t, stdev):
 
     #ks_weights = ks_weights[:3]
 
-    jax.debug.print('ks weights : {} ', ks_weights)
+    #jax.debug.print('ks weights : {} ', ks_weights)
 
     max_index = jnp.argmax(ks_weights)
     result = jnp.zeros_like(ks_weights, dtype=jnp.int32)
     ks_weights = result.at[max_index].set(1)
 
-    jax.debug.print('ks weights : {} ', ks_weights)
+    #jax.debug.print('ks weights : {} ', ks_weights)
 
 
 

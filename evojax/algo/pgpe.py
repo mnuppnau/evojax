@@ -230,7 +230,7 @@ class PGPE(NEAlgorithm):
         self.belief_space = initialize_belief_space(population_size=self.pop_size, key=self._key, scaled_noises_adjustment_rate=self._scaled_noises_adjustment_rate, param_size=param_size)
 
     def ask(self) -> jnp.ndarray:
-        if self._t > 20:
+        if self._t > 200:
            center, stdev = get_updated_params(self.belief_space, self._center, self._stdev, self._t)
         else:
              center, stdev = self._center, self._stdev
@@ -281,10 +281,10 @@ class PGPE(NEAlgorithm):
 
         self.belief_space = update_knowledge_sources(self.belief_space, best_individual)   
         
-        if self._t == 10:
+        if self._t >= 180 and self._t % 19 == 0:
             self.belief_space = update_topographic_ks(self.belief_space, best_individual)
-        elif self._t > 10:
-            self.belief_space = update_topographic_ks(self.belief_space, best_individual)
+        #elif self._t > 10:
+        #    self.belief_space = update_topographic_ks(self.belief_space, best_individual)
 
         self.belief_space, self._adjust_kmeans_iterations = update_normative_ks(self.belief_space, best_fitness=self._best_score, avg_fitness=self._avg_score, norm_entropy=norm_entropy, adjust_kmeans_iterations=self._adjust_kmeans_iterations)
 
