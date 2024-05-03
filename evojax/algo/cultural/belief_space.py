@@ -15,7 +15,7 @@ def initialize_belief_space(population_size: int, param_size: int, key: int , sc
         initialize_history_ks(param_size),
         initialize_topographic_ks(param_size, num_clusters),
         initialize_normative_ks(param_size),
-        jnp.array([0.8]),
+        jnp.array([0.16]),
         generate_scaled_noises_indexes(population_size, key, scaled_noises_adjustment_rate),
     )
     return belief_space
@@ -60,11 +60,11 @@ def get_updated_params(belief_space, center, stdev, t):
     #new_center = (1 - ((learning_rate//2)-(.1*topographic_center_weight))) * center + ((learning_rate//2)-(.1*topographic_center_weight)) * combined_guidance_center
     #new_stdev = ((1 - ((learning_rate)+(.3*topographic_stdev_weight))) * stdev + ((learning_rate)+(0.7*topographic_stdev_weight)) * combined_guidance_stdev)
 
-    new_center = combined_guidance_center
-    new_stdev = combined_guidance_stdev
+    #new_center = combined_guidance_center
+    #new_stdev = combined_guidance_stdev
 
-    #new_center = (1 - learning_rate//2) * center + learning_rate//2 * combined_guidance_center
-    #new_stdev = (1 - learning_rate) * stdev + learning_rate * combined_guidance_stdev
+    new_center = (1 - learning_rate) * center + learning_rate * combined_guidance_center
+    new_stdev = (1 - learning_rate) * stdev + learning_rate * combined_guidance_stdev
     
     return new_center, new_stdev
 

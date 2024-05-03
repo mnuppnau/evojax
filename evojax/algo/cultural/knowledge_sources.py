@@ -9,7 +9,7 @@ import numpy as np
 import copy
 
 from evojax.algo.cultural.population_space import Individual
-from evojax.algo.cultural.helper_functions import kmeans, calculate_slopes, update_weights, least_frequent_cluster
+from evojax.algo.cultural.helper_functions import kmeans, calculate_slopes, update_weights, least_frequent_cluster, combined_min_max_scale, combined_z_score_standardize, normalize_arrays, scale_arrays
 
 def initialize_domain_ks(param_size: int):
     return (
@@ -39,7 +39,7 @@ def initialize_history_ks(param_size: int, decay_factor: float = 0.8, num_iterat
         jnp.zeros(num_iterations) # fitness_score
     )
 
-def initialize_topographic_ks(param_size: int, num_clusters: int = 10, max_individuals: int = 1000):
+def initialize_topographic_ks(param_size: int, num_clusters: int = 3, max_individuals: int = 20):
     return (
         jnp.zeros((param_size, max_individuals)), # center
         jnp.zeros((param_size, max_individuals)), # stdev
@@ -51,9 +51,9 @@ def initialize_topographic_ks(param_size: int, num_clusters: int = 10, max_indiv
 
 def initialize_normative_ks(param_size: int):
     return (
-        jnp.ones(20), # rolling_avg_fitness
-        jnp.ones(20), # rolling_best_fitness
-        jnp.ones(20), # rolling_norm_entropy
+        jnp.ones(40), # rolling_avg_fitness
+        jnp.ones(40), # rolling_best_fitness
+        jnp.ones(40), # rolling_norm_entropy
         jnp.array([0.0]), # avg_fitness_slope
         jnp.array([0.0]), # best_fitness_slope
         jnp.array([0.0]), # norm_entropy_slope
@@ -105,15 +105,47 @@ def update_knowledge_sources(belief_space, best_individual, num_iterations=5000,
     
     return updated_belief_space_history
 
-
-def update_topographic_ks(belief_space, best_individual, max_individuals=1000):
+def add_ind_topographic_ks(belief_space, best_individual, max_individuals=20):
     topographic_ks = belief_space[4]
 
     center, stdev = topographic_ks[:2]
-       
+
     best_center, best_stdev, best_noise_magnitude, best_fitness_value = best_individual
-   
+
     best_center_reshaped = best_center.reshape(-1, 1)
+
+    updated_center = jnp.concatenate([best_center_reshaped, center], axis=1)[:, :max_individuals]
+
+    updated_stdev = jnp.concatenate([best_stdev[:, None], stdev], axis=1)[:, :max_individuals]
+   
+    updated_topographic_ks = (updated_center, updated_stdev, topographic_ks[2], topographic_ks[3], topographic_ks[4], topographic_ks[5])
+
+    transposed_topographic_ks_center = updated_topographic_ks[0].T
+    centroids, assignments = kmeans(transposed_topographic_ks_center)
+
+    lowest_density_cluster, center_index = least_frequent_cluster(assignments)
+
+    #random_center = transposed_topographic_ks_center[center_index]
+
+    #reshaped_random_center = random_center.reshape(transposed_topographic_ks_center.shape[1])
+
+    #print('reshaped random center : ', reshaped_random_center.shape)
+
+    final_topographic_ks = (updated_topographic_ks[0], updated_topographic_ks[1], updated_topographic_ks[2], centroids, best_center, assignments)
+    updated_belief_space_topographic = belief_space[:4] + (final_topographic_ks,) + belief_space[5:]
+    return updated_belief_space_topographic
+
+def update_topographic_ks(belief_space, best_individual, max_individuals=20):
+    topographic_ks = belief_space[4]
+
+    center, stdev = topographic_ks[:2]
+
+    #print('center shape : ', center.shape)
+    best_center, best_stdev, best_noise_magnitude, best_fitness_value = best_individual
+    #print('best center shape : ', best_center.shape)
+
+    best_center_reshaped = best_center.reshape(-1, 1)
+    #print('best center reshaped : ', best_center_reshaped.shape)
 
     updated_center = jnp.concatenate([best_center_reshaped, center], axis=1)[:, :max_individuals]
     #print('updated center shape : ', updated_center.shape) 
@@ -144,12 +176,28 @@ def update_normative_ks(belief_space, best_fitness, avg_fitness, norm_entropy, a
     one_dim_best_fitness = jnp.array([best_fitness])
     one_dim_norm_entropy = jnp.array([norm_entropy])
 
-    updated_rolling_avg_fitness = jnp.concatenate([one_dim_avg_fitness, normative_ks[0]], axis=0)[:20]
+    updated_rolling_avg_fitness = jnp.concatenate([normative_ks[0], -one_dim_avg_fitness], axis=0)[1:]
     #jax.debug.print('updated rolling avg fitness : {} ', updated_rolling_avg_fitness)
-    updated_rolling_best_fitness = jnp.concatenate([one_dim_best_fitness, normative_ks[1]], axis=0)[:20]
-    updated_rolling_norm_entropy = jnp.concatenate([one_dim_norm_entropy, normative_ks[2]], axis=0)[:20]
+    updated_rolling_best_fitness = jnp.concatenate([normative_ks[1], -one_dim_best_fitness], axis=0)[1:]
+    #jax.debug.print('updated rolling best fitness : {} ', updated_rolling_best_fitness)
+    updated_rolling_norm_entropy = jnp.concatenate([normative_ks[2], one_dim_norm_entropy], axis=0)[1:]
+    #jax.debug.print('updated rolling norm entropy : {} ', updated_rolling_norm_entropy)
 
-    avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope = calculate_slopes(avg_fitness_window=updated_rolling_avg_fitness, best_fitness_window=updated_rolling_best_fitness, norm_entropy_window=updated_rolling_norm_entropy)
+
+    scaled_rolling_avg_fitness, scaled_rolling_best_fitness, scaled_rolling_norm_entropy = scale_arrays([updated_rolling_avg_fitness, updated_rolling_best_fitness, updated_rolling_norm_entropy])
+
+    #jax.debug.print('scaled rolling avg fitness : {} ', scaled_rolling_avg_fitness)
+    #jax.debug.print('scaled rolling best fitness : {} ', scaled_rolling_best_fitness)
+    #jax.debug.print('scaled rolling norm entropy : {} ', scaled_rolling_norm_entropy)
+
+    #standardized_rolling_avg_fitness, standardized_rolling_best_fitness, standardized_rolling_norm_entropy = combined_z_score_standardize(scaled_rolling_avg_fitness, scaled_rolling_best_fitness, scaled_rolling_norm_entropy)
+
+    avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope = calculate_slopes(avg_fitness_window=scaled_rolling_avg_fitness, best_fitness_window=scaled_rolling_best_fitness, norm_entropy_window=scaled_rolling_norm_entropy)
+
+    #jax.debug.print('avg fitness slope : {} ', avg_fitness_slope)
+    #jax.debug.print('best fitness slope : {} ', best_fitness_slope)
+    #jax.debug.print('norm entropy slope : {} ', norm_entropy_slope)
+    #jax.debug.print('stagnation slope : {} ', stagnation_slope)
 
     ks_weights = update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope)
 
@@ -164,7 +212,7 @@ def update_normative_ks(belief_space, best_fitness, avg_fitness, norm_entropy, a
 
     updated_belief_space_normative = belief_space[:5] + (updated_normative_ks,) + belief_space[6:]
 
-    return updated_belief_space_normative, net_kmeans_adjustment
+    return updated_belief_space_normative, net_kmeans_adjustment, ks_weights
 
 def get_center_guidance(belief_space,t):
     topographic_ks = belief_space[4]
@@ -175,25 +223,21 @@ def get_center_guidance(belief_space,t):
     norm_entropy_slope = normative_ks[5]
     stagnation_slope = normative_ks[6]
 
-    #jax.debug.print('avg fitness slope : {} ', avg_fitness_slope)
-    #jax.debug.print('best fitness slope : {} ', best_fitness_slope)
-    #jax.debug.print('norm entropy slope : {} ', norm_entropy_slope)
-    #jax.debug.print('stagnation slope : {} ', stagnation_slope)
-
     ks_weights = update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope) 
 
     #ks_weights = ks_weights[:3]
 
     jax.debug.print('ks weights : {} ', ks_weights)
 
-    max_index = jnp.argmax(ks_weights)
+    min_index = jnp.argmin(ks_weights)
     result = jnp.zeros_like(ks_weights, dtype=jnp.int32)
-    ks_weights = result.at[max_index].set(1)
+    #result = jnp.full_like(ks_weights, 0.1)
+    ks_weights = result.at[min_index].set(1)
 
     jax.debug.print('ks weights : {} ', ks_weights)
 
-    decay_factor_history = 0.95
-    decay_factor_situational = 0.90
+    decay_factor_history = 0.994
+    decay_factor_situational = 0.95
 
     max_iterations = 5000
 
@@ -266,16 +310,16 @@ def get_center_guidance(belief_space,t):
     #history_ks_center_weights = jnp.power(decay_factor, jnp.arange(t))
     #history_ks_center_avg = jnp.average(history_ks_center, weights=history_ks_center_weights, axis=1)
 
-    #return domain_ks_center_weighted + situational_row_averages_weighted + history_row_averages_weighted + topographic_ks_center_weighted
-    return jnp.sum(jnp.array([domain_ks_center_weighted, situational_row_averages_weighted, history_row_averages_weighted, topographic_ks_center_weighted]), axis=0), ks_weights[2]
+    return domain_ks_center_weighted + situational_row_averages_weighted + history_row_averages_weighted + topographic_ks_center_weighted, ks_weights[2]
+    #return jnp.sum(jnp.array([domain_ks_center_weighted, situational_row_averages_weighted, history_row_averages_weighted, topographic_ks_center_weighted]), axis=0), ks_weights[2]
     #return domain_ks_center
 
 def get_stdev_guidance(belief_space,t, stdev):
     topographic_ks = belief_space[4]
     normative_ks = belief_space[5]
 
-    decay_factor_historical = 0.90
-    decay_factor_situational = 0.90
+    decay_factor_historical = 0.994
+    decay_factor_situational = 0.95
 
     max_iterations = 5000
 
@@ -290,13 +334,14 @@ def get_stdev_guidance(belief_space,t, stdev):
 
     #ks_weights = ks_weights[:3]
 
-    jax.debug.print('ks weights : {} ', ks_weights)
+    #jax.debug.print('ks weights : {} ', ks_weights)
 
     max_index = jnp.argmax(ks_weights)
     result = jnp.zeros_like(ks_weights, dtype=jnp.int32)
+    #result = jnp.full_like(ks_weights, 0.1)
     ks_weights = result.at[max_index].set(1)
 
-    jax.debug.print('ks weights : {} ', ks_weights)
+    #jax.debug.print('ks weights : {} ', ks_weights)
 
 
 
@@ -363,10 +408,10 @@ def get_stdev_guidance(belief_space,t, stdev):
     situational_row_averages_weighted = situational_weighted_averages * ks_weights[1]
     history_row_averages_weighted = history_weighted_averages * ks_weights[2]
 
-    topographic_ks_stdev = stdev * (0.50+ks_weights[3])
+    topographic_ks_stdev = stdev * (0.4+ks_weights[3])
 
-    #return domain_ks_stdev_weighted + situational_row_averages_weighted + history_row_averages_weighted + topographic_ks_stdev
-    return jnp.sum(jnp.array([domain_ks_stdev_weighted, situational_row_averages_weighted, history_row_averages_weighted, topographic_ks_stdev]), axis=0), ks_weights[3]
+    return domain_ks_stdev_weighted + situational_row_averages_weighted + history_row_averages_weighted + topographic_ks_stdev, ks_weights[3]
+    #return jnp.sum(jnp.array([domain_ks_stdev_weighted, situational_row_averages_weighted, history_row_averages_weighted, topographic_ks_stdev]), axis=0), ks_weights[3]
     #return domain_ks_stdev
 
 #class DomainKS:

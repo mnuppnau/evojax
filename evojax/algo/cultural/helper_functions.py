@@ -138,14 +138,15 @@ def calculate_slopes(avg_fitness_window, best_fitness_window, norm_entropy_windo
     norm_entropy_slope = calculate_slope(norm_entropy_window)
     
     # Normalize the slope values
-    slope_values = jnp.array([avg_fitness_slope, best_fitness_slope, norm_entropy_slope])
-    normalized_slopes = normalize_slopes(slope_values)
+    #slope_values = jnp.array([avg_fitness_slope, best_fitness_slope, norm_entropy_slope])
+    #normalized_slopes = normalize_slopes(slope_values)
 
-    avg_fitness_slope = normalized_slopes[0]
-    best_fitness_slope = normalized_slopes[1]
-    norm_entropy_slope = normalized_slopes[2]
+    #avg_fitness_slope = normalized_slopes[0]
+    #best_fitness_slope = normalized_slopes[1]
+    #norm_entropy_slope = normalized_slopes[2]
 
-    stagnation_slope = 1 - best_fitness_slope
+    stagnation_slope = calculate_stagnation_slope(best_fitness_slope)
+    stagnation_slope = -stagnation_slope
     return avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope
 
 def normalize_slopes(slope_values):
@@ -154,10 +155,87 @@ def normalize_slopes(slope_values):
     normalized_slopes = (slope_values - min_value) / (max_value - min_value)
     return normalized_slopes
 
+def combined_min_max_scale(arr1, arr2, arr3):
+    combined = jnp.concatenate([arr1, arr2, arr3])
+    min_val = jnp.min(combined)
+    max_val = jnp.max(combined)
+    scaled1 = (arr1 - min_val) / (max_val - min_val)
+    scaled2 = (arr2 - min_val) / (max_val - min_val)
+    scaled3 = (arr3 - min_val) / (max_val - min_val)
+    return scaled1, scaled2, scaled3
+
+def combined_z_score_standardize(arr1, arr2, arr3):
+    combined = jnp.concatenate([arr1, arr2, arr3])
+    mean_val = jnp.mean(combined)
+    std_dev = jnp.std(combined)
+    standardized1 = (arr1 - mean_val) / std_dev
+    standardized2 = (arr2 - mean_val) / std_dev
+    standardized3 = (arr3 - mean_val) / std_dev
+    return standardized1, standardized2, standardized3
+
+def scale_arrays(arrays, ref_index=2):
+    # Choose the reference array
+    ref_array = arrays[ref_index]
+    
+    # Compute the mean of the reference array
+    ref_mean = jnp.mean(ref_array)
+    
+    # Scale each array based on the reference mean
+    scaled_arrays = []
+    for array in arrays:
+        array_mean = jnp.mean(array)
+        scale_factor = ref_mean / array_mean
+        scaled_array = array * scale_factor
+        scaled_arrays.append(scaled_array)
+    
+    return scaled_arrays[0],scaled_arrays[1], scaled_arrays[2]
+
+def normalize_arrays(arrays):
+    # Concatenate the arrays along a new axis
+    concatenated = jnp.stack(arrays)
+    
+    # Compute the minimum and maximum values along the first axis
+    min_val = jnp.min(concatenated, axis=0)
+    max_val = jnp.max(concatenated, axis=0)
+    
+    # Normalize the arrays using min-max normalization
+    normalized = (concatenated - min_val) / (max_val - min_val)
+    
+    # Split the normalized arrays back into separate arrays
+    normalized_arrays = jnp.split(normalized, len(arrays))
+
+    return normalized_arrays[0][0], normalized_arrays[1][0], normalized_arrays[2][0]
+
 @jit
-def calculate_slope(window):
-    if len(window) < 2:
-        return 0.0
+def calculate_slope(y):
+    # Create an array of x-coordinates (indices)
+    x = jnp.arange(len(y))
+    
+    # Calculate the mean of x and y
+    mean_x = jnp.mean(x)
+    mean_y = jnp.mean(y)
+    
+    # Calculate the slope using the formula: slope = (x - mean_x) * (y - mean_y) / (x - mean_x)^2
+    numerator = jnp.sum((x - mean_x) * (y - mean_y))
+    denominator = jnp.sum((x - mean_x) ** 2)
+    slope = numerator / denominator
+    
+    return slope
+
+@jit
+def calculate_stagnation_slope(slope, flatness_threshold=0.00000000005, max_scale=2):
+    # Normalize the slope by the flatness threshold
+    normalized_slope = jnp.abs(slope) / flatness_threshold
+    
+    # Calculate scale factor using an exponential decay function
+    # Ensures that the factor is within 0 to max_scale
+    scale = max_scale / (1 + normalized_slope ** 2)  # Using squared to enhance the effect of smaller slopes
+    return scale
+
+@jit
+def calculate_slope_old(window):
+    #if len(window) < 2:
+    #    return 0.0
     x = jnp.arange(len(window), dtype=jnp.float32)  # Convert x to float32
     y = jnp.array(window, dtype=jnp.float32)        # Convert y to float32 
     slope = jnp.polyfit(x, y, 1)[0]
@@ -169,12 +247,12 @@ def update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, st
     history_weight = norm_entropy_slope
     topographic_weight = stagnation_slope
 
-    total_weight = domain_weight + situational_weight + history_weight + topographic_weight
+    total_weight = jnp.abs(domain_weight) + jnp.abs(situational_weight) + jnp.abs(history_weight) + jnp.abs(topographic_weight)
     domain_weight /= total_weight
     situational_weight /= total_weight
     history_weight /= total_weight
     topographic_weight /= total_weight
 
-    history_weight = history_weight * 0.9
+    #history_weight = history_weight * 0.9
 
     return jnp.array([domain_weight, situational_weight, history_weight, topographic_weight])
