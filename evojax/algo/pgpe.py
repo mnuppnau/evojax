@@ -266,7 +266,7 @@ class PGPE(NEAlgorithm):
         #    self._center.size,
         #    )
 
-        if self._t > 10:
+        if self._t > 10000:
             self._key, self._scaled_noises, self._solutions = ask_func_infl(
                 self._key,
                 stdev,
