@@ -223,7 +223,7 @@ def calculate_slope(y):
     return slope
 
 @jit
-def calculate_stagnation_slope(slope, flatness_threshold=0.00000005, max_scale=2):
+def calculate_stagnation_slope(slope, flatness_threshold=0.000000078, max_scale=2):
     # Normalize the slope by the flatness threshold
     normalized_slope = jnp.abs(slope) / flatness_threshold
     
@@ -258,7 +258,7 @@ def update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, st
     return jnp.array([domain_weight, situational_weight, history_weight, topographic_weight])
 
 def compute_cluster_weights(assignments, fitness_values):
-    num_clusters = 6
+    num_clusters = jnp.max(assignments) + 1
     cluster_sums = jnp.zeros(num_clusters)
     cluster_counts = jnp.zeros(num_clusters)
 
@@ -269,10 +269,11 @@ def compute_cluster_weights(assignments, fitness_values):
         cluster_counts = cluster_counts.at[assignment].add(1)
         return (cluster_sums, cluster_counts), None
 
-    (cluster_sums, cluster_counts),_ = jax.lax.scan(update_cluster_stats, (cluster_sums, cluster_counts), (assignments, fitness_values))
+    (cluster_sums, cluster_counts), _ = jax.lax.scan(update_cluster_stats, (cluster_sums, cluster_counts), (assignments, fitness_values))
 
     cluster_weights = cluster_sums / cluster_counts
-    return cluster_weights
+    normalized_weights = cluster_weights / jnp.sum(cluster_weights)  # Normalize the weights
+    return normalized_weights
 
 def inverse_fitness_values(fitness_values, epsilon=1e-2):
     min_fitness = jnp.max(fitness_values)
