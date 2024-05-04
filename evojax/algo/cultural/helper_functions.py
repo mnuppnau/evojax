@@ -70,9 +70,9 @@ def update_centroids(embeddings, assignments, k):
         masked_embeddings = jnp.where(mask[:, None], embeddings, 0)
         return jnp.sum(masked_embeddings, axis=0) / jnp.sum(mask)
 
-    return jax.vmap(update_centroid)(jnp.arange(10))
+    return jax.vmap(update_centroid)(jnp.arange(6))
 
-def kmeans(embeddings, k=10, num_iters=100, seed=0):
+def kmeans(embeddings, k=6, num_iters=100, seed=0):
     """
     This function applies the K-Means algorithm to input embeddings.
 
@@ -223,7 +223,7 @@ def calculate_slope(y):
     return slope
 
 @jit
-def calculate_stagnation_slope(slope, flatness_threshold=0.00000000005, max_scale=2):
+def calculate_stagnation_slope(slope, flatness_threshold=0.00000005, max_scale=2):
     # Normalize the slope by the flatness threshold
     normalized_slope = jnp.abs(slope) / flatness_threshold
     
@@ -256,3 +256,27 @@ def update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, st
     #history_weight = history_weight * 0.9
 
     return jnp.array([domain_weight, situational_weight, history_weight, topographic_weight])
+
+def compute_cluster_weights(assignments, fitness_values):
+    num_clusters = 6
+    cluster_sums = jnp.zeros(num_clusters)
+    cluster_counts = jnp.zeros(num_clusters)
+
+    def update_cluster_stats(carry, x):
+        cluster_sums, cluster_counts = carry
+        assignment, fitness = x
+        cluster_sums = cluster_sums.at[assignment].add(fitness)
+        cluster_counts = cluster_counts.at[assignment].add(1)
+        return (cluster_sums, cluster_counts), None
+
+    (cluster_sums, cluster_counts),_ = jax.lax.scan(update_cluster_stats, (cluster_sums, cluster_counts), (assignments, fitness_values))
+
+    cluster_weights = cluster_sums / cluster_counts
+    return cluster_weights
+
+def inverse_fitness_values(fitness_values, epsilon=1e-2):
+    min_fitness = jnp.max(fitness_values)
+    shifted_fitness = jnp.abs(fitness_values - min_fitness)
+    inverse_fitness = 1 / (shifted_fitness + epsilon)
+    normalized_inverse_fitness = inverse_fitness / jnp.sum(inverse_fitness)
+    return normalized_inverse_fitness

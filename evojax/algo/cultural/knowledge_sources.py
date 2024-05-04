@@ -9,7 +9,7 @@ import numpy as np
 import copy
 
 from evojax.algo.cultural.population_space import Individual
-from evojax.algo.cultural.helper_functions import kmeans, calculate_slopes, update_weights, least_frequent_cluster, combined_min_max_scale, combined_z_score_standardize, normalize_arrays, scale_arrays
+from evojax.algo.cultural.helper_functions import kmeans, calculate_slopes, update_weights, least_frequent_cluster, combined_min_max_scale, combined_z_score_standardize, normalize_arrays, scale_arrays, compute_cluster_weights, inverse_fitness_values
 
 def initialize_domain_ks(param_size: int):
     return (
@@ -39,14 +39,17 @@ def initialize_history_ks(param_size: int, decay_factor: float = 0.8, num_iterat
         jnp.zeros(num_iterations) # fitness_score
     )
 
-def initialize_topographic_ks(param_size: int, num_clusters: int = 3, max_individuals: int = 20):
+def initialize_topographic_ks(param_size: int, num_clusters: int = 6, max_individuals: int = 100):
     return (
         jnp.zeros((param_size, max_individuals)), # center
         jnp.zeros((param_size, max_individuals)), # stdev
-        jnp.ones(max_individuals), # fitness_score
-        jnp.zeros(max_individuals), # cluster_centroids
-        jnp.zeros(param_size), # low_density_center
-        jnp.zeros(max_individuals) # cluster_assignments
+        jnp.zeros(max_individuals), # fitness_scores
+        jnp.zeros(num_clusters, param_size), # cluster_centroids_center
+        jnp.zeros(num_clusters, param_size), # cluster_centroids_stdev
+        jnp.zeros(max_individuals), # cluster_assignments_center
+        jnp.zeros(max_individuals), # cluster_assignments_stdev
+        jnp.zeros(max_individuals), # cluster_weights_center
+        jnp.zeros(max_individuals) # cluster_weights_stdev
     )
 
 def initialize_normative_ks(param_size: int):
@@ -105,67 +108,84 @@ def update_knowledge_sources(belief_space, best_individual, num_iterations=5000,
     
     return updated_belief_space_history
 
-def add_ind_topographic_ks(belief_space, best_individual, max_individuals=20):
+def add_ind_topographic_ks(belief_space, grad_center, grad_stdev, best_score, max_individuals=100):
     topographic_ks = belief_space[4]
 
-    center, stdev = topographic_ks[:2]
+    center, stdev, fitness = topographic_ks[:3]
 
-    best_center, best_stdev, best_noise_magnitude, best_fitness_value = best_individual
+    grad_center = grad_center.reshape(-1, 1)
+    grad_stdev = grad_stdev.reshape(-1, 1)
+  
 
-    best_center_reshaped = best_center.reshape(-1, 1)
+    #jax.debug.print('best score : {} ', best_score)
+    #jax.debug.print('fitness : {} ', fitness)
 
-    updated_center = jnp.concatenate([best_center_reshaped, center], axis=1)[:, :max_individuals]
+    updated_center = jnp.concatenate([grad_center, center], axis=1)[:, :max_individuals]
 
-    updated_stdev = jnp.concatenate([best_stdev[:, None], stdev], axis=1)[:, :max_individuals]
-   
-    updated_topographic_ks = (updated_center, updated_stdev, topographic_ks[2], topographic_ks[3], topographic_ks[4], topographic_ks[5])
+    updated_stdev = jnp.concatenate([grad_stdev, stdev], axis=1)[:, :max_individuals]
+ 
+    updated_fitness = jnp.concatenate([best_score, fitness], axis=0)[:max_individuals]
 
-    transposed_topographic_ks_center = updated_topographic_ks[0].T
-    centroids, assignments = kmeans(transposed_topographic_ks_center)
+    updated_topographic_ks = (updated_center, updated_stdev, updated_fitness, topographic_ks[3], topographic_ks[4], topographic_ks[5], topographic_ks[6], topographic_ks[7], topographic_ks[8])
 
-    lowest_density_cluster, center_index = least_frequent_cluster(assignments)
+    centroids_center, assignments_center = kmeans(updated_center.T)
+    centroids_stdev, assignments_stdev = kmeans(updated_stdev.T)
 
-    #random_center = transposed_topographic_ks_center[center_index]
+    #jax.debug.print('assignments center: {} ', assignments_center)
+    #jax.debug.print('updated fitness : {} ', updated_fitness)
 
-    #reshaped_random_center = random_center.reshape(transposed_topographic_ks_center.shape[1])
+    inv_fitness = inverse_fitness_values(updated_fitness)
 
-    #print('reshaped random center : ', reshaped_random_center.shape)
+    #jax.debug.print('inverse fitness : {} ', inv_fitness)
+    cluster_weights_center = compute_cluster_weights(assignments_center, inv_fitness)
 
-    final_topographic_ks = (updated_topographic_ks[0], updated_topographic_ks[1], updated_topographic_ks[2], centroids, best_center, assignments)
+    #jax.debug.print('cluster weights center : {} ', cluster_weights_center)
+    cluster_weights_stdev = compute_cluster_weights(assignments_stdev, inv_fitness)
+
+    final_topographic_ks = (updated_topographic_ks[0], updated_topographic_ks[1], updated_topographic_ks[2],centroids_center, centroids_stdev, assignments_center, assignments_stdev, cluster_weights_center, cluster_weights_stdev)
+    
     updated_belief_space_topographic = belief_space[:4] + (final_topographic_ks,) + belief_space[5:]
+    
     return updated_belief_space_topographic
 
-def update_topographic_ks(belief_space, best_individual, max_individuals=20):
+def update_topographic_ks(belief_space, grad_center, grad_stdev, best_score, max_individuals=100):
     topographic_ks = belief_space[4]
 
-    center, stdev = topographic_ks[:2]
+    center, stdev, fitness = topographic_ks[:3]
 
-    #print('center shape : ', center.shape)
-    best_center, best_stdev, best_noise_magnitude, best_fitness_value = best_individual
-    #print('best center shape : ', best_center.shape)
+    grad_center = grad_center.reshape(-1, 1)
+    grad_stdev = grad_stdev.reshape(-1, 1)
 
-    best_center_reshaped = best_center.reshape(-1, 1)
-    #print('best center reshaped : ', best_center_reshaped.shape)
 
-    updated_center = jnp.concatenate([best_center_reshaped, center], axis=1)[:, :max_individuals]
-    #print('updated center shape : ', updated_center.shape) 
-    updated_stdev = jnp.concatenate([best_stdev[:, None], stdev], axis=1)[:, :max_individuals]
-   
-    updated_topographic_ks = (updated_center, updated_stdev, topographic_ks[2], topographic_ks[3], topographic_ks[4], topographic_ks[5])
+    #jax.debug.print('best score : {} ', best_score)
+    #jax.debug.print('fitness : {} ', fitness)
 
-    transposed_topographic_ks_center = updated_topographic_ks[0].T
-    centroids, assignments = kmeans(transposed_topographic_ks_center)
+    updated_center = jnp.concatenate([grad_center, center], axis=1)[:, :max_individuals]
 
-    lowest_density_cluster, center_index = least_frequent_cluster(assignments)
+    updated_stdev = jnp.concatenate([grad_stdev, stdev], axis=1)[:, :max_individuals]
+ 
+    updated_fitness = jnp.concatenate([best_score, fitness], axis=0)[:max_individuals]
 
-    random_center = transposed_topographic_ks_center[center_index]
+    updated_topographic_ks = (updated_center, updated_stdev, updated_fitness, topographic_ks[3], topographic_ks[4], topographic_ks[5], topographic_ks[6], topographic_ks[7], topographic_ks[8])
 
-    reshaped_random_center = random_center.reshape(transposed_topographic_ks_center.shape[1])
+    centroids_center, assignments_center = kmeans(updated_center.T)
+    centroids_stdev, assignments_stdev = kmeans(updated_stdev.T)
 
-    #print('reshaped random center : ', reshaped_random_center.shape)
+    #jax.debug.print('assignments center: {} ', assignments_center)
+    #jax.debug.print('updated fitness : {} ', updated_fitness)
 
-    final_topographic_ks = (updated_topographic_ks[0], updated_topographic_ks[1], updated_topographic_ks[2], centroids, reshaped_random_center, assignments)
+    inv_fitness = inverse_fitness_values(updated_fitness)
+
+    #jax.debug.print('inverse fitness : {} ', inv_fitness)
+    cluster_weights_center = compute_cluster_weights(assignments_center, inv_fitness)
+
+    #jax.debug.print('cluster weights center : {} ', cluster_weights_center)
+    cluster_weights_stdev = compute_cluster_weights(assignments_stdev, inv_fitness)
+
+    final_topographic_ks = (updated_topographic_ks[0], updated_topographic_ks[1], updated_topographic_ks[2],centroids_center, centroids_stdev, assignments_center, assignments_stdev, cluster_weights_center, cluster_weights_stdev)
+ 
     updated_belief_space_topographic = belief_space[:4] + (final_topographic_ks,) + belief_space[5:]
+    
     return updated_belief_space_topographic
    
 @jax.jit
@@ -214,7 +234,7 @@ def update_normative_ks(belief_space, best_fitness, avg_fitness, norm_entropy, a
 
     return updated_belief_space_normative, net_kmeans_adjustment, ks_weights
 
-def get_center_guidance(belief_space,t):
+def get_center_guidance(belief_space,t, center):
     topographic_ks = belief_space[4]
     normative_ks = belief_space[5]
 
@@ -300,7 +320,7 @@ def get_center_guidance(belief_space,t):
     domain_ks_center_weighted = domain_ks_center * ks_weights[0]
     situational_row_averages_weighted = situational_weighted_averages * ks_weights[1]
     history_row_averages_weighted = history_weighted_averages * ks_weights[2]
-    topographic_ks_center_weighted = topographic_ks_center * ks_weights[3]
+    topographic_ks_center_weighted = center * ks_weights[3]
 
     #history_row_sums = history_masked_data.sum(axis=1)
 
@@ -408,7 +428,7 @@ def get_stdev_guidance(belief_space,t, stdev):
     situational_row_averages_weighted = situational_weighted_averages * ks_weights[1]
     history_row_averages_weighted = history_weighted_averages * ks_weights[2]
 
-    topographic_ks_stdev = stdev * (0.4+ks_weights[3])
+    topographic_ks_stdev = stdev * ks_weights[3]
 
     return domain_ks_stdev_weighted + situational_row_averages_weighted + history_row_averages_weighted + topographic_ks_stdev, ks_weights[3]
     #return jnp.sum(jnp.array([domain_ks_stdev_weighted, situational_row_averages_weighted, history_row_averages_weighted, topographic_ks_stdev]), axis=0), ks_weights[3]

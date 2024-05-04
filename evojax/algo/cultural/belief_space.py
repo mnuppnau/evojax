@@ -54,22 +54,22 @@ def influence(belief_space, scaled_noises):
 @jax.jit
 def get_updated_params(belief_space, center, stdev, t):
     learning_rate = belief_space[6][0] 
-    combined_guidance_center, topographic_center_weight = combine_center_guidance(belief_space, t)
+    combined_guidance_center, topographic_center_weight = combine_center_guidance(belief_space, t, center)
     combined_guidance_stdev, topographic_stdev_weight = combine_stdev_guidance(belief_space, t, stdev)
 
     #new_center = (1 - ((learning_rate//2)-(.1*topographic_center_weight))) * center + ((learning_rate//2)-(.1*topographic_center_weight)) * combined_guidance_center
     #new_stdev = ((1 - ((learning_rate)+(.3*topographic_stdev_weight))) * stdev + ((learning_rate)+(0.7*topographic_stdev_weight)) * combined_guidance_stdev)
 
-    #new_center = combined_guidance_center
-    #new_stdev = combined_guidance_stdev
+    new_center = combined_guidance_center
+    new_stdev = combined_guidance_stdev
 
-    new_center = (1 - learning_rate) * center + learning_rate * combined_guidance_center
-    new_stdev = (1 - learning_rate) * stdev + learning_rate * combined_guidance_stdev
+    #new_center = (1 - learning_rate) * center + learning_rate * combined_guidance_center
+    #new_stdev = (1 - learning_rate) * stdev + learning_rate * combined_guidance_stdev
     
     return new_center, new_stdev
 
-def combine_center_guidance(belief_space, t):
-    return get_center_guidance(belief_space, t)
+def combine_center_guidance(belief_space, t, center):
+    return get_center_guidance(belief_space, t, center)
 
 def combine_stdev_guidance(belief_space,t, stdev):
     return get_stdev_guidance(belief_space, t, stdev)

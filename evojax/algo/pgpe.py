@@ -91,6 +91,12 @@ def update_stdev(
     max_allowed = stdev + allowed_delta
     return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
 
+@jax.jit
+def normalize_gradients(grad_center: jnp.ndarray, grad_stdev: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    grad_center = grad_center / jnp.linalg.norm(grad_center)
+    grad_stdev = grad_stdev / jnp.linalg.norm(grad_stdev)
+    return grad_center, grad_stdev
+
 @partial(jax.jit, static_argnums=(3,4))
 def ask_func_infl(
     key: jnp.ndarray,
@@ -293,6 +299,50 @@ class PGPE(NEAlgorithm):
             stdev=self._stdev,
         )
 
+        grad_center_norm, grad_stdev_norm = normalize_gradients(grad_center, grad_stdev)
+
+        self.population, best_individual = update_population(
+            fitness_scores=self.fitness_scores,
+            center=self._center,
+            stdev=self._stdev,
+            scaled_noises=self._scaled_noises
+        )
+
+        self.belief_space = update_knowledge_sources(self.belief_space, best_individual)   
+
+        best_score = jnp.array([self._best_score])
+
+        #if self._t == 100:
+        #    self.belief_space = self.belief_space[:4] + ((grad_center_norm, grad_center_norm, self.belief_space[4][2], self.belief_space[4][3], best_individual[0], self.belief_space[4][5]),) + self.belief_space[5:] 
+        if self._t > 100 and self._t < 200:
+            self.belief_space = add_ind_topographic_ks(self.belief_space, grad_center_norm, grad_stdev_norm, best_score)
+        elif self._t >= 200:
+            self.belief_space = update_topographic_ks(self.belief_space, grad_center_norm, grad_stdev_norm, best_score)
+
+        updated_grad_center = self.belief_space[4][3]
+        updated_grad_stdev = self.belief_space[4][4]
+
+        cluster_weights_center = self.belief_space[4][7]
+        cluster_weights_stdev = self.belief_space[4][8]
+
+        self.belief_space, self._adjust_kmeans_iterations, ks_weights = update_normative_ks(self.belief_space, best_fitness=self._best_score, avg_fitness=self._avg_score, norm_entropy=norm_entropy, adjust_kmeans_iterations=self._adjust_kmeans_iterations)
+
+        min_index = jnp.argmin(ks_weights)
+        result = jnp.zeros(4)
+        ks_weights = result.at[min_index].set(1.0)
+
+
+        if min_index == 3 and self._t > 200:
+            weighted_sum_center = jnp.sum(cluster_weights_center[:, None] * updated_grad_center, axis=0)
+            weighted_sum_stdev = jnp.sum(cluster_weights_stdev[:, None] * updated_grad_stdev, axis=0)
+            grad_center = weighted_sum_center*0.7 + grad_center*0.3
+            grad_stdev = weighted_sum_stdev*0.7 + grad_stdev*0.3
+
+        with open('/home/gh0st/Downloads/pgpe_ks_weights.csv', 'a') as f:
+            f.write(f'Iter: {self._t}, Domain Weight: {ks_weights[0]}, Situational Weight: {ks_weights[1]}, History Weight: {ks_weights[2]}, Topographic Weight: {ks_weights[3]}\n')
+
+        self._kmeans_iterations += self._adjust_kmeans_iterations
+
         self._opt_state = self._opt_update(
             self._t // self._lr_decay_steps, -grad_center, self._opt_state
         )
@@ -306,32 +356,7 @@ class PGPE(NEAlgorithm):
             grad=grad_stdev,
         )
 
-        self.population, best_individual = update_population(
-            fitness_scores=self.fitness_scores,
-            center=self._center,
-            stdev=self._stdev,
-            scaled_noises=self._scaled_noises
-        )
 
-        self.belief_space = update_knowledge_sources(self.belief_space, best_individual)   
-        
-        if self._t == 100:
-            self.belief_space = self.belief_space[:4] + ((self.belief_space[4][0], self.belief_space[4][1], self.belief_space[4][2], self.belief_space[4][3], best_individual[0], self.belief_space[4][5]),) + self.belief_space[5:] 
-        elif self._t > 1000 and self._t < 2000:
-            self.belief_space = add_ind_topographic_ks(self.belief_space, best_individual)
-        elif self._t >= 2000:
-            self.belief_space = update_topographic_ks(self.belief_space, best_individual)
-
-        self.belief_space, self._adjust_kmeans_iterations, ks_weights = update_normative_ks(self.belief_space, best_fitness=self._best_score, avg_fitness=self._avg_score, norm_entropy=norm_entropy, adjust_kmeans_iterations=self._adjust_kmeans_iterations)
-
-        min_index = jnp.argmin(ks_weights)
-        result = jnp.zeros(4)
-        ks_weights = result.at[min_index].set(1.0)
-
-        with open('/home/gh0st/Downloads/pgpe_ks_weights.csv', 'a') as f:
-            f.write(f'Iter: {self._t}, Domain Weight: {ks_weights[0]}, Situational Weight: {ks_weights[1]}, History Weight: {ks_weights[2]}, Topographic Weight: {ks_weights[3]}\n')
-
-        self._kmeans_iterations += self._adjust_kmeans_iterations
 
     @property
     def best_params(self) -> jnp.ndarray:
