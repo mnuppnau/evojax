@@ -153,7 +153,7 @@ class Trainer(object):
                     time.perf_counter() - start_time))
 
                 start_time = time.perf_counter()
-                scores, bds = self.sim_mgr.eval_params(
+                scores, bds, activations = self.sim_mgr.eval_params(
                     params=params, test=False)
                 self._logger.debug('sim_mgr.eval_params time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
@@ -161,7 +161,7 @@ class Trainer(object):
                 start_time = time.perf_counter()
                 if isinstance(self.solver, QualityDiversityMethod):
                     self.solver.observe_bd(bds)
-                self.solver.tell(fitness=scores)
+                self.solver.tell(fitness=scores, activations=activations)
                 self._logger.debug('solver.tell time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
@@ -178,7 +178,7 @@ class Trainer(object):
 
                 if i > 0 and i % self._test_interval == 0:
                     best_params = self.solver.best_params
-                    test_scores, _ = self.sim_mgr.eval_params(
+                    test_scores, _, _ = self.sim_mgr.eval_params(
                         params=best_params, test=True)
                     self._logger.info(
                         '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '

@@ -16,7 +16,8 @@ def initialize_domain_ks(param_size: int):
         jnp.zeros(param_size), # center
         jnp.ones(param_size), # stdev
         jnp.array([1.0]), # noise_magnitude
-        jnp.array([0.0]) # fitness_score
+        jnp.array([0.0]), # fitness_score
+        (jnp.zeros((90,28,28,8)), jnp.zeros((90,14,14,16)), jnp.zeros((90, 784))) # activations
         )
 
 def initialize_situational_ks(param_size: int, max_individuals: int = 100):
@@ -64,14 +65,16 @@ def initialize_normative_ks(param_size: int):
     )
 
 @jax.jit
-def update_knowledge_sources(belief_space, best_individual, num_iterations=5000, max_individuals=100):
+def update_knowledge_sources(belief_space, best_individual, activations, num_iterations=5000, max_individuals=100):
    
-    updated_belief_space_domain = belief_space[:1] + (best_individual,) + belief_space[2:]
+    best_center, best_stdev, best_noise_magnitude, best_fitness_value = best_individual
+  
+    updated_domain_ks = (best_center, best_stdev, best_noise_magnitude, best_fitness_value, activations)
+
+    updated_belief_space_domain = belief_space[:1] + (updated_domain_ks,) + belief_space[2:]
 
     center, stdev, noise_magnitude, fitness_value = updated_belief_space_domain[2]
        
-    best_center, best_stdev, best_noise_magnitude, best_fitness_value = best_individual
-   
     #print('center shape : ', center.shape)
     #print('best center shape : ', best_center.shape)
 

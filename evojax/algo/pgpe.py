@@ -28,6 +28,7 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from jax import random
+from jax import tree_util
 
 try:
     from jax.example_libraries import optimizers
@@ -79,6 +80,12 @@ def compute_reinforce_update(
     )
     return total_mu.mean(axis=0), total_sigma.mean(axis=0)
 
+@jax.jit
+def activation_loss_fn(activations: jnp.ndarray, target: jnp.ndarray) -> jnp.ndarray:
+    loss = 0.0
+    for act, target_act in zip(activations, target):
+        loss += jnp.mean(jnp.square(act - target_act))
+    return loss
 
 @jax.jit
 def update_stdev(
@@ -90,6 +97,30 @@ def update_stdev(
     min_allowed = stdev - allowed_delta
     max_allowed = stdev + allowed_delta
     return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
+
+@jax.jit
+def flatten_gradients(gradients):
+    flattened_grads = []
+    for grad in gradients:
+        flattened_grad = jnp.reshape(grad, (grad.shape[0], -1))
+        flattened_grads.append(flattened_grad)
+    
+    return jnp.concatenate(flattened_grads, axis=1)
+
+#@jax.jit
+def adjust_gradient_shape(gradients, param_shape):
+    grad_length = gradients.shape[0]
+    param_length = param_shape[0]
+    
+    if grad_length > param_length:
+        # Truncate or reduce the gradient vector
+        gradients = gradients[:param_length]
+    elif grad_length < param_length:
+        # Pad the gradient vector with zeros
+        pad_length = param_length - grad_length
+        gradients = jnp.pad(gradients, (0, pad_length))
+    
+    return gradients
 
 @jax.jit
 def normalize_gradients(grad_center: jnp.ndarray, grad_stdev: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -285,7 +316,32 @@ class PGPE(NEAlgorithm):
             )
         return self._solutions
 
-    def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:
+    def tell(self, fitness: Union[np.ndarray, jnp.ndarray], activations: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]) -> None:
+        
+        act1 = activations[0]
+        act2 = activations[1]
+        act3 = activations[2]
+
+        avg_act1 = jnp.mean(act1, axis=0)
+        avg_act2 = jnp.mean(act2, axis=0)
+        avg_act3 = jnp.mean(act3, axis=0)
+
+        prev_activations = self.belief_space[1][4]
+
+        activations = (avg_act1, avg_act2, avg_act3)
+
+        #activations_loss = activation_loss_fn(activations, prev_activations)
+
+        # Compute gradients of the activation loss with respect to the model parameters
+
+        grads = jax.grad(activation_loss_fn)(activations, prev_activations)
+       
+        # Flatten the gradients
+        flat_grads = flatten_gradients(grads)
+
+        # Adjust the shape of the gradients to match the parameter shape
+        adjusted_grads = adjust_gradient_shape(flat_grads, self._center.shape)
+
         self._previous_best_score = self._best_score
         self.fitness_scores, self._best_score = process_scores(fitness, self._solution_ranking)
       
@@ -308,7 +364,7 @@ class PGPE(NEAlgorithm):
             scaled_noises=self._scaled_noises
         )
 
-        self.belief_space = update_knowledge_sources(self.belief_space, best_individual)   
+        self.belief_space = update_knowledge_sources(self.belief_space, best_individual, activations)   
 
         best_score = jnp.array([self._best_score])
 
@@ -331,7 +387,6 @@ class PGPE(NEAlgorithm):
         result = jnp.zeros(4)
         ks_weights = result.at[min_index].set(1.0)
 
-
         if min_index == 3 and self._t > 200:
             weighted_sum_center = jnp.sum(cluster_weights_center[:, None] * updated_grad_center, axis=0)
             weighted_sum_stdev = jnp.sum(cluster_weights_stdev[:, None] * updated_grad_stdev, axis=0)
@@ -349,6 +404,12 @@ class PGPE(NEAlgorithm):
         self._t += 1
         
         self._center = self._get_params(self._opt_state)
+        
+        if min_index == 0:
+            self._center = self._center - self._center_lr * adjusted_grads
+            self.belief_space = self.belief_space[:1] + ((self._center, self._stdev, self.belief_space[1][2], self.belief_space[1][3], self.belief_space[1][4]),) + self.belief_space[2:]
+
+
         self._stdev = update_stdev(
             stdev=self._stdev,
             lr=self._stdev_lr,

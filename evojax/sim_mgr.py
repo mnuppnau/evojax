@@ -167,7 +167,7 @@ class SimManager(object):
 
         def step_once(carry, input_data, task):
             (task_state, policy_state, params, obs_params,
-             accumulated_reward, valid_mask) = carry
+             accumulated_reward, valid_mask, activations) = carry
             if task.multi_agent_training:
                 num_tasks, num_agents = task_state.obs.shape[:2]
                 task_state = task_state.replace(
@@ -175,8 +175,10 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            actions, policy_state = policy_net.get_actions(
+            actions, policy_state, activations = policy_net.get_actions(
                 task_state, params, policy_state)
+            #jax.debug.print('actions shape: {}', actions.shape)
+            #jax.debug.print('labels shape: {}', task_state.labels.shape)
             if task.multi_agent_training:
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape(
@@ -184,26 +186,52 @@ class SimManager(object):
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
             task_state, reward, done = task.step(task_state, actions)
+            #jax.debug.print('reward : {}', reward)
+            
+            max_reward_index = jnp.argmax(reward)
+            
+            individual_predictions = actions[max_reward_index]  # Shape (1024, 10)
+            individual_labels = task_state.labels[max_reward_index]      # Shape (1024)
+            
+            predicted_classes = jnp.argmax(individual_predictions, axis=1)  # Shape (1024)
+            correct_predictions = predicted_classes == individual_labels    # Shape (1024), boolean array
+
+            #jax.debug.print('correct_predictions : {}', jnp.sum(correct_predictions)) 
+            correct_indices_weights = correct_predictions.astype(jnp.int32)
+    
+            #_, top_indices = jax.lax.top_k(-correct_indices_weights, k=min(100, correct_predictions.size))
+   
+            _, top_indices = jax.lax.top_k(correct_indices_weights, k=min(90, correct_predictions.size))
+
+            selected_indices = jnp.flip(top_indices)
+
+            act1 = activations[0][max_reward_index, selected_indices]
+            act2 = activations[1][max_reward_index, selected_indices]
+            act3 = activations[2][max_reward_index, selected_indices]
+            activations = (act1, act2, act3)
+                        
+            jax.debug.print('selected_indices : {}', selected_indices)
             if task.multi_agent_training:
                 reward = reward.ravel()
                 done = jnp.repeat(done, num_agents, axis=0)
             accumulated_reward = accumulated_reward + reward * valid_mask
             valid_mask = valid_mask * (1 - done.ravel())
             return ((task_state, policy_state, params, obs_params,
-                     accumulated_reward, valid_mask),
+                     accumulated_reward, valid_mask, activations),
                     (org_obs, valid_mask))
 
         def rollout(task_states, policy_states, params, obs_params,
                     step_once_fn, max_steps):
             accumulated_rewards = jnp.zeros(params.shape[0])
             valid_masks = jnp.ones(params.shape[0])
+            activations = (jnp.zeros((90,28,28,8)),jnp.zeros((90,14,14,16)),jnp.zeros((90,784)))
             ((task_states, policy_states, params, obs_params,
-              accumulated_rewards, valid_masks),
+              accumulated_rewards, valid_masks, activations),
              (obs_set, obs_mask)) = jax.lax.scan(
                 step_once_fn,
                 (task_states, policy_states, params, obs_params,
-                 accumulated_rewards, valid_masks), (), max_steps)
-            return accumulated_rewards, obs_set, obs_mask, task_states
+                 accumulated_rewards, valid_masks, activations), (), max_steps)
+            return accumulated_rewards, obs_set, obs_mask, task_states, activations
 
         self._policy_reset_fn = jax.jit(policy_net.reset)
         self._policy_act_fn = jax.jit(policy_net.get_actions)
@@ -352,7 +380,7 @@ class SimManager(object):
             policy_state = split_states_for_pmap(policy_state)
 
         # Do the rollouts.
-        scores, all_obs, masks, final_states = rollout_func(
+        scores, all_obs, masks, final_states, activations = rollout_func(
             task_state, policy_state, params, self.obs_params)
         if self._num_device > 1:
             all_obs = reshape_data_from_pmap(all_obs)
@@ -381,4 +409,4 @@ class SimManager(object):
                 lambda x: x.reshape((scores.shape[0], n_repeats, *x.shape[1:])),
                 final_states)
 
-        return scores, self._bd_summarize_fn(final_states)
+        return scores, self._bd_summarize_fn(final_states), activations

@@ -34,14 +34,17 @@ class CNN(nn.Module):
     def __call__(self, x):
         x = nn.Conv(features=8, kernel_size=(5, 5), padding='SAME')(x)
         x = nn.relu(x)
+        act1 = x
         x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
         x = nn.Conv(features=16, kernel_size=(5, 5), padding='SAME')(x)
         x = nn.relu(x)
+        act2 = x
         x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
         x = x.reshape((x.shape[0], -1))  # flatten
+        act3 = x
         x = nn.Dense(features=10)(x)
         x = nn.log_softmax(x)
-        return x
+        return x, (act1, act2, act3)
 
 
 class ConvNetPolicy(PolicyNetwork):
@@ -66,4 +69,7 @@ class ConvNetPolicy(PolicyNetwork):
                     params: jnp.ndarray,
                     p_states: PolicyState) -> Tuple[jnp.ndarray, PolicyState]:
         params = self._format_params_fn(params)
-        return self._forward_fn(params, t_states.obs), p_states
+        logits, activations = self._forward_fn(params, t_states.obs)
+        return logits, p_states, activations
+
+        #return self._forward_fn(params, t_states), p_states
