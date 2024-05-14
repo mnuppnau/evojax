@@ -281,3 +281,16 @@ def inverse_fitness_values(fitness_values, epsilon=1e-2):
     inverse_fitness = 1 / (shifted_fitness + epsilon)
     normalized_inverse_fitness = inverse_fitness / jnp.sum(inverse_fitness)
     return normalized_inverse_fitness
+
+def average_activations(tuple_list):
+    # Stack arrays in each position of the tuples
+    stack_1 = jnp.stack([t[0] for t in tuple_list])
+    stack_2 = jnp.stack([t[1] for t in tuple_list])
+    stack_3 = jnp.stack([t[2] for t in tuple_list])
+    
+    # Compute the average along the new axis (axis 0)
+    average_1 = jnp.mean(stack_1, axis=0)
+    average_2 = jnp.mean(stack_2, axis=0)
+    average_3 = jnp.mean(stack_3, axis=0)
+    
+    return (average_1, average_2, average_3)

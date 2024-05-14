@@ -166,7 +166,7 @@ class SimManager(object):
                     self._n_evaluations, self._num_device))
 
         def step_once(carry, input_data, task):
-            (task_state, policy_state, params, obs_params,
+            (task_state, policy_state, params, obs_params, key,
              accumulated_reward, valid_mask, activations) = carry
             if task.multi_agent_training:
                 num_tasks, num_agents = task_state.obs.shape[:2]
@@ -201,35 +201,47 @@ class SimManager(object):
     
             #_, top_indices = jax.lax.top_k(-correct_indices_weights, k=min(100, correct_predictions.size))
    
-            _, top_indices = jax.lax.top_k(correct_indices_weights, k=min(90, correct_predictions.size))
+            _, top_indices = jax.lax.top_k(correct_indices_weights, k=min(1000, correct_predictions.size))
 
             selected_indices = jnp.flip(top_indices)
+           
+            #num_top_indices = 1000
+            #top_values, top_indices = jax.lax.top_k(correct_indices_weights, k=num_top_indices)
 
+            #valid_indices = top_indices[top_values > 0]
+
+            # Determine the number of random samples, ensuring it does not exceed the number of valid indices
+            num_samples = min(90, len(selected_indices))
+
+
+            # Use jax.random.choice to select indices randomly
+            selected_indices = random.choice(key, selected_indices, shape=(num_samples,), replace=False)
+ 
             act1 = activations[0][max_reward_index, selected_indices]
             act2 = activations[1][max_reward_index, selected_indices]
             act3 = activations[2][max_reward_index, selected_indices]
             activations = (act1, act2, act3)
                         
-            jax.debug.print('selected_indices : {}', selected_indices)
+            #jax.debug.print('selected_indices : {}', selected_indices)
             if task.multi_agent_training:
                 reward = reward.ravel()
                 done = jnp.repeat(done, num_agents, axis=0)
             accumulated_reward = accumulated_reward + reward * valid_mask
             valid_mask = valid_mask * (1 - done.ravel())
-            return ((task_state, policy_state, params, obs_params,
+            return ((task_state, policy_state, params, obs_params, key,
                      accumulated_reward, valid_mask, activations),
                     (org_obs, valid_mask))
 
-        def rollout(task_states, policy_states, params, obs_params,
+        def rollout(task_states, policy_states, params, obs_params, key,
                     step_once_fn, max_steps):
             accumulated_rewards = jnp.zeros(params.shape[0])
             valid_masks = jnp.ones(params.shape[0])
             activations = (jnp.zeros((90,28,28,8)),jnp.zeros((90,14,14,16)),jnp.zeros((90,784)))
-            ((task_states, policy_states, params, obs_params,
+            ((task_states, policy_states, params, obs_params, key,
               accumulated_rewards, valid_masks, activations),
              (obs_set, obs_mask)) = jax.lax.scan(
                 step_once_fn,
-                (task_states, policy_states, params, obs_params,
+                (task_states, policy_states, params, obs_params, key,
                  accumulated_rewards, valid_masks, activations), (), max_steps)
             return accumulated_rewards, obs_set, obs_mask, task_states, activations
 
@@ -255,7 +267,7 @@ class SimManager(object):
             max_steps=train_vec_task.max_steps)
         if self._num_device > 1:
             self._train_rollout_fn = jax.jit(jax.pmap(
-                self._train_rollout_fn, in_axes=(0, 0, 0, None)))
+                self._train_rollout_fn, in_axes=(0, 0, 0, None, None)))
 
         # Set up validation functions.
         self._valid_reset_fn = valid_vec_task.reset
@@ -267,7 +279,7 @@ class SimManager(object):
             max_steps=valid_vec_task.max_steps)
         if self._num_device > 1:
             self._valid_rollout_fn = jax.jit(jax.pmap(
-                self._valid_rollout_fn, in_axes=(0, 0, 0, None)))
+                self._valid_rollout_fn, in_axes=(0, 0, 0, None, None)))
 
     def eval_params(self,
                     params: jnp.ndarray,
@@ -381,7 +393,7 @@ class SimManager(object):
 
         # Do the rollouts.
         scores, all_obs, masks, final_states, activations = rollout_func(
-            task_state, policy_state, params, self.obs_params)
+            task_state, policy_state, params, self.obs_params, self._key)
         if self._num_device > 1:
             all_obs = reshape_data_from_pmap(all_obs)
             masks = reshape_data_from_pmap(masks)

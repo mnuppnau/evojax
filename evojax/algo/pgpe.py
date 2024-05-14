@@ -98,6 +98,18 @@ def update_stdev(
     max_allowed = stdev + allowed_delta
     return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
 
+def process_activation_grads_to_fit_params(activation_grads, param_shape):
+    # Flatten activation gradients
+    flattened_grads = jax.tree_util.tree_flatten(activation_grads)[0]
+    combined_grads = jnp.concatenate([grad.flatten() for grad in flattened_grads])
+
+    # Example adjustment, ensure to customize based on actual requirements
+    #scale_factor = param_shape[0] / combined_grads.shape[0]
+    rescale_factor = param_shape[0] / combined_grads.size
+    #adjusted_grads = jnp.repeat(combined_grads, scale_factor)
+    adjusted_grads = jnp.tile(combined_grads, int(rescale_factor) + 1)[:param_shape[0]]
+    return adjusted_grads[:param_shape[0]]  # Ensuring the shape matches exactly
+
 @jax.jit
 def flatten_gradients(gradients):
     flattened_grads = []
@@ -326,7 +338,7 @@ class PGPE(NEAlgorithm):
         avg_act2 = jnp.mean(act2, axis=0)
         avg_act3 = jnp.mean(act3, axis=0)
 
-        prev_activations = self.belief_space[1][4]
+        prev_activations = self.belief_space[1][5]
 
         activations = (avg_act1, avg_act2, avg_act3)
 
@@ -336,11 +348,7 @@ class PGPE(NEAlgorithm):
 
         grads = jax.grad(activation_loss_fn)(activations, prev_activations)
        
-        # Flatten the gradients
-        flat_grads = flatten_gradients(grads)
-
-        # Adjust the shape of the gradients to match the parameter shape
-        adjusted_grads = adjust_gradient_shape(flat_grads, self._center.shape)
+        processed_activation_grads = process_activation_grads_to_fit_params(grads, self._center.shape)
 
         self._previous_best_score = self._best_score
         self.fitness_scores, self._best_score = process_scores(fitness, self._solution_ranking)
@@ -364,7 +372,7 @@ class PGPE(NEAlgorithm):
             scaled_noises=self._scaled_noises
         )
 
-        self.belief_space = update_knowledge_sources(self.belief_space, best_individual, activations)   
+        #self.belief_space = update_knowledge_sources(self.belief_space, best_individual, activations)   
 
         best_score = jnp.array([self._best_score])
 
@@ -387,11 +395,16 @@ class PGPE(NEAlgorithm):
         result = jnp.zeros(4)
         ks_weights = result.at[min_index].set(1.0)
 
+        jax.debug.print('activation grads : {}', jnp.sum(processed_activation_grads))
+        jax.debug.print('grad center : {}', jnp.sum(grad_center))
+
         if min_index == 3 and self._t > 200:
             weighted_sum_center = jnp.sum(cluster_weights_center[:, None] * updated_grad_center, axis=0)
             weighted_sum_stdev = jnp.sum(cluster_weights_stdev[:, None] * updated_grad_stdev, axis=0)
             grad_center = weighted_sum_center*0.7 + grad_center*0.3
             grad_stdev = weighted_sum_stdev*0.7 + grad_stdev*0.3
+        elif min_index == 0:
+            grad_center = processed_activation_grads * 0.3 + grad_center * 0.7
 
         with open('/home/gh0st/Downloads/pgpe_ks_weights.csv', 'a') as f:
             f.write(f'Iter: {self._t}, Domain Weight: {ks_weights[0]}, Situational Weight: {ks_weights[1]}, History Weight: {ks_weights[2]}, Topographic Weight: {ks_weights[3]}\n')
@@ -405,10 +418,9 @@ class PGPE(NEAlgorithm):
         
         self._center = self._get_params(self._opt_state)
         
-        if min_index == 0:
-            self._center = self._center - self._center_lr * adjusted_grads
-            self.belief_space = self.belief_space[:1] + ((self._center, self._stdev, self.belief_space[1][2], self.belief_space[1][3], self.belief_space[1][4]),) + self.belief_space[2:]
-
+        #if min_index == 0:
+        #    self._center = self._center - 0.0002 * processed_activation_grads
+        #    self.belief_space = self.belief_space[:1] + ((self._center, self._stdev, self.belief_space[1][2], self.belief_space[1][3], self.belief_space[1][4]),) + self.belief_space[2:]
 
         self._stdev = update_stdev(
             stdev=self._stdev,
@@ -416,6 +428,11 @@ class PGPE(NEAlgorithm):
             max_change=self._stdev_max_change,
             grad=grad_stdev,
         )
+
+        self.belief_space = update_knowledge_sources(self.belief_space, (self._center, self._stdev, best_individual[2], best_individual[3]), activations)   
+
+        #self.belief_space = update_knowledge_sources(self.belief_space, best_individual, activations)   
+
 
 
 

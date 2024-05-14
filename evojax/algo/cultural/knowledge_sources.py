@@ -9,7 +9,7 @@ import numpy as np
 import copy
 
 from evojax.algo.cultural.population_space import Individual
-from evojax.algo.cultural.helper_functions import kmeans, calculate_slopes, update_weights, least_frequent_cluster, combined_min_max_scale, combined_z_score_standardize, normalize_arrays, scale_arrays, compute_cluster_weights, inverse_fitness_values
+from evojax.algo.cultural.helper_functions import kmeans, calculate_slopes, update_weights, least_frequent_cluster, combined_min_max_scale, combined_z_score_standardize, normalize_arrays, scale_arrays, compute_cluster_weights, inverse_fitness_values, average_activations
 
 def initialize_domain_ks(param_size: int):
     return (
@@ -17,7 +17,8 @@ def initialize_domain_ks(param_size: int):
         jnp.ones(param_size), # stdev
         jnp.array([1.0]), # noise_magnitude
         jnp.array([0.0]), # fitness_score
-        (jnp.zeros((90,28,28,8)), jnp.zeros((90,14,14,16)), jnp.zeros((90, 784))) # activations
+        [(jnp.zeros((90,28,28,8)), jnp.zeros((90,14,14,16)), jnp.zeros((90, 784))) for _ in range(40)], # activations
+        (jnp.zeros((90,28,28,8)), jnp.zeros((90,14,14,16)), jnp.zeros((90, 784))) # average activations
         )
 
 def initialize_situational_ks(param_size: int, max_individuals: int = 100):
@@ -68,8 +69,16 @@ def initialize_normative_ks(param_size: int):
 def update_knowledge_sources(belief_space, best_individual, activations, num_iterations=5000, max_individuals=100):
    
     best_center, best_stdev, best_noise_magnitude, best_fitness_value = best_individual
-  
-    updated_domain_ks = (best_center, best_stdev, best_noise_magnitude, best_fitness_value, activations)
+
+    domain_activations = belief_space[1][4]
+
+    domain_activations.insert(0, activations)
+
+    domain_activations.pop()
+
+    avg_activations = average_activations(domain_activations)
+
+    updated_domain_ks = (best_center, best_stdev, best_noise_magnitude, best_fitness_value, domain_activations, avg_activations)
 
     updated_belief_space_domain = belief_space[:1] + (updated_domain_ks,) + belief_space[2:]
 
