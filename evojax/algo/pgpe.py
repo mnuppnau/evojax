@@ -46,6 +46,21 @@ from evojax.algo.cultural.knowledge_sources import update_knowledge_sources, upd
 
 from evojax.algo.cultural.helper_functions import calculate_entropy
 
+def scale_activation_grads(activation_grads, target_norm):
+    activation_grads_norm = jnp.linalg.norm(activation_grads)
+    scale_factor = target_norm / (activation_grads_norm + 1e-8)
+    scaled_activation_grads = activation_grads * scale_factor
+    return scaled_activation_grads
+
+def compare_gradient_magnitudes(grad_center, processed_activation_grads):
+    grad_center_norm = jnp.linalg.norm(grad_center)
+    processed_activation_grads_norm = jnp.linalg.norm(processed_activation_grads)
+    return grad_center_norm, processed_activation_grads_norm
+
+def cosine_similarity(grad1, grad2):
+    cos_sim = jnp.dot(grad1, grad2) / (jnp.linalg.norm(grad1) * jnp.linalg.norm(grad2) + 1e-8)
+    return cos_sim
+
 @partial(jax.jit, static_argnums=(1,))
 def process_scores(
     x: Union[np.ndarray, jnp.ndarray], use_ranking: bool
@@ -362,6 +377,8 @@ class PGPE(NEAlgorithm):
             scaled_noises=self._scaled_noises,
             stdev=self._stdev,
         )
+       
+        processed_activation_grads = scale_activation_grads(processed_activation_grads, jnp.linalg.norm(grad_center))
 
         grad_center_norm, grad_stdev_norm = normalize_gradients(grad_center, grad_stdev)
 
@@ -395,8 +412,14 @@ class PGPE(NEAlgorithm):
         result = jnp.zeros(4)
         ks_weights = result.at[min_index].set(1.0)
 
-        jax.debug.print('activation grads : {}', jnp.sum(processed_activation_grads))
-        jax.debug.print('grad center : {}', jnp.sum(grad_center))
+        #jax.debug.print('activation grads : {}', jnp.sum(processed_activation_grads))
+        #jax.debug.print('grad center : {}', jnp.sum(grad_center))
+
+        #grad_center_norm2, processed_activation_grads_norm = compare_gradient_magnitudes(grad_center, processed_activation_grads)
+        #print(f"PGPE Grad Norm: {grad_center_norm2}, Activation Grad Norm: {processed_activation_grads_norm}")
+        
+        #cos_sim = cosine_similarity(grad_center, processed_activation_grads)
+        #print(f"Cosine Similarity: {cos_sim}")
 
         if min_index == 3 and self._t > 200:
             weighted_sum_center = jnp.sum(cluster_weights_center[:, None] * updated_grad_center, axis=0)
@@ -404,7 +427,7 @@ class PGPE(NEAlgorithm):
             grad_center = weighted_sum_center*0.7 + grad_center*0.3
             grad_stdev = weighted_sum_stdev*0.7 + grad_stdev*0.3
         elif min_index == 0:
-            grad_center = processed_activation_grads * 0.3 + grad_center * 0.7
+            grad_center = processed_activation_grads * 0.32 + grad_center * 0.68
 
         with open('/home/gh0st/Downloads/pgpe_ks_weights.csv', 'a') as f:
             f.write(f'Iter: {self._t}, Domain Weight: {ks_weights[0]}, Situational Weight: {ks_weights[1]}, History Weight: {ks_weights[2]}, Topographic Weight: {ks_weights[3]}\n')
@@ -429,7 +452,7 @@ class PGPE(NEAlgorithm):
             grad=grad_stdev,
         )
 
-        self.belief_space = update_knowledge_sources(self.belief_space, (self._center, self._stdev, best_individual[2], best_individual[3]), activations)   
+        self.belief_space = update_knowledge_sources(self.belief_space, ((self._center*0.8 + best_individual[0]*0.2), self._stdev, best_individual[2], best_individual[3]), activations)   
 
         #self.belief_space = update_knowledge_sources(self.belief_space, best_individual, activations)   
 
