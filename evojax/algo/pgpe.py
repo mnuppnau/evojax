@@ -46,20 +46,24 @@ from evojax.algo.cultural.knowledge_sources import update_knowledge_sources, upd
 
 from evojax.algo.cultural.helper_functions import calculate_entropy
 
+@jax.jit
+def get_activation_mean(activations: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]) -> jnp.ndarray:
+    act1 = activations[0]
+    act2 = activations[1]
+    act3 = activations[2]
+
+    avg_act1 = jnp.mean(act1, axis=0)
+    avg_act2 = jnp.mean(act2, axis=0)
+    avg_act3 = jnp.mean(act3, axis=0)
+
+    return (avg_act1, avg_act2, avg_act3)
+
+@jax.jit
 def scale_activation_grads(activation_grads, target_norm):
     activation_grads_norm = jnp.linalg.norm(activation_grads)
     scale_factor = target_norm / (activation_grads_norm + 1e-8)
     scaled_activation_grads = activation_grads * scale_factor
     return scaled_activation_grads
-
-def compare_gradient_magnitudes(grad_center, processed_activation_grads):
-    grad_center_norm = jnp.linalg.norm(grad_center)
-    processed_activation_grads_norm = jnp.linalg.norm(processed_activation_grads)
-    return grad_center_norm, processed_activation_grads_norm
-
-def cosine_similarity(grad1, grad2):
-    cos_sim = jnp.dot(grad1, grad2) / (jnp.linalg.norm(grad1) * jnp.linalg.norm(grad2) + 1e-8)
-    return cos_sim
 
 @partial(jax.jit, static_argnums=(1,))
 def process_scores(
@@ -113,65 +117,20 @@ def update_stdev(
     max_allowed = stdev + allowed_delta
     return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
 
-def process_activation_grads_to_fit_params(activation_grads, param_shape):
+@jax.jit
+def process_activation_grads_to_fit_params(activation_grads, param_shape, param_size):
     # Flatten activation gradients
     flattened_grads = jax.tree_util.tree_flatten(activation_grads)[0]
     combined_grads = jnp.concatenate([grad.flatten() for grad in flattened_grads])
 
-    # Example adjustment, ensure to customize based on actual requirements
-    #scale_factor = param_shape[0] / combined_grads.shape[0]
-    rescale_factor = param_shape[0] / combined_grads.size
-    #adjusted_grads = jnp.repeat(combined_grads, scale_factor)
-    adjusted_grads = jnp.tile(combined_grads, int(rescale_factor) + 1)[:param_shape[0]]
-    return adjusted_grads[:param_shape[0]]  # Ensuring the shape matches exactly
-
-@jax.jit
-def flatten_gradients(gradients):
-    flattened_grads = []
-    for grad in gradients:
-        flattened_grad = jnp.reshape(grad, (grad.shape[0], -1))
-        flattened_grads.append(flattened_grad)
-    
-    return jnp.concatenate(flattened_grads, axis=1)
-
-#@jax.jit
-def adjust_gradient_shape(gradients, param_shape):
-    grad_length = gradients.shape[0]
-    param_length = param_shape[0]
-    
-    if grad_length > param_length:
-        # Truncate or reduce the gradient vector
-        gradients = gradients[:param_length]
-    elif grad_length < param_length:
-        # Pad the gradient vector with zeros
-        pad_length = param_length - grad_length
-        gradients = jnp.pad(gradients, (0, pad_length))
-    
-    return gradients
+    adjusted_grads = jnp.tile(combined_grads, int(0.01229) + 1)[:11274]
+    return adjusted_grads[:11274]  # Ensuring the shape matches exactly
 
 @jax.jit
 def normalize_gradients(grad_center: jnp.ndarray, grad_stdev: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
     grad_center = grad_center / jnp.linalg.norm(grad_center)
     grad_stdev = grad_stdev / jnp.linalg.norm(grad_stdev)
     return grad_center, grad_stdev
-
-@partial(jax.jit, static_argnums=(3,4))
-def ask_func_infl(
-    key: jnp.ndarray,
-    stdev: jnp.ndarray,
-    center: jnp.ndarray,
-    num_directions: int,
-    solution_size: int,
-    belief_space: dict,
-) -> Tuple[jnp.ndarray,jnp.ndarray,jnp.ndarray]:
-    next_key, key = random.split(key)
-    scaled_noises = random.normal(key, [num_directions, solution_size]) * stdev
-    # Apply the influence adjustments to the scaled noises
-    scaled_noises = influence(belief_space,scaled_noises)
-
-    solutions = jnp.hstack([center + scaled_noises, center - scaled_noises]).reshape(-1, solution_size)    
-
-    return next_key, scaled_noises, solutions
 
 @partial(jax.jit, static_argnums=(3, 4))
 def ask_func(
@@ -298,9 +257,6 @@ class PGPE(NEAlgorithm):
 
         self._max_iter = max_iter
 
-        self._previous_best_score = -11.0
-        self._best_score = -10.0
-
         self._scaled_noises_adjustment_rate = 0.2
         self._kmeans_rate = 0.005
         self._adjust_kmeans_rate = 0.001
@@ -316,56 +272,26 @@ class PGPE(NEAlgorithm):
         else:
              center, stdev = self._center, self._stdev
 
-        #self._key, self._scaled_noises, self._solutions = ask_func(
-        #    self._key,
-        #    stdev,
-        #    center,
-        #    self._num_directions,
-        #    self._center.size,
-        #    )
-
-        if self._t > 10000:
-            self._key, self._scaled_noises, self._solutions = ask_func_infl(
-                self._key,
-                stdev,
-                center,
-                self._num_directions,
-                self._center.size,
-                self.belief_space,
-            )
-        else:
-            self._key, self._scaled_noises, self._solutions = ask_func(
+        self._key, self._scaled_noises, self._solutions = ask_func(
             self._key,
             stdev,
             center,
             self._num_directions,
             self._center.size,
             )
+
         return self._solutions
 
     def tell(self, fitness: Union[np.ndarray, jnp.ndarray], activations: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]) -> None:
         
-        act1 = activations[0]
-        act2 = activations[1]
-        act3 = activations[2]
-
-        avg_act1 = jnp.mean(act1, axis=0)
-        avg_act2 = jnp.mean(act2, axis=0)
-        avg_act3 = jnp.mean(act3, axis=0)
-
         prev_activations = self.belief_space[1][5]
 
-        activations = (avg_act1, avg_act2, avg_act3)
-
-        #activations_loss = activation_loss_fn(activations, prev_activations)
-
-        # Compute gradients of the activation loss with respect to the model parameters
+        activations = get_activation_mean(activations)
 
         grads = jax.grad(activation_loss_fn)(activations, prev_activations)
        
-        processed_activation_grads = process_activation_grads_to_fit_params(grads, self._center.shape)
+        processed_activation_grads = process_activation_grads_to_fit_params(grads, self._center.shape, self._center.shape[0])
 
-        self._previous_best_score = self._best_score
         self.fitness_scores, self._best_score = process_scores(fitness, self._solution_ranking)
       
         self._avg_score = jnp.array(fitness).mean()
@@ -389,22 +315,12 @@ class PGPE(NEAlgorithm):
             scaled_noises=self._scaled_noises
         )
 
-        #self.belief_space = update_knowledge_sources(self.belief_space, best_individual, activations)   
-
         best_score = jnp.array([self._best_score])
 
-        #if self._t == 100:
-        #    self.belief_space = self.belief_space[:4] + ((grad_center_norm, grad_center_norm, self.belief_space[4][2], self.belief_space[4][3], best_individual[0], self.belief_space[4][5]),) + self.belief_space[5:] 
         if self._t > 100 and self._t < 200:
             self.belief_space = add_ind_topographic_ks(self.belief_space, grad_center_norm, grad_stdev_norm, best_score)
         elif self._t >= 200:
             self.belief_space = update_topographic_ks(self.belief_space, grad_center_norm, grad_stdev_norm, best_score)
-
-        updated_grad_center = self.belief_space[4][3]
-        updated_grad_stdev = self.belief_space[4][4]
-
-        cluster_weights_center = self.belief_space[4][7]
-        cluster_weights_stdev = self.belief_space[4][8]
 
         self.belief_space, self._adjust_kmeans_iterations, ks_weights = update_normative_ks(self.belief_space, best_fitness=self._best_score, avg_fitness=self._avg_score, norm_entropy=norm_entropy, adjust_kmeans_iterations=self._adjust_kmeans_iterations)
 
@@ -412,16 +328,13 @@ class PGPE(NEAlgorithm):
         result = jnp.zeros(4)
         ks_weights = result.at[min_index].set(1.0)
 
-        #jax.debug.print('activation grads : {}', jnp.sum(processed_activation_grads))
-        #jax.debug.print('grad center : {}', jnp.sum(grad_center))
-
-        #grad_center_norm2, processed_activation_grads_norm = compare_gradient_magnitudes(grad_center, processed_activation_grads)
-        #print(f"PGPE Grad Norm: {grad_center_norm2}, Activation Grad Norm: {processed_activation_grads_norm}")
-        
-        #cos_sim = cosine_similarity(grad_center, processed_activation_grads)
-        #print(f"Cosine Similarity: {cos_sim}")
-
         if min_index == 3 and self._t > 200:
+            updated_grad_center = self.belief_space[4][3]
+            updated_grad_stdev = self.belief_space[4][4]
+
+            cluster_weights_center = self.belief_space[4][7]
+            cluster_weights_stdev = self.belief_space[4][8]
+
             weighted_sum_center = jnp.sum(cluster_weights_center[:, None] * updated_grad_center, axis=0)
             weighted_sum_stdev = jnp.sum(cluster_weights_stdev[:, None] * updated_grad_stdev, axis=0)
             grad_center = weighted_sum_center*0.7 + grad_center*0.3
@@ -429,10 +342,10 @@ class PGPE(NEAlgorithm):
         elif min_index == 0:
             grad_center = processed_activation_grads * 0.32 + grad_center * 0.68
 
-        with open('/home/gh0st/Downloads/pgpe_ks_weights.csv', 'a') as f:
-            f.write(f'Iter: {self._t}, Domain Weight: {ks_weights[0]}, Situational Weight: {ks_weights[1]}, History Weight: {ks_weights[2]}, Topographic Weight: {ks_weights[3]}\n')
+        #with open('/home/gh0st/Downloads/pgpe_ks_weights.csv', 'a') as f:
+        #    f.write(f'Iter: {self._t}, Domain Weight: {ks_weights[0]}, Situational Weight: {ks_weights[1]}, History Weight: {ks_weights[2]}, Topographic Weight: {ks_weights[3]}\n')
 
-        self._kmeans_iterations += self._adjust_kmeans_iterations
+        #self._kmeans_iterations += self._adjust_kmeans_iterations
 
         self._opt_state = self._opt_update(
             self._t // self._lr_decay_steps, -grad_center, self._opt_state
@@ -441,10 +354,6 @@ class PGPE(NEAlgorithm):
         
         self._center = self._get_params(self._opt_state)
         
-        #if min_index == 0:
-        #    self._center = self._center - 0.0002 * processed_activation_grads
-        #    self.belief_space = self.belief_space[:1] + ((self._center, self._stdev, self.belief_space[1][2], self.belief_space[1][3], self.belief_space[1][4]),) + self.belief_space[2:]
-
         self._stdev = update_stdev(
             stdev=self._stdev,
             lr=self._stdev_lr,
@@ -453,11 +362,6 @@ class PGPE(NEAlgorithm):
         )
 
         self.belief_space = update_knowledge_sources(self.belief_space, ((self._center*0.8 + best_individual[0]*0.2), self._stdev, best_individual[2], best_individual[3]), activations)   
-
-        #self.belief_space = update_knowledge_sources(self.belief_space, best_individual, activations)   
-
-
-
 
     @property
     def best_params(self) -> jnp.ndarray:

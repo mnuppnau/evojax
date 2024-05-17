@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 
+from jax import lax
 from jax import jit
 from jax import random
 from jax import vmap
@@ -60,7 +61,7 @@ def update_centroids(embeddings, assignments, k):
     Args:
         embeddings (jax.numpy.ndarray): The input embeddings.
         assignments (jax.numpy.ndarray): The cluster assignments for each embedding.
-        K (int): The number of clusters.
+        k (int): The number of clusters.
 
     Returns:
         jax.numpy.ndarray: The updated centroids.
@@ -70,9 +71,26 @@ def update_centroids(embeddings, assignments, k):
         masked_embeddings = jnp.where(mask[:, None], embeddings, 0)
         return jnp.sum(masked_embeddings, axis=0) / jnp.sum(mask)
 
-    return jax.vmap(update_centroid)(jnp.arange(6))
+    return vmap(update_centroid)(jnp.arange(10))
 
-def kmeans(embeddings, k=6, num_iters=100, seed=0):
+def kmeans_step(state, _):
+    """
+    This function performs a single iteration of the K-Means algorithm.
+
+    Args:
+        state (tuple): A tuple containing the current centroids and embeddings.
+        _ (Any): A dummy variable to comply with the lax.scan API.
+
+    Returns:
+        tuple: The updated state containing the new centroids and assignments.
+    """
+    centroids, embeddings, k = state
+    assignments = assign_clusters(embeddings, centroids)
+    centroids = update_centroids(embeddings, assignments, 10)
+    return (centroids, embeddings, 10), None
+
+@jit
+def kmeans(embeddings, k=10, num_iters=100, seed=0):
     """
     This function applies the K-Means algorithm to input embeddings.
 
@@ -87,14 +105,14 @@ def kmeans(embeddings, k=6, num_iters=100, seed=0):
     """
     key = random.PRNGKey(seed)
     centroids = initialize_centroids(embeddings, k, key)
+    initial_state = (centroids, embeddings, k)
 
-    for _ in range(num_iters):
-        assignments = assign_clusters(embeddings, centroids)
-        centroids = update_centroids(embeddings, assignments, k)
+    final_state, _ = lax.scan(kmeans_step, initial_state, None, length=num_iters)
+    final_centroids, embeddings, k = final_state
+    assignments = assign_clusters(embeddings, final_centroids)
+    return final_centroids, assignments
 
-    return centroids, assignments
-
-
+@jit
 def least_frequent_cluster(arr):
     unique_elements, counts = jnp.unique(arr, return_counts=True)
     min_count_index = jnp.argmin(counts)
