@@ -26,6 +26,7 @@ from typing import Callable
 from functools import partial
 
 import jax
+import jax.profiler
 import jax.numpy as jnp
 from jax import random
 from jax import tree_util

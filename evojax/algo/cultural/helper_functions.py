@@ -8,64 +8,23 @@ from jax import vmap
 from jax import ops 
 from jax.lax import scan, fori_loop
 
+
 @jit
 def initialize_centroids(embeddings, k, key):
-    """
-    This function initializes k centroids randomly.
-
-    Args:
-        embeddings (jax.numpy.ndarray): The input embeddings.
-        k (int): The number of clusters.
-        key (jax.random.PRNGKey): The random key.
-
-    Returns:
-        jax.numpy.ndarray: The initialized centroids.
-    """
     indices = random.choice(key, jnp.arange(embeddings.shape[0]), shape=(10,), replace=False)
     return jnp.take(embeddings, indices, axis=0)
 
 @jit
 def compute_distances(embedding, centroids):
-    """
-    This function computes the distance from each centroid to an embedding.
-
-    Args:
-        embedding (jax.numpy.ndarray): The input embedding.
-        centroids (jax.numpy.ndarray): The centroids.
-
-    Returns:
-        jax.numpy.ndarray: The distances.
-    """
     return jnp.sqrt(jnp.sum((embedding - centroids)**2, axis=-1))
 
 @jit
 def assign_clusters(embeddings, centroids):
-    """
-    This function assigns each embedding to the nearest centroid.
-
-    Args:
-        embeddings (jax.numpy.ndarray): The input embeddings.
-        centroids (jax.numpy.ndarray): The centroids.
-
-    Returns:
-        jax.numpy.ndarray: The cluster assignments for each embedding.
-    """
     distances = vmap(compute_distances, in_axes=(0, None))(embeddings, centroids)
     return jnp.argmin(distances, axis=-1)
 
 @jit
 def update_centroids(embeddings, assignments, k):
-    """
-    This function updates the centroids by computing the mean of all embeddings in each cluster.
-
-    Args:
-        embeddings (jax.numpy.ndarray): The input embeddings.
-        assignments (jax.numpy.ndarray): The cluster assignments for each embedding.
-        k (int): The number of clusters.
-
-    Returns:
-        jax.numpy.ndarray: The updated centroids.
-    """
     def update_centroid(i):
         mask = jnp.equal(assignments, i)
         masked_embeddings = jnp.where(mask[:, None], embeddings, 0)
@@ -74,35 +33,13 @@ def update_centroids(embeddings, assignments, k):
     return vmap(update_centroid)(jnp.arange(10))
 
 def kmeans_step(state, _):
-    """
-    This function performs a single iteration of the K-Means algorithm.
-
-    Args:
-        state (tuple): A tuple containing the current centroids and embeddings.
-        _ (Any): A dummy variable to comply with the lax.scan API.
-
-    Returns:
-        tuple: The updated state containing the new centroids and assignments.
-    """
     centroids, embeddings, k = state
     assignments = assign_clusters(embeddings, centroids)
-    centroids = update_centroids(embeddings, assignments, 10)
-    return (centroids, embeddings, 10), None
+    centroids = update_centroids(embeddings, assignments, k)
+    return (centroids, embeddings, k), None
 
 @jit
-def kmeans(embeddings, k=10, num_iters=100, seed=0):
-    """
-    This function applies the K-Means algorithm to input embeddings.
-
-    Args:
-        embeddings (jax.numpy.ndarray): The input embeddings.
-        k (int): The number of clusters.
-        num_iters (int, optional): The number of iterations to run the K-Means algorithm. Default is 100.
-        seed (int, optional): The random seed for centroid initialization. Default is 0.
-
-    Returns:
-        tuple: The final centroids and the cluster assignments for each embedding.
-    """
+def kmeans(embeddings, k=10, num_iters=60, seed=0):
     key = random.PRNGKey(seed)
     centroids = initialize_centroids(embeddings, k, key)
     initial_state = (centroids, embeddings, k)
@@ -136,19 +73,6 @@ def calculate_entropy(population):
     
     return mean_cosine_distance
 
-#@jit
-#def calculate_slope(values):
-#    n = len(values)
-#    x = jnp.arange(n)
-#    x_mean = jnp.mean(x)
-#    y_mean = jnp.mean(values)
-    
-#    numerator = jnp.sum((x - x_mean) * (values - y_mean))
-#    denominator = jnp.sum((x - x_mean) ** 2)
-    
-#    slope = numerator / denominator
-#    return slope
-
 @jit
 def calculate_slopes(avg_fitness_window, best_fitness_window, norm_entropy_window):
     avg_fitness_slope = calculate_slope(avg_fitness_window)
@@ -163,34 +87,12 @@ def calculate_slopes(avg_fitness_window, best_fitness_window, norm_entropy_windo
     #best_fitness_slope = normalized_slopes[1]
     #norm_entropy_slope = normalized_slopes[2]
 
-    stagnation_slope = calculate_stagnation_slope(best_fitness_slope)
-    stagnation_slope = -stagnation_slope
+    #stagnation_slope = calculate_stagnation_slope(best_fitness_slope)
+    #stagnation_slope = -stagnation_slope
+    stagnation_slope = calculate_slope(best_fitness_window)
     return avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope
 
-def normalize_slopes(slope_values):
-    min_value = jnp.min(slope_values)
-    max_value = jnp.max(slope_values)
-    normalized_slopes = (slope_values - min_value) / (max_value - min_value)
-    return normalized_slopes
-
-def combined_min_max_scale(arr1, arr2, arr3):
-    combined = jnp.concatenate([arr1, arr2, arr3])
-    min_val = jnp.min(combined)
-    max_val = jnp.max(combined)
-    scaled1 = (arr1 - min_val) / (max_val - min_val)
-    scaled2 = (arr2 - min_val) / (max_val - min_val)
-    scaled3 = (arr3 - min_val) / (max_val - min_val)
-    return scaled1, scaled2, scaled3
-
-def combined_z_score_standardize(arr1, arr2, arr3):
-    combined = jnp.concatenate([arr1, arr2, arr3])
-    mean_val = jnp.mean(combined)
-    std_dev = jnp.std(combined)
-    standardized1 = (arr1 - mean_val) / std_dev
-    standardized2 = (arr2 - mean_val) / std_dev
-    standardized3 = (arr3 - mean_val) / std_dev
-    return standardized1, standardized2, standardized3
-
+@jit
 def scale_arrays(arrays, ref_index=2):
     # Choose the reference array
     ref_array = arrays[ref_index]
@@ -207,22 +109,6 @@ def scale_arrays(arrays, ref_index=2):
         scaled_arrays.append(scaled_array)
     
     return scaled_arrays[0],scaled_arrays[1], scaled_arrays[2]
-
-def normalize_arrays(arrays):
-    # Concatenate the arrays along a new axis
-    concatenated = jnp.stack(arrays)
-    
-    # Compute the minimum and maximum values along the first axis
-    min_val = jnp.min(concatenated, axis=0)
-    max_val = jnp.max(concatenated, axis=0)
-    
-    # Normalize the arrays using min-max normalization
-    normalized = (concatenated - min_val) / (max_val - min_val)
-    
-    # Split the normalized arrays back into separate arrays
-    normalized_arrays = jnp.split(normalized, len(arrays))
-
-    return normalized_arrays[0][0], normalized_arrays[1][0], normalized_arrays[2][0]
 
 @jit
 def calculate_slope(y):
@@ -251,15 +137,7 @@ def calculate_stagnation_slope(slope, flatness_threshold=0.000000078, max_scale=
     return scale
 
 @jit
-def calculate_slope_old(window):
-    #if len(window) < 2:
-    #    return 0.0
-    x = jnp.arange(len(window), dtype=jnp.float32)  # Convert x to float32
-    y = jnp.array(window, dtype=jnp.float32)        # Convert y to float32 
-    slope = jnp.polyfit(x, y, 1)[0]
-    return slope
-
-def update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope):
+def update_ks_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope, best_fitness_variance_ratio):
     domain_weight = best_fitness_slope
     situational_weight = avg_fitness_slope
     history_weight = norm_entropy_slope
@@ -270,13 +148,16 @@ def update_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, st
     situational_weight /= total_weight
     history_weight /= total_weight
     topographic_weight /= total_weight
+    topographic_weight = topographic_weight * best_fitness_variance_ratio 
 
     #history_weight = history_weight * 0.9
 
     return jnp.array([domain_weight, situational_weight, history_weight, topographic_weight])
 
+@jit
 def compute_cluster_weights(assignments, fitness_values):
-    num_clusters = jnp.max(assignments) + 1
+    #num_clusters = jnp.max(assignments) + 1
+    num_clusters = 10
     cluster_sums = jnp.zeros(num_clusters)
     cluster_counts = jnp.zeros(num_clusters)
 
@@ -293,6 +174,7 @@ def compute_cluster_weights(assignments, fitness_values):
     normalized_weights = cluster_weights / jnp.sum(cluster_weights)  # Normalize the weights
     return normalized_weights
 
+@jit
 def inverse_fitness_values(fitness_values, epsilon=1e-2):
     min_fitness = jnp.max(fitness_values)
     shifted_fitness = jnp.abs(fitness_values - min_fitness)
@@ -300,6 +182,7 @@ def inverse_fitness_values(fitness_values, epsilon=1e-2):
     normalized_inverse_fitness = inverse_fitness / jnp.sum(inverse_fitness)
     return normalized_inverse_fitness
 
+@jit
 def average_activations(tuple_list):
     # Stack arrays in each position of the tuples
     stack_1 = jnp.stack([t[0] for t in tuple_list])
