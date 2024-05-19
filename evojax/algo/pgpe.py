@@ -343,8 +343,8 @@ class PGPE(NEAlgorithm):
         elif min_index == 0:
             grad_center = processed_activation_grads * 0.32 + grad_center * 0.68
 
-        #with open('/home/gh0st/Downloads/pgpe_ks_weights.csv', 'a') as f:
-        #    f.write(f'Iter: {self._t}, Domain Weight: {ks_weights[0]}, Situational Weight: {ks_weights[1]}, History Weight: {ks_weights[2]}, Topographic Weight: {ks_weights[3]}\n')
+        with open('/home/gh0st/Downloads/pgpe_ks_weights.csv', 'a') as f:
+            f.write(f'Iter: {self._t}, Domain Weight: {ks_weights[0]}, Situational Weight: {ks_weights[1]}, History Weight: {ks_weights[2]}, Topographic Weight: {ks_weights[3]}\n')
 
         #self._kmeans_iterations += self._adjust_kmeans_iterations
 

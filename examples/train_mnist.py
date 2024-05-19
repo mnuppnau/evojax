@@ -35,7 +35,7 @@ def parse_args():
     parser.add_argument(
         '--batch-size', type=int, default=1024, help='Batch size for training.')
     parser.add_argument(
-        '--max-iter', type=int, default=5000, help='Max training iterations.')
+        '--max-iter', type=int, default=2000, help='Max training iterations.')
     parser.add_argument(
         '--test-interval', type=int, default=1000, help='Test interval.')
     parser.add_argument(

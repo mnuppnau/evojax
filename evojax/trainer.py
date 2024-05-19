@@ -199,7 +199,7 @@ class Trainer(object):
 
             # Test and save the final model.
             best_params = self.solver.best_params
-            test_scores, _ = self.sim_mgr.eval_params(
+            test_scores, _, _ = self.sim_mgr.eval_params(
                 params=best_params, test=True)
             self._logger.info(
                 '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
