@@ -28,24 +28,30 @@ from evojax.util import get_params_format_fn
 
 
 class CNN(nn.Module):
-    """CNN for MNIST."""
+    """CNN updated for CIFAR-10 with 3-channel input."""
 
     @nn.compact
     def __call__(self, x):
-        x = nn.Conv(features=8, kernel_size=(5, 5), padding='SAME')(x)
+        # Adjust the first Conv layer to accept 3 channels
+        x = nn.Conv(features=32, kernel_size=(3, 3), padding='SAME')(x)
         x = nn.relu(x)
         x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
-        x = nn.Conv(features=16, kernel_size=(5, 5), padding='SAME')(x)
+        x = nn.Conv(features=64, kernel_size=(3, 3), padding='SAME')(x)
         x = nn.relu(x)
         x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
+        x = nn.Conv(features=128, kernel_size=(3, 3), padding='SAME')(x)
+        x = nn.relu(x)
+        x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
+
         x = x.reshape((x.shape[0], -1))  # flatten
+        x = nn.Dense(features=256)(x)
+        x = nn.relu(x)
         x = nn.Dense(features=10)(x)
         x = nn.log_softmax(x)
         return x
 
-
 class ConvNetPolicy(PolicyNetwork):
-    """A convolutional neural network for the MNIST classification task."""
+    """A convolutional neural network for the CIFAR-10 classification task."""
 
     def __init__(self, logger: logging.Logger = None):
         if logger is None:
@@ -54,7 +60,8 @@ class ConvNetPolicy(PolicyNetwork):
             self._logger = logger
 
         model = CNN()
-        params = model.init(random.PRNGKey(0), jnp.zeros([1, 28, 28, 1]))
+        # Initialize the model with an example CIFAR-10 image shape: [batch_size, height, width, channels]
+        params = model.init(random.PRNGKey(0), jnp.zeros([1, 32, 32, 3]))
         self.num_params, format_params_fn = get_params_format_fn(params)
         self._logger.info(
             'ConvNetPolicy.num_params = {}'.format(self.num_params))
