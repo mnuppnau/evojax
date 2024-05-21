@@ -8,7 +8,6 @@ from jax import vmap
 from jax import ops 
 from jax.lax import scan, fori_loop
 
-
 @jit
 def initialize_centroids(embeddings, k, key):
     indices = random.choice(key, jnp.arange(embeddings.shape[0]), shape=(10,), replace=False)
@@ -39,14 +38,38 @@ def kmeans_step(state, _):
     return (centroids, embeddings, k), None
 
 @jit
-def kmeans(embeddings, k=10, num_iters=60, seed=0):
+def kmeans(embeddings, k=10, num_iters=100, seed=0):
     key = random.PRNGKey(seed)
     centroids = initialize_centroids(embeddings, k, key)
     initial_state = (centroids, embeddings, k)
 
-    final_state, _ = lax.scan(kmeans_step, initial_state, None, length=num_iters)
+    final_state, _ = lax.scan(kmeans_step, initial_state, None, length=100)
     final_centroids, embeddings, k = final_state
     assignments = assign_clusters(embeddings, final_centroids)
+    return final_centroids, assignments
+
+@jit
+def random_projection(embeddings, output_dim, key):
+    input_dim = embeddings.shape[1]
+    projection_matrix = random.normal(key, (input_dim, 500))
+    return jnp.dot(embeddings, projection_matrix)
+
+@jit
+def perform_clustering(gradients, k=10, num_iters=100, seed=0, output_dim=500):
+    # Generate a random projection
+    key = random.PRNGKey(seed)
+    reduced_gradients = random_projection(gradients, 500, key)
+    
+    # Perform K-means clustering on reduced gradients
+    final_centroids_reduced, assignments = kmeans(reduced_gradients, k=k, num_iters=100, seed=seed)
+    
+    # Compute centroids in the original space
+    def compute_original_centroid(i):
+        mask = jnp.equal(assignments, i)
+        masked_gradients = jnp.where(mask[:, None], gradients, 0)
+        return jnp.sum(masked_gradients, axis=0) / jnp.sum(mask)
+
+    final_centroids = vmap(compute_original_centroid)(jnp.arange(k))
     return final_centroids, assignments
 
 @jit

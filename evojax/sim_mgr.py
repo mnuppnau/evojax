@@ -236,7 +236,7 @@ class SimManager(object):
                     step_once_fn, max_steps):
             accumulated_rewards = jnp.zeros(params.shape[0])
             valid_masks = jnp.ones(params.shape[0])
-            activations = (jnp.zeros((90,28,28,8)),jnp.zeros((90,14,14,16)),jnp.zeros((90,784)))
+            activations = (jnp.zeros((90,32,32,32)),jnp.zeros((90,16,16,64)),jnp.zeros((90,2048)))
             ((task_states, policy_states, params, obs_params, key,
               accumulated_rewards, valid_masks, activations),
              (obs_set, obs_mask)) = jax.lax.scan(

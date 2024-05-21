@@ -9,7 +9,7 @@ import numpy as np
 import copy
 
 from evojax.algo.cultural.population_space import Individual
-from evojax.algo.cultural.helper_functions import kmeans, calculate_slopes, update_ks_weights, least_frequent_cluster, scale_arrays, compute_cluster_weights, inverse_fitness_values, average_activations
+from evojax.algo.cultural.helper_functions import kmeans, calculate_slopes, update_ks_weights, least_frequent_cluster, scale_arrays, compute_cluster_weights, inverse_fitness_values, average_activations, perform_clustering
 
 def initialize_domain_ks(param_size: int):
     return (
@@ -17,8 +17,8 @@ def initialize_domain_ks(param_size: int):
         jnp.ones(param_size), # stdev
         jnp.array([1.0]), # noise_magnitude
         jnp.array([0.0]), # fitness_score
-        [(jnp.zeros((90,28,28,8)), jnp.zeros((90,14,14,16)), jnp.zeros((90, 784))) for _ in range(40)], # activations
-        (jnp.zeros((90,28,28,8)), jnp.zeros((90,14,14,16)), jnp.zeros((90, 784))) # average activations
+        [(jnp.zeros((90,32,32,32)), jnp.zeros((90,16,16,64)), jnp.zeros((90, 2048))) for _ in range(40)], # activations
+        (jnp.zeros((90,32,32,32)), jnp.zeros((90,16,16,64)), jnp.zeros((90, 2048))) # average activations
         )
 
 def initialize_situational_ks(param_size: int, max_individuals: int = 100):
@@ -31,7 +31,7 @@ def initialize_situational_ks(param_size: int, max_individuals: int = 100):
         jnp.zeros(max_individuals) # fitness_score
     )
 
-def initialize_history_ks(param_size: int, decay_factor: float = 0.8, num_iterations: int = 5000):
+def initialize_history_ks(param_size: int, decay_factor: float = 0.8, num_iterations: int = 300):
     # Pre-allocate arrays with zeros for each individual property, given num_iterations
     # Assuming 'center' and 'stdev' are of size 'param_size'
     return (
@@ -68,7 +68,7 @@ def initialize_normative_ks(param_size: int):
     )
 
 @jax.jit
-def update_knowledge_sources(belief_space, best_individual, activations, num_iterations=5000, max_individuals=100):
+def update_knowledge_sources(belief_space, best_individual, activations, num_iterations=300, max_individuals=100):
    
     best_center, best_stdev, best_noise_magnitude, best_fitness_value = best_individual
 
@@ -142,8 +142,8 @@ def add_ind_topographic_ks(belief_space, grad_center, grad_stdev, best_score, ma
 
     updated_topographic_ks = (updated_center, updated_stdev, updated_fitness, topographic_ks[3], topographic_ks[4], topographic_ks[5], topographic_ks[6], topographic_ks[7], topographic_ks[8])
 
-    centroids_center, assignments_center = kmeans(updated_center.T)
-    centroids_stdev, assignments_stdev = kmeans(updated_stdev.T)
+    centroids_center, assignments_center = perform_clustering(updated_center.T)
+    centroids_stdev, assignments_stdev = perform_clustering(updated_stdev.T)
 
     #jax.debug.print('assignments center: {} ', assignments_center)
     #jax.debug.print('updated fitness : {} ', updated_fitness)
@@ -182,8 +182,8 @@ def update_topographic_ks(belief_space, grad_center, grad_stdev, best_score, max
 
     updated_topographic_ks = (updated_center, updated_stdev, updated_fitness, topographic_ks[3], topographic_ks[4], topographic_ks[5], topographic_ks[6], topographic_ks[7], topographic_ks[8])
 
-    centroids_center, assignments_center = kmeans(updated_center.T)
-    centroids_stdev, assignments_stdev = kmeans(updated_stdev.T)
+    centroids_center, assignments_center = perform_clustering(updated_center.T)
+    centroids_stdev, assignments_stdev = perform_clustering(updated_stdev.T)
 
     #jax.debug.print('assignments center: {} ', assignments_center)
     #jax.debug.print('updated fitness : {} ', updated_fitness)
@@ -280,10 +280,10 @@ def get_center_guidance(belief_space,t, center):
 
     jax.debug.print('ks weights : {} ', ks_weights)
 
-    decay_factor_history = 0.994
+    decay_factor_history = 0.90
     decay_factor_situational = 0.95
 
-    max_iterations = 5000
+    max_iterations = 300
 
     arr = jnp.array([t,100])
     n = jnp.min(arr)
@@ -342,10 +342,10 @@ def get_stdev_guidance(belief_space,t, stdev):
     normative_ks = belief_space[5]
 
     best_fitness_variance_ratio = normative_ks[8]
-    decay_factor_historical = 0.994
+    decay_factor_historical = 0.90
     decay_factor_situational = 0.95
 
-    max_iterations = 5000
+    max_iterations = 300
 
     #ks_weights = jnp.array([.1, .8, .1])
     

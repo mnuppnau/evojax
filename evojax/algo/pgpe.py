@@ -124,8 +124,8 @@ def process_activation_grads_to_fit_params(activation_grads, param_shape, param_
     flattened_grads = jax.tree_util.tree_flatten(activation_grads)[0]
     combined_grads = jnp.concatenate([grad.flatten() for grad in flattened_grads])
 
-    adjusted_grads = jnp.tile(combined_grads, int(0.01229) + 1)[:11274]
-    return adjusted_grads[:11274]  # Ensuring the shape matches exactly
+    adjusted_grads = jnp.tile(combined_grads, int(0.01229) + 1)[:620362]
+    return adjusted_grads[:620362]  # Ensuring the shape matches exactly
 
 @jax.jit
 def normalize_gradients(grad_center: jnp.ndarray, grad_stdev: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
