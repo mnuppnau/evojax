@@ -1,6 +1,12 @@
 import jax.numpy as jnp
 import numpy as np
 
+def initialize_population(param_size: int, pop_size: int):
+    pop_center_grad = jnp.zeros((pop_size, param_size))
+    pop_stdev_grad = jnp.zeros((pop_size, param_size))
+    pop_connections = jnp.zeros(pop_size)
+    pop_connection_weights = jnp.zeros(pop_size)
+
 def update_population(center: jnp.ndarray, stdev: jnp.ndarray, fitness_scores: jnp.ndarray, scaled_noises: jnp.ndarray):
     
     noise_magnitudes = jnp.linalg.norm(scaled_noises, axis=1)
