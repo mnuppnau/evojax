@@ -1,39 +1,32 @@
 import jax.numpy as jnp
 import numpy as np
 
-def update_population(center: jnp.ndarray, stdev: jnp.ndarray, fitness_scores: jnp.ndarray, scaled_noises: jnp.ndarray):
+def update_population(center: jnp.ndarray, stdev: jnp.ndarray, fitness_scores: jnp.ndarray):
     
-    noise_magnitudes = jnp.linalg.norm(scaled_noises, axis=1)
-
     updated_population = (
         center,                   
         stdev,                    
-        noise_magnitudes,      
         fitness_scores         
     )
    
     best_index = jnp.argmax(fitness_scores)
    
-    # Extract the corresponding values for the best individual
-    best_noise_magnitude = noise_magnitudes[best_index]  # Assuming noise_magnitude is 1D: individuals
     best_fitness_scores = fitness_scores[best_index]
 
     center = jnp.atleast_1d(center)
     stdev = jnp.atleast_1d(stdev)
-    best_noise_magnitude = jnp.atleast_1d(best_noise_magnitude)
     best_fitness_scores = jnp.atleast_1d(best_fitness_scores)
 
-    return updated_population, (center, stdev, best_noise_magnitude, best_fitness_scores)
+    return updated_population, (center, stdev, best_fitness_scores)
 
 class Individual:
-    def __init__(self, center: jnp.ndarray, stdev: jnp.ndarray, noise_magnitude: float, fitness_score: float):
+    def __init__(self, center: jnp.ndarray, stdev: jnp.ndarray, fitness_score: float):
         self.center = center
         self.stdev = stdev
-        self.noise_magnitude = noise_magnitude
         self.fitness_score = fitness_score
 
     def __repr__(self):
-         return f"Individual(fitness_score={self.fitness_score}, noise_magnitude={self.noise_magnitude})"
+         return f"Individual(fitness_score={self.fitness_score})"
 
 class PopulationSpace:
     def __init__(self, pop_size: int):
@@ -45,9 +38,8 @@ class PopulationSpace:
             individual = Individual(center, stdev, noise_magnitude=0.0, fitness_score=0.0)
             self.individuals.append(individual)
 
-    def update(self, fitness_scores: jnp.ndarray, center: jnp.ndarray, stdev: jnp.ndarray, scaled_noises: jnp.ndarray):
+    def update(self, fitness_scores: jnp.ndarray, center: jnp.ndarray, stdev: jnp.ndarray):
         for i, individual in enumerate(self.individuals):
             individual.center = center
             individual.stdev = stdev
-            individual.noise_magnitude = jnp.linalg.norm(scaled_noises[i])
             individual.fitness_score = fitness_scores[i]

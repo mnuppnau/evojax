@@ -2,79 +2,57 @@ import random as jrandom
 import jax.numpy as jnp
 import jax
 
-#from jax import jrandom
-from typing import List, Tuple ,Dict
-from evojax.algo.cultural.knowledge_sources import initialize_domain_ks, initialize_situational_ks, initialize_history_ks, initialize_topographic_ks, initialize_normative_ks, get_center_guidance, get_stdev_guidance
-#from evojax.algo.cultural.knowledge_sources import accept_domain_ks, accept_situational_ks, accept_history_ks, get_center_guidance, get_stdev_guidance
+from typing import List, Tuple, Dict
+from evojax.algo.cultural.knowledge_sources import (
+    initialize_domain_ks,
+    initialize_situational_ks,
+    initialize_history_ks,
+    initialize_topographic_ks,
+    initialize_normative_ks,
+    get_center_guidance,
+    get_stdev_guidance,
+)
 
-def initialize_belief_space(population_size: int, param_size: int, key: int , scaled_noises_adjustment_rate: float ,num_clusters: int = 3):
+def initialize_belief_space(
+    population_size: int,
+    param_size: int,
+    key: int,
+    num_clusters: int = 3,
+):
     belief_space = (
-        jnp.array([population_size]), 
+        jnp.array([population_size]),
         initialize_domain_ks(param_size),
         initialize_situational_ks(param_size),
         initialize_history_ks(param_size),
         initialize_topographic_ks(param_size, num_clusters),
-        initialize_normative_ks(param_size),
-        jnp.array([0.16]),
-        generate_scaled_noises_indexes(population_size, key, scaled_noises_adjustment_rate),
+        initialize_normative_ks(param_size)
     )
     return belief_space
 
-def generate_scaled_noises_indexes(population_size, key, scaled_noises_adjustment_rate):
-    indexes = jnp.arange(1, population_size)
-    
-    shuffled_numbers = jax.random.shuffle(key, indexes)
-
-    max_index = int(population_size * scaled_noises_adjustment_rate)
-   
-    shuffled_numbers_subset = shuffled_numbers[:max_index]
-
-    return shuffled_numbers_subset
-
-def influence(belief_space, scaled_noises):
-    # Extracted and concatenated noise magnitudes
-    domain_noise = belief_space[1][2]  # Domain KS noise magnitude
-    situational_noise = belief_space[2][2][:len(belief_space[7]) // 2]  # Half from situational KS
-    history_noise = belief_space[3][2][:(len(belief_space[7]) + 1) // 2]  # Half (rounded up) from history KS
-    
-    noise_magnitudes = jnp.concatenate([domain_noise, situational_noise, history_noise])
-    
-    noise_magnitudes = noise_magnitudes[:len(belief_space[7])]
-    
-    noise_magnitudes = noise_magnitudes[:, None]  # Properly broadcasting across columns
-    
-    selected_rows = scaled_noises[belief_space[7], :]
-    
-    adjusted_rows = selected_rows * noise_magnitudes
-    
-    adjusted_scaled_noises = scaled_noises.at[belief_space[7], :].set(adjusted_rows)
-
-    return adjusted_scaled_noises
-
 @jax.jit
 def get_updated_params(belief_space, center, stdev, t):
-    learning_rate = belief_space[6][0] 
-    combined_guidance_center, topographic_center_weight = combine_center_guidance(belief_space, t, center)
-    combined_guidance_stdev, topographic_stdev_weight = combine_stdev_guidance(belief_space, t, stdev)
-
-    #new_center = (1 - ((learning_rate//2)-(.1*topographic_center_weight))) * center + ((learning_rate//2)-(.1*topographic_center_weight)) * combined_guidance_center
-    #new_stdev = ((1 - ((learning_rate)+(.3*topographic_stdev_weight))) * stdev + ((learning_rate)+(0.7*topographic_stdev_weight)) * combined_guidance_stdev)
+    combined_guidance_center = combine_center_guidance(
+        belief_space, t, center
+    )
+    combined_guidance_stdev = combine_stdev_guidance(
+        belief_space, t, stdev
+    )
 
     new_center = combined_guidance_center
     new_stdev = combined_guidance_stdev
 
-    #new_center = (1 - learning_rate) * center + learning_rate * combined_guidance_center
-    #new_stdev = (1 - learning_rate) * stdev + learning_rate * combined_guidance_stdev
-    
     return new_center, new_stdev
+
 
 def combine_center_guidance(belief_space, t, center):
     return get_center_guidance(belief_space, t, center)
 
-def combine_stdev_guidance(belief_space,t, stdev):
+
+def combine_stdev_guidance(belief_space, t, stdev):
     return get_stdev_guidance(belief_space, t, stdev)
 
-#class BeliefSpace:
+
+# class BeliefSpace:
 #    def __init__(self, population_size: int, num_clusters: int = 3):
 #        self.population_size = population_size
 #        self.domain_ks = DomainKS()
