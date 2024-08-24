@@ -1,0 +1,41 @@
+Seq2seq: 2024-08-10 16:31:39,509 [INFO] EvoJAX Seq2seq Demo
+Seq2seq: 2024-08-10 16:31:39,509 [INFO] ==============================
+Seq2seq: 2024-08-10 16:31:43,971 [INFO] Seq2seqPolicy.num_params = 149391
+Seq2seq: 2024-08-10 16:31:44,005 [INFO] use_for_loop=False
+Seq2seq: 2024-08-10 16:31:44,025 [INFO] Start to train for 50000 iterations.
+Seq2seq: 2024-08-10 16:31:54,364 [INFO] Iter=1, size=1024, max=-2.1338, avg=-2.1638, min=-2.1957, std=0.0096
+Seq2seq: 2024-08-10 16:31:54,399 [INFO] Iter=2, size=1024, max=-2.1254, avg=-2.1585, min=-2.1886, std=0.0101
+Seq2seq: 2024-08-10 16:31:54,433 [INFO] Iter=3, size=1024, max=-2.1177, avg=-2.1511, min=-2.1839, std=0.0095
+Seq2seq: 2024-08-10 16:31:54,468 [INFO] Iter=4, size=1024, max=-2.1096, avg=-2.1440, min=-2.1755, std=0.0099
+Seq2seq: 2024-08-10 16:31:54,502 [INFO] Iter=5, size=1024, max=-2.1069, avg=-2.1347, min=-2.1703, std=0.0098
+Seq2seq: 2024-08-10 16:31:54,537 [INFO] Iter=6, size=1024, max=-2.0932, avg=-2.1256, min=-2.1556, std=0.0094
+Seq2seq: 2024-08-10 16:31:54,571 [INFO] Iter=7, size=1024, max=-2.0850, avg=-2.1139, min=-2.1464, std=0.0094
+Seq2seq: 2024-08-10 16:31:54,605 [INFO] Iter=8, size=1024, max=-2.0737, avg=-2.1005, min=-2.1397, std=0.0095
+Seq2seq: 2024-08-10 16:31:54,640 [INFO] Iter=9, size=1024, max=-2.0563, avg=-2.0850, min=-2.1183, std=0.0095
+Seq2seq: 2024-08-10 16:31:54,674 [INFO] Iter=10, size=1024, max=-2.0265, avg=-2.0664, min=-2.1199, std=0.0104
+Seq2seq: 2024-08-10 16:31:54,708 [INFO] Iter=11, size=1024, max=-2.0114, avg=-2.0448, min=-2.0827, std=0.0106
+Seq2seq: 2024-08-10 16:31:54,743 [INFO] Iter=12, size=1024, max=-1.9874, avg=-2.0199, min=-2.0527, std=0.0100
+Seq2seq: 2024-08-10 16:31:54,777 [INFO] Iter=13, size=1024, max=-1.9597, avg=-1.9923, min=-2.0292, std=0.0102
+Seq2seq: 2024-08-10 16:31:54,811 [INFO] Iter=14, size=1024, max=-1.9313, avg=-1.9621, min=-1.9984, std=0.0099
+Seq2seq: 2024-08-10 16:31:54,845 [INFO] Iter=15, size=1024, max=-1.9004, avg=-1.9320, min=-1.9645, std=0.0102
+Seq2seq: 2024-08-10 16:31:54,880 [INFO] Iter=16, size=1024, max=-1.8661, avg=-1.8972, min=-1.9328, std=0.0093
+Seq2seq: 2024-08-10 16:31:54,914 [INFO] Iter=17, size=1024, max=-1.8365, avg=-1.8637, min=-1.8910, std=0.0085
+Seq2seq: 2024-08-10 16:31:54,948 [INFO] Iter=18, size=1024, max=-1.8119, avg=-1.8323, min=-1.8497, std=0.0067
+Seq2seq: 2024-08-10 16:31:54,983 [INFO] Iter=19, size=1024, max=-1.7891, avg=-1.8129, min=-1.8395, std=0.0069
+Seq2seq: 2024-08-10 16:31:55,017 [INFO] Iter=20, size=1024, max=-1.7715, avg=-1.7964, min=-1.8247, std=0.0084
+Seq2seq: 2024-08-10 16:31:55,051 [INFO] Iter=21, size=1024, max=-1.7394, avg=-1.7878, min=-1.8476, std=0.0117
+Seq2seq: 2024-08-10 16:31:55,085 [INFO] Iter=22, size=1024, max=-1.7129, avg=-1.7760, min=-1.8240, std=0.0162
+Seq2seq: 2024-08-10 16:31:55,120 [INFO] Iter=23, size=1024, max=-1.6935, avg=-1.7430, min=-1.8260, std=0.0270
+Seq2seq: 2024-08-10 16:31:55,154 [INFO] Iter=24, size=1024, max=-1.6751, avg=-1.6991, min=-1.7882, std=0.0130
+Seq2seq: 2024-08-10 16:31:55,188 [INFO] Iter=25, size=1024, max=-1.6571, avg=-1.6754, min=-1.7015, std=0.0075
+Seq2seq: 2024-08-10 16:31:55,223 [INFO] Iter=26, size=1024, max=-1.6350, avg=-1.6545, min=-1.6894, std=0.0074
+Seq2seq: 2024-08-10 16:31:55,257 [INFO] Iter=27, size=1024, max=-1.6209, avg=-1.6484, min=-1.6925, std=0.0115
+Seq2seq: 2024-08-10 16:31:55,291 [INFO] Iter=28, size=1024, max=-1.6071, avg=-1.6451, min=-1.7230, std=0.0133
+Seq2seq: 2024-08-10 16:31:55,326 [INFO] Iter=29, size=1024, max=-1.5920, avg=-1.6317, min=-1.7964, std=0.0185
+Seq2seq: 2024-08-10 16:31:55,360 [INFO] Iter=30, size=1024, max=-1.5713, avg=-1.6074, min=-1.7772, std=0.0213
+Seq2seq: 2024-08-10 16:31:55,394 [INFO] Iter=31, size=1024, max=-1.5614, avg=-1.5894, min=-1.7811, std=0.0194
+Seq2seq: 2024-08-10 16:31:55,429 [INFO] Iter=32, size=1024, max=-1.5445, avg=-1.5676, min=-1.7235, std=0.0112
+Seq2seq: 2024-08-10 16:31:55,463 [INFO] Iter=33, size=1024, max=-1.5219, avg=-1.5401, min=-1.5717, std=0.0070
+Seq2seq: 2024-08-10 16:31:55,497 [INFO] Iter=34, size=1024, max=-1.5114, avg=-1.5332, min=-1.6571, std=0.0082
+Seq2seq: 2024-08-10 16:31:55,532 [INFO] Iter=35, size=1024, max=-1.5017, avg=-1.5283, min=-1.5677, std=0.0095
+Seq2seq: 2024-08-10 16:31:55,566 [INFO] Iter=36, size=1024, max=-1.4817, avg=-1.5094, min=-1.5572, std=0.0102
