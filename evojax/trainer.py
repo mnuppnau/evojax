@@ -35,10 +35,14 @@ class Trainer(object):
     """A trainer that organizes the training logistics."""
 
     def __init__(self,
-                 policy: PolicyNetwork,
-                 solver: NEAlgorithm,
-                 train_task: VectorizedTask,
-                 test_task: VectorizedTask,
+                 policy_gen: PolicyNetwork,
+                 policy_disc: PolicyNetwork,
+                 solver_gen: NEAlgorithm,
+                 solver_disc: NEAlgorithm,
+                 train_task_gen: VectorizedTask,
+                 test_task_disc: VectorizedTask,
+                 train_task_disc: VectorizedTask,
+                 test_task_gen: VectorizedTask,
                  max_iter: int = 1000,
                  log_interval: int = 20,
                  test_interval: int = 100,
@@ -95,16 +99,32 @@ class Trainer(object):
             dummy=not normalize_obs,
         )
 
-        self.solver = solver
-        self.sim_mgr = SimManager(
+        self.solver_gen = solver_gen
+        self.solver_disc = solver_disc
+
+        self.sim_mgr_gen = SimManager(
             n_repeats=n_repeats,
             test_n_repeats=test_n_repeats,
             pop_size=solver.pop_size,
             n_evaluations=n_evaluations,
-            policy_net=policy,
-            train_vec_task=train_task,
-            valid_vec_task=test_task,
+            policy_net=policy_gen,
+            train_vec_task=train_task_gen,
+            valid_vec_task=test_task_gen,
             seed=seed,
+            obs_normalizer=self._obs_normalizer,
+            use_for_loop=use_for_loop,
+            logger=self._logger,
+        )
+
+        self.sim_mgr_disc = SimManager(
+            n_repeats=n_repeats,
+            test_n_repeats=test_n_repeats,
+            pop_size=solver.pop_size,
+            n_evaluations=n_evaluations,
+            policy_net=policy_disc,
+            train_vec_task=train_task_disc,
+            valid_vec_task=test_task_disc,
+            seed=seed + 1,
             obs_normalizer=self._obs_normalizer,
             use_for_loop=use_for_loop,
             logger=self._logger,
@@ -138,18 +158,18 @@ class Trainer(object):
 
             if params is not None:
                 # Continue training from the breakpoint.
-                self.solver.best_params = params
+                self.solver_gen.best_params = params
 
             best_score = -float('Inf')
 
             for i in range(self._max_iter):
                 start_time = time.perf_counter()
-                params = self.solver.ask()
+                params = self.solver_gen.ask()
                 self._logger.debug('solver.ask time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
                 start_time = time.perf_counter()
-                scores, bds = self.sim_mgr.eval_params(
+                scores, bds = self.sim_mgr_gen.eval_params(
                     params=params, test=False)
                 self._logger.debug('sim_mgr.eval_params time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
