@@ -47,7 +47,8 @@ def generate_latent_points(rng, latent_dim, n_samples):
       rng, latent_rng, cat_rng = jrandom.split(rng, num=3)
       latent_inputs = jrandom.normal(latent_rng, (n_samples, latent_dim))
       cat_codes = jrandom.randint(cat_rng, (n_samples,), 0, 10)
-      cat_codes = nn.one_hot(cat_codes, 10) z_input = jnp.concatenate((latent_inputs, cat_codes), axis=1)
+      cat_codes = nn.one_hot(cat_codes, 10) 
+      z_input = jnp.concatenate((latent_inputs, cat_codes), axis=1)
     
       return z_input, cat_codes
 

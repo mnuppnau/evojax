@@ -86,6 +86,11 @@ class Trainer(object):
         else:
             self._logger = logger
 
+        self.batch_stats_gen = None
+        self.batch_stats_disc = None
+
+        self.fake_imgs = None
+
         self._log_interval = log_interval
         self._test_interval = test_interval
         self._max_iter = max_iter
@@ -139,7 +144,7 @@ class Trainer(object):
             self._logger.info(
                 'Loaded model parameters from {}.'.format(self.model_dir))
         else:
-            params = None
+            params_gen, params_disc = None, None
 
         if demo_mode:
             if params is None:
@@ -156,30 +161,37 @@ class Trainer(object):
             self._logger.info(
                 'Start to train for {} iterations.'.format(self._max_iter))
 
-            if params is not None:
+            if params_gen is not None and params_disc is not None:
                 # Continue training from the breakpoint.
-                self.solver_gen.best_params = params
+                self.solver_gen.best_params = params_gen
+                self.solver_disc.best_params = params_disc
 
-            best_score = -float('Inf')
+            best_score_gen, best_score_disc = -float('Inf'), -float('Inf')
 
             for i in range(self._max_iter):
                 start_time = time.perf_counter()
-                params = self.solver_gen.ask()
+                params_gen = self.solver_gen.ask()
                 self._logger.debug('solver.ask time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
                 start_time = time.perf_counter()
-                scores, bds = self.sim_mgr_gen.eval_params(
-                    params=params, test=False)
-                self._logger.debug('sim_mgr.eval_params time: {0:.4f}s'.format(
+                scores_gen, bds_gen, self.batch_stats_gen, self.fake_imgs = self.sim_mgr_gen.eval_params(
+                    params=params_gen, test=False)
+                self._logger.debug('sim_mgr_gen.eval_params time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
 
                 start_time = time.perf_counter()
-                if isinstance(self.solver, QualityDiversityMethod):
-                    self.solver.observe_bd(bds)
-                self.solver.tell(fitness=scores)
-                self._logger.debug('solver.tell time: {0:.4f}s'.format(
+                if isinstance(self.solver_gen, QualityDiversityMethod):
+                    self.solver_gen.observe_bd(bds_gen)
+                self.solver_gen.tell(fitness=scores_gen)
+                self._logger.debug('solver_gen.tell time: {0:.4f}s'.format(
                     time.perf_counter() - start_time))
+
+                scores_disc, bds_disc = self.sim_mgr_disc.eval_params(
+                    params=params_disc, test=False)
+                if isinstance(self.solver_disc, QualityDiversityMethod):
+                    self.solver_disc.observe_bd(bds_disc)
+                self.solver_disc.tell(fitness=scores_disc)
 
                 if i > 0:#and i % self._log_interval == 0:
                     scores = np.array(scores)
