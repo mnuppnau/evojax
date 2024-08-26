@@ -242,8 +242,12 @@ class SimManager(object):
                 self._valid_rollout_fn, in_axes=(0, 0, 0, None)))
 
     def eval_params(self,
-                    params: jnp.ndarray,
-                    test: bool) -> Tuple[jnp.ndarray, TaskState]:
+                    params_gen: jnp.ndarray = None,
+                    params_disc: jnp.ndarray = None,
+                    batch_stats_gen: dict = None,
+                    batch_stats_disc: dict = None,
+                    generator: bool = True,
+                    test: bool = False) -> Tuple[jnp.ndarray, TaskState]:
         """Evaluate population parameters or test the best parameter.
 
         Args:
@@ -253,9 +257,9 @@ class SimManager(object):
             An array of fitness scores.
         """
         if self._use_for_loop:
-            return self._for_loop_eval(params, test)
+            return self._for_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, generator, test)
         else:
-            return self._scan_loop_eval(params, test)
+            return self._scan_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, generator, test)
 
     def _for_loop_eval(self,
                        params: jnp.ndarray,
@@ -307,16 +311,26 @@ class SimManager(object):
         return report_score(scores, n_repeats), task_state
 
     def _scan_loop_eval(self,
-                        params: jnp.ndarray,
+                        params_gen: jnp.ndarray = None,
+                        params_disc: jnp.ndarray = None,
+                        batch_stats_gen: dict = None,
+                        batch_stats_disc: dict = None,
+                        generator: bool = True,
                         test: bool) -> Tuple[jnp.ndarray, TaskState]:
         """Rollout using jax.lax.scan."""
         policy_reset_func = self._policy_reset_fn
+        
+        self.batch_stats_gen = batch_stats_gen
+        self.batch_stats_disc = batch_stats_disc
+
         if test:
             n_repeats = self._test_n_repeats
             task_reset_func = self._valid_reset_fn
             rollout_func = self._valid_rollout_fn
-            params = duplicate_params(
-                params[None, :], self._n_evaluations, False)
+            if generator:
+                params_gen = duplicate_params(
+                    params_gen[None, :], self._n_evaluations, False)
+            params_disc = duplicate_params(params_disc[None, :], self._n_evaluations, False)
         else:
             n_repeats = self._n_repeats
             task_reset_func = self._train_reset_fn
@@ -337,7 +351,10 @@ class SimManager(object):
         #   b1, b2, ..., bn  (individual 2 params)
         #   b1, b2, ..., bn  (individual 2 params)
         #   b1, b2, ..., bn  (individual 2 params)
-        params = duplicate_params(params, n_repeats, self._ma_training)
+        if generator:
+           params_gen = duplicate_params(params_gen, n_repeats, self._ma_training)
+
+        params_disc = duplicate_params(params_disc, n_repeats, self._ma_training)
 
         self._key, reset_keys = get_task_reset_keys(
             self._key, test, self._pop_size, self._n_evaluations, n_repeats,
@@ -345,9 +362,18 @@ class SimManager(object):
 
         # Reset the tasks and the policy.
         task_state = task_reset_func(reset_keys)
+        
+        if generator:
+            task_state = task_state.replace(batch_stats_gen=self.batch_stats_gen)
+
+        task_state = task_state.replace(batch_stats_disc=self.batch_stats_disc)
+
         policy_state = policy_reset_func(task_state)
+        
         if self._num_device > 1:
-            params = split_params_for_pmap(params)
+            if generator:
+                params_gen = split_params_for_pmap(params_gen)
+            params_disc = split_params_for_pmap(params_disc)
             task_state = split_states_for_pmap(task_state)
             policy_state = split_states_for_pmap(policy_state)
 
