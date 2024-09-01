@@ -55,12 +55,17 @@ class MNIST(VectorizedTask):
     """MNIST classification task."""
 
     def __init__(self,
+                 batch_stats_gen: dict = None,
+                 batch_stats_disc: dict = None,
                  batch_size: int = 1024,
                  test: bool = False):
 
         self.max_steps = 1
         self.obs_shape = tuple([28, 28, 1])
         self.act_shape = tuple([10, ])
+
+        self.batch_stats_gen = batch_stats_gen 
+        self.batch_stats_disc = batch_stats_disc
 
         # Delayed importing of torchvision
 
