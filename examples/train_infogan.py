@@ -23,7 +23,7 @@ import shutil
 
 from evojax import Trainer
 from evojax.task.mnist import MNIST
-from evojax.task.latent import LATENT_POINTS
+from evojax.task.latent import Latent_Points
 from evojax.policy.convnet import GenPolicy, DiscPolicy
 from evojax.algo import PGPE
 from evojax import util
@@ -72,8 +72,8 @@ def main(config):
     train_task_mnist = MNIST(batch_size=config.batch_size, test=False)
     test_task_mnist = MNIST(batch_size=config.batch_size, test=True)
     
-    train_task_latent = LATENT_POINTS(batch_size=config.batch_size, test=False)
-    test_task_latent = LATENT_POINTS(batch_size=config.batch_size, test=True)
+    train_task_latent = Latent_Points(batch_size=config.batch_size, test=False)
+    test_task_latent = Latent_Points(batch_size=config.batch_size, test=True)
 
     solver_gen = PGPE(
         pop_size=config.pop_size,
@@ -99,9 +99,14 @@ def main(config):
 
     # Train.
     trainer = Trainer(
-        policy=policy,
-        solver=solver,
-        train_task=train_task,
+        policy_gen=policy_gen,
+        policy_disc=policy_disc,
+        solver_gen=solver_gen,
+        solver_disc=solver_disc,
+        train_task_gen=train_task_gen,
+        test_task_gen=test_task_gen,
+        train_task_disc=train_task_disc,
+        test_task_disc=test_task_disc,
         test_task=test_task,
         max_iter=config.max_iter,
         log_interval=config.log_interval,

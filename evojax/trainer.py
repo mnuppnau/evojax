@@ -86,8 +86,8 @@ class Trainer(object):
         else:
             self._logger = logger
 
-        self.batch_stats_gen = None
-        self.batch_stats_disc = None
+        self.batch_stats_gen = policy_gen.init_batch_stats_gen
+        self.batch_stats_disc = policy_disc.init_batch_stats_disc
 
         self.fake_imgs = None
 
@@ -169,26 +169,22 @@ class Trainer(object):
             best_score_gen, best_score_disc = -float('Inf'), -float('Inf')
 
             for i in range(self._max_iter):
-                start_time = time.perf_counter()
+                # Generator step.
                 params_gen = self.solver_gen.ask()
-                self._logger.debug('solver.ask time: {0:.4f}s'.format(
-                    time.perf_counter() - start_time))
+                params_disc = self.solver_disc.best_params
+                
+                scores_gen, bds_gen, self.batch_stats_gen, self.batch_stats_disc, self.fake_imgs = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=params_disc, test=False, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True
+                )
 
-                start_time = time.perf_counter()
-                scores_gen, bds_gen, self.batch_stats_gen, self.fake_imgs = self.sim_mgr_gen.eval_params(
-                    params=params_gen, test=False)
-                self._logger.debug('sim_mgr_gen.eval_params time: {0:.4f}s'.format(
-                    time.perf_counter() - start_time))
-
-                start_time = time.perf_counter()
                 if isinstance(self.solver_gen, QualityDiversityMethod):
                     self.solver_gen.observe_bd(bds_gen)
                 self.solver_gen.tell(fitness=scores_gen)
-                self._logger.debug('solver_gen.tell time: {0:.4f}s'.format(
-                    time.perf_counter() - start_time))
 
-                scores_disc, bds_disc = self.sim_mgr_disc.eval_params(
-                    params=params_disc, test=False)
+                scores_disc, bds_disc, _, _, _ = self.sim_mgr_disc.eval_params(
+                    params_gen=params_gen, params_disc=params_disc, test=False, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=False
+                )
+
                 if isinstance(self.solver_disc, QualityDiversityMethod):
                     self.solver_disc.observe_bd(bds_disc)
                 self.solver_disc.tell(fitness=scores_disc)

@@ -39,15 +39,16 @@ setup(
     ],
     zip_safe=False,
     install_requires=[
-        "flax<0.7.0",
+        "flax==0.8.4",
         # Upgrade flax dependency after migrating RNN (a change introduced in 0.7.0):
         # https://flax.readthedocs.io/en/latest/guides/rnncell_upgrade_guide.html
-        "jax>=0.2.17",
-        "jaxlib>=0.1.65",
+        "jax[cuda12_pip]==0.4.31",
+        #"jaxlib>=0.1.65",
         "Pillow",
         "cma",
         "matplotlib",
         "pyyaml",
+        "torchvision"
     ],
     extras_require={
         "extra": ['evosax', 'torchvision', 'pandas', 'procgen', 'brax'],
