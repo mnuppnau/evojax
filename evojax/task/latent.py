@@ -38,6 +38,11 @@ def sample_batch(key: jnp.ndarray,
     return (jnp.take(latent_inputs, indices=ix, axis=0),
             jnp.take(cat_codes, indices=ix, axis=0))
 
+def loss_mutual_information(code_cat, q_cat):
+    cat_loss = -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
+    mi_loss = cat_loss
+    return mi_loss
+
 class Latent_Points(VectorizedTask):
     """Latent point task for InfoGAN Generator."""
 
@@ -69,11 +74,13 @@ class Latent_Points(VectorizedTask):
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
-        def step_fn(state, action):
-            # In a real scenario, you might want to implement a more meaningful
-            # reward function based on your specific InfoGAN objectives.
-            # For now, we'll use a placeholder reward.
-            reward = jnp.zeros(())
+        def step_fn(state, action, q):
+            
+            q_cat = jax.nn.log_softmax(q, axis=-1)
+            loss_mi = loss_mutual_information(state.cat_codes, q_cat)
+            loss_d = -jnp.mean(jnp.log(jnp.nn.sigmoid(action)))
+            loss = loss_mi + loss_d
+            reward = -loss # Minimize the loss
             return state, reward, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
@@ -83,5 +90,6 @@ class Latent_Points(VectorizedTask):
 
     def step(self,
              state: TaskState,
-             action: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
-        return self._step_fn(state, action)
+             action: jnp.ndarray,
+             q: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
+        return self._step_fn(state, action, q)
