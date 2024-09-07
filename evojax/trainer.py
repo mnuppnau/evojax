@@ -90,6 +90,7 @@ class Trainer(object):
         self.batch_stats_disc = policy_disc.init_batch_stats_disc
 
         self.fake_imgs = None
+        self.cat_codes = None
 
         self._log_interval = log_interval
         self._test_interval = test_interval
@@ -171,18 +172,18 @@ class Trainer(object):
             for i in range(self._max_iter):
                 # Generator step.
                 params_gen = self.solver_gen.ask()
-                params_disc = self.solver_disc.best_params
+                params_disc = self.solver_disc.ask()
                 
-                scores_gen, bds_gen, self.batch_stats_gen, self.batch_stats_disc, self.fake_imgs = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=params_disc, test=False, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True
+                scores_gen, bds_gen, self.batch_stats_gen, self.batch_stats_disc, self.fake_imgs, self.cat_codes = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=params_disc, test=False, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, cat_codes=self.cat_codes, generator=True
                 )
 
                 if isinstance(self.solver_gen, QualityDiversityMethod):
                     self.solver_gen.observe_bd(bds_gen)
                 self.solver_gen.tell(fitness=scores_gen)
 
-                scores_disc, bds_disc, _, _, _ = self.sim_mgr_disc.eval_params(
-                    params_gen=params_gen, params_disc=params_disc, test=False, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=False
+                scores_disc, bds_disc, _, _, _, _ = self.sim_mgr_disc.eval_params(
+                    params_disc=params_disc, test=False, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, cat_codes=self.cat_codes, generator=False, fake_imgs=self.fake_imgs
                 )
 
                 if isinstance(self.solver_disc, QualityDiversityMethod):

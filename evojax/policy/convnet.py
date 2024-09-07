@@ -135,26 +135,18 @@ class GenPolicy(PolicyNetwork):
     def set_model_disc(self, model_disc):
         self.model_disc = model_disc
 
-    def forward_fn_gen(self, params_g, vars_g_batch_stats, params_d, vars_d_batch_stats):
+    def forward_fn_gen(self, params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, latent_input):
           
-        z_input, cat_one_hot = generate_latent_points(key, self.latent_dim, self.batch_size)
+        #z_input, cat_one_hot = generate_latent_points(key, self.latent_dim, self.batch_size)
 
-        fake_data, vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, z_input, mutable=['batch_stats'])
+        fake_data, vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
+        
         (preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
-        return fake_data, preds, q, vars_g, vars_d, q
+        return fake_data, preds, q, vars_g['batch_stats'], vars_d['batch_stats']
 
     self.forward_fn_gen = jax.jit(forward_fn_gen)
 
-    def forward_fn_disc(self, params_d, vars_d_batch_stats, real_data, fake_data):
-        
-        (real_preds, _), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, real_data, mutable=['batch_stats'])
-        (fake_preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
-
-        return real_preds, fake_preds, q, vars_d
-
-    self.forward_fn_disc = jax.jit(forward_fn_disc)
-    
     def get_actions(self,
                     t_states: TaskState,
                     params_gen: jnp.ndarray,
@@ -162,9 +154,9 @@ class GenPolicy(PolicyNetwork):
                     p_states: PolicyState) -> Tuple[jnp.ndarray, PolicyState]:
         params_gen = self._format_params_fn(params_gen)
         params_disc = self._format_params_fn(params_disc)
-        fake_imgs, fake_preds, q, vars_g, vars_d, q = self._forward_fn_gen(params_gen, vars_g, params_disc, vars_d)
         
-        return self._forward_fn_disc(params_disc, vars_d, t_states.obs, fake_imgs), p_states 
+        return  self._forward_fn_gen(params_gen, t_states.batch_stats_gen, params_disc, t_states.batch_stats_disc, t_states.latent_input), p_states
+        
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
@@ -200,9 +192,12 @@ class DiscPolicy(PolicyNetwork):
 
         return real_preds, fake_preds, q, vars_d
 
+    self.forward_fn_disc = jax.jit(forward_fn_disc)
+
     def get_actions(self,
                     t_states: TaskState,
-                    params: jnp.ndarray,
+                    params_disc: jnp.ndarray,
+                    fake_imgs: jnp.ndarray,
                     p_states: PolicyState) -> Tuple[jnp.ndarray, PolicyState]:
-        params = self._format_params_fn(params)
-        return self._forward_fn(params, t_states.obs), p_states
+        params_disc = self._format_params_fn(params_disc)
+        return self._forward_fn_disc(params_disc, t_states.batch_stats_disc, t_states.obs, fake_imgs), p_states

@@ -29,7 +29,8 @@ from evojax.task.base import TaskState
 class State(TaskState):
     obs: jnp.ndarray
     labels: jnp.ndarray
-
+    cat_codes: jnp.ndarray
+    fake_imgs: jnp.ndarray
 
 def sample_batch(key: jnp.ndarray,
                  data: jnp.ndarray,
@@ -41,15 +42,19 @@ def sample_batch(key: jnp.ndarray,
             jnp.take(labels, indices=ix, axis=0))
 
 
-def loss(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
-    target = jax.nn.one_hot(target, 10)
-    return -jnp.mean(jnp.sum(prediction * target, axis=1))
+def bce_logits(logit, label):
+    """
+    Implements the BCE with logits loss, as described:
+    https://github.com/pytorch/pytorch/issues/751
+    """
+    neg_abs = -jnp.abs(logit)
+    batch_bce = jnp.maximum(logit, 0) - logit * label + jnp.log(1 + jnp.exp(neg_abs))
+    return jnp.mean(batch_bce)
 
-
-def accuracy(prediction: jnp.ndarray, target: jnp.ndarray) -> jnp.float32:
-    predicted_class = jnp.argmax(prediction, axis=1)
-    return jnp.mean(predicted_class == target)
-
+def loss_mutual_information(code_cat, q_cat):
+    cat_loss = -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
+    mi_loss = cat_loss
+    return mi_loss
 
 class MNIST(VectorizedTask):
     """MNIST classification task."""
@@ -105,12 +110,17 @@ class MNIST(VectorizedTask):
             return State(obs=batch_data, labels=batch_labels)
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
-        def step_fn(state, action):
-            if test:
-                reward = accuracy(action, state.labels)
-            else:
-                reward = -loss(action, state.labels)
+        def step_fn(state, real_preds, action, q):
+            # Compute the loss
+            q_cat = jnp.nn.log_softmax(q, axis=-1)
+            loss_mi = loss_mutual_information(state.cat_codes, q_cat)
+            
+            real_loss = bce_logits(real_preds, jnp.ones((), dtype=jnp.int32))
+            fake_loss = bce_logits(action, jnp.zeros((), dtype=jnp.int32))
+            
+            loss = (real_loss + fake_loss) / 2 + loss_mi
             return state, reward, jnp.ones(())
+        
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
     def reset(self, key: jnp.ndarray) -> State:
@@ -118,5 +128,7 @@ class MNIST(VectorizedTask):
 
     def step(self,
              state: TaskState,
-             action: jnp.ndarray) -> Tuple[TaskState, jnp.ndarray, jnp.ndarray]:
-        return self._step_fn(state, action)
+             real_preds: jnp.ndarray,
+             action: jnp.ndarray,
+             q: jnp.ndarray) -> Tuple[TaskState, jnp.ndarray, jnp.ndarray]:
+        return self._step_fn(state, real_preds, action, q)
