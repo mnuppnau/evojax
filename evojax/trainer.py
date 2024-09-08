@@ -101,7 +101,7 @@ class Trainer(object):
         self._log_scores_fn = log_scores_fn or (lambda x, y, z: None)
 
         self._obs_normalizer = ObsNormalizer(
-            obs_shape=train_task.obs_shape,
+            obs_shape=train_task_gen.obs_shape,
             dummy=not normalize_obs,
         )
 
@@ -111,7 +111,7 @@ class Trainer(object):
         self.sim_mgr_gen = SimManager(
             n_repeats=n_repeats,
             test_n_repeats=test_n_repeats,
-            pop_size=solver.pop_size,
+            pop_size=solver_gen.pop_size,
             n_evaluations=n_evaluations,
             policy_net=policy_gen,
             train_vec_task=train_task_gen,
@@ -125,7 +125,7 @@ class Trainer(object):
         self.sim_mgr_disc = SimManager(
             n_repeats=n_repeats,
             test_n_repeats=test_n_repeats,
-            pop_size=solver.pop_size,
+            pop_size=solver_disc.pop_size,
             n_evaluations=n_evaluations,
             policy_net=policy_disc,
             train_vec_task=train_task_disc,
@@ -175,7 +175,7 @@ class Trainer(object):
                 params_disc = self.solver_disc.ask()
                 
                 scores_gen, bds_gen, self.batch_stats_gen, self.batch_stats_disc, self.fake_imgs, self.cat_codes = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=params_disc, test=False, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, cat_codes=self.cat_codes, generator=True
+                params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, cat_codes=self.cat_codes, fake_imgs=None, test=False
                 )
 
                 if isinstance(self.solver_gen, QualityDiversityMethod):
@@ -183,7 +183,7 @@ class Trainer(object):
                 self.solver_gen.tell(fitness=scores_gen)
 
                 scores_disc, bds_disc, _, _, _, _ = self.sim_mgr_disc.eval_params(
-                    params_disc=params_disc, test=False, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, cat_codes=self.cat_codes, generator=False, fake_imgs=self.fake_imgs
+                    params_gen=None, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=False, cat_codes=self.cat_codes, fake_imgs=self.fake_imgs, test=False
                 )
 
                 if isinstance(self.solver_disc, QualityDiversityMethod):

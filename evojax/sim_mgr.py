@@ -278,9 +278,9 @@ class SimManager(object):
         
         if self._num_device > 1:
             self._train_rollout_gen_fn = jax.jit(jax.pmap(
-                self._train_rollout_gen_fn, in_axes=(0, 0, 0, None)))
+                self._train_rollout_gen_fn, in_axes=(0, 0, 0, 0, None)))
             self._train_rollout_disc_fn = jax.jit(jax.pmap(
-                self._train_rollout_disc_fn, in_axes=(0, 0, 0, None)))
+                self._train_rollout_disc_fn, in_axes=(0, 0, 0, 0, None)))
 
 
         # Set up validation functions.
@@ -288,8 +288,8 @@ class SimManager(object):
         self._valid_step_fn = valid_vec_task.step
         self._valid_max_steps = valid_vec_task.max_steps
         self._valid_rollout_fn = partial(
-            rollout,
-            step_once_fn=partial(step_once, task=valid_vec_task),
+            rollout_gen,
+            step_once_fn=partial(step_once_gen, task=valid_vec_task),
             max_steps=valid_vec_task.max_steps)
         if self._num_device > 1:
             self._valid_rollout_fn = jax.jit(jax.pmap(
@@ -312,6 +312,7 @@ class SimManager(object):
         Returns:
             An array of fitness scores.
         """
+        jax.debug.print('test in eval : {}: ', test)
         if self._use_for_loop:
             return self._for_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, generator, cat_codes, fake_imgs, test)
         else:
@@ -367,20 +368,21 @@ class SimManager(object):
         return report_score(scores, n_repeats), task_state
 
     def _scan_loop_eval(self,
-                        test: bool,
                         params_gen: jnp.ndarray = None,
                         params_disc: jnp.ndarray = None,
                         batch_stats_gen: dict = None,
                         batch_stats_disc: dict = None,
+                        generator: bool = True,
                         cat_codes: jnp.ndarray = None,
                         fake_imgs: jnp.ndarray = None,
-                        generator: bool = True) -> Tuple[jnp.ndarray, TaskState]:
+                        test: bool = False) -> Tuple[jnp.ndarray, TaskState]:
         """Rollout using jax.lax.scan."""
         policy_reset_func = self._policy_reset_fn
         
         self.batch_stats_gen = batch_stats_gen
         self.batch_stats_disc = batch_stats_disc
 
+        jax.debug.print('test : {}: ', test)
         if test:
             n_repeats = self._test_n_repeats
             task_reset_func = self._valid_reset_fn
