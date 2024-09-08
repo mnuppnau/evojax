@@ -31,6 +31,8 @@ class State(TaskState):
     labels: jnp.ndarray
     cat_codes: jnp.ndarray
     fake_imgs: jnp.ndarray
+    batch_stats_gen: any = None
+    batch_stats_disc: any = None
 
 def sample_batch(key: jnp.ndarray,
                  data: jnp.ndarray,

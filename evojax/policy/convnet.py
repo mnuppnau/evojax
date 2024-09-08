@@ -20,6 +20,7 @@ import jax.numpy as jnp
 from jax import random
 from flax import linen as nn
 
+from jax.nn.initializers import normal as normal_init
 from evojax.policy.base import PolicyNetwork
 from evojax.policy.base import PolicyState
 from evojax.task.base import TaskState
@@ -54,6 +55,9 @@ def generate_latent_points(rng, latent_dim, n_samples):
 
 class Generator(nn.Module):
     """ Generator CNN for MNIST """
+
+    features: int = 64
+    training: bool = True
 
     @nn.compact
     def __call__(self, z):
@@ -115,7 +119,7 @@ class GenPolicy(PolicyNetwork):
         key, key_gen, key_disc, key_latent = random.split(key, 4)
 
         noise = random.normal(key_latent, (100, 64))
-        c = jnp.tile(jnp.arrange(10), 10)
+        c = jnp.tile(jnp.arange(10), 10)
         c = jax.nn.one_hot(c, 10)
 
         latent = jnp.concatenate([noise, c], axis=-1)
@@ -127,42 +131,46 @@ class GenPolicy(PolicyNetwork):
         self.latent_dim = 64
         self.batch_size = 512
   
-        self.num_params, format_params_fn = get_params_format_fn(params)
+        self.num_params, format_params_gen_fn = get_params_format_fn(self.init_params_gen)
         self._logger.info(
             'ConvNetPolicy.num_params = {}'.format(self.num_params))
-        self._format_params_fn = jax.vmap(format_params_fn)
+        self._format_params_gen_fn = jax.vmap(format_params_gen_fn)
 
-    def set_model_disc(self, model_disc):
-        self.model_disc = model_disc
 
-    def forward_fn_gen(self, params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, latent_input):
+        def forward_fn_gen(params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, latent_input):
           
         #z_input, cat_one_hot = generate_latent_points(key, self.latent_dim, self.batch_size)
 
-        fake_data, vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
+            fake_data, vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
         
-        (preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
+            (preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
-        return fake_data, preds, q, vars_g['batch_stats'], vars_d['batch_stats']
+            return fake_data, preds, q, vars_g['batch_stats'], vars_d['batch_stats']
 
-    self.forward_fn_gen = jax.jit(forward_fn_gen)
+        self._forward_fn_gen = jax.jit(forward_fn_gen)
+
+    def set_format_params_disc_fn(self, format_params_disc_fn):
+        self._format_params_disc_fn = format_params_disc_fn
+
+    def set_model_disc(self, model_disc):
+        self.model_disc = model_disc
 
     def get_actions(self,
                     t_states: TaskState,
                     params_gen: jnp.ndarray,
                     params_disc: jnp.ndarray,
                     p_states: PolicyState) -> Tuple[jnp.ndarray, PolicyState]:
-        params_gen = self._format_params_fn(params_gen)
-        params_disc = self._format_params_fn(params_disc)
+        params_gen = self._format_params_gen_fn(params_gen)
+        params_disc = self._format_params_disc_fn(params_disc)
         
-        return  self._forward_fn_gen(params_gen, t_states.batch_stats_gen, params_disc, t_states.batch_stats_disc, t_states.latent_input), p_states
+        return  self._forward_fn_gen(params_gen, t_states.batch_stats_gen, params_disc, t_states.batch_stats_disc, t_states.obs), p_states
         
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
     """A convolutional neural network for the MNIST classification task."""
 
-    def __init__(self, logger: logging.Logger = None):
+    def __init__(self, gen_policy: GenPolicy, logger: logging.Logger = None):
         if logger is None:
             self._logger = create_logger('ConvNetPolicy')
         else:
@@ -180,24 +188,28 @@ class DiscPolicy(PolicyNetwork):
 
         self.init_params_disc, self.init_batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.num_params, format_params_fn = get_params_format_fn(params)
+        self.num_params, format_params_disc_fn = get_params_format_fn(self.init_params_disc)
         self._logger.info(
             'ConvNetPolicy.num_params = {}'.format(self.num_params))
-        self._format_params_fn = jax.vmap(format_params_fn)
+        self._format_params_disc_fn = jax.vmap(format_params_disc_fn)
 
-    def forward_fn_disc(self, params_d, vars_d_batch_stats, real_data, fake_data):
+        gen_policy.set_model_disc(self.model_disc)
+
+        gen_policy.set_format_params_disc_fn(self._format_params_disc_fn)
+
+        def forward_fn_disc(params_d, vars_d_batch_stats, real_data, fake_data):
         
-        (real_preds, _), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, real_data, mutable=['batch_stats'])
-        (fake_preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
+            (real_preds, _), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, real_data, mutable=['batch_stats'])
+            (fake_preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
-        return real_preds, fake_preds, q, vars_d
+            return real_preds, fake_preds, q, vars_d
 
-    self.forward_fn_disc = jax.jit(forward_fn_disc)
+        self._forward_fn_disc = jax.jit(forward_fn_disc)
 
     def get_actions(self,
                     t_states: TaskState,
                     params_disc: jnp.ndarray,
                     fake_imgs: jnp.ndarray,
                     p_states: PolicyState) -> Tuple[jnp.ndarray, PolicyState]:
-        params_disc = self._format_params_fn(params_disc)
+        params_disc = self._format_params_disc_fn(params_disc)
         return self._forward_fn_disc(params_disc, t_states.batch_stats_disc, t_states.obs, fake_imgs), p_states

@@ -67,7 +67,7 @@ def main(config):
     logger.info('=' * 30)
 
     policy_gen = GenPolicy(logger=logger)
-    policy_disc = DiscPolicy(logger=logger)
+    policy_disc = DiscPolicy(policy_gen, logger=logger)
 
     train_task_mnist = MNIST(batch_size=config.batch_size, test=False)
     test_task_mnist = MNIST(batch_size=config.batch_size, test=True)

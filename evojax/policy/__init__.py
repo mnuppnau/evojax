@@ -15,7 +15,7 @@
 from .base import PolicyNetwork
 from .mlp import MLPPolicy
 from .mlp_pi import PermutationInvariantPolicy
-from .convnet import ConvNetPolicy
+from .convnet import GenPolicy, DiscPolicy
 from .seq2seq import Seq2seqPolicy
 
 

@@ -26,8 +26,11 @@ from evojax.task.base import TaskState
 
 @dataclass
 class State(TaskState):
-    latent_input: jnp.ndarray
+    obs: jnp.ndarray
+    #latent_input: jnp.ndarray
     cat_codes: jnp.ndarray
+    batch_stats_gen: any = None
+    batch_stats_disc: any = None
 
 def sample_batch(key: jnp.ndarray,
                  latent_inputs: jnp.ndarray,
@@ -70,7 +73,7 @@ class Latent_Points(VectorizedTask):
             else:
                 batch_latent, batch_cat = sample_batch(
                     key, self.latent_inputs, self.cat_codes, batch_size)
-            return State(latent_input=batch_latent, cat_codes=batch_cat)
+            return State(obs=batch_latent, cat_codes=batch_cat)
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 

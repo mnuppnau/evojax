@@ -4282,3 +4282,152 @@ MNIST: 2024-04-15 19:24:36,470 [INFO] Iter=3005, size=128, max=-0.0569, avg=-0.0
 MNIST: 2024-04-15 19:24:36,549 [INFO] Iter=3006, size=128, max=-0.0690, avg=-0.0843, min=-0.1166, std=0.0085
 MNIST: 2024-04-15 19:24:36,628 [INFO] Iter=3007, size=128, max=-0.0507, avg=-0.0659, min=-0.0822, std=0.0069
 MNIST: 2024-04-15 19:24:36,704 [INFO] Iter=3008, size=128, max=-0.0597, avg=-0.0769, min=-0.1090, std=0.0082
+MNIST: 2024-09-07 13:14:12,037 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 13:14:12,037 [INFO] ==============================
+MNIST: 2024-09-07 13:16:47,903 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 13:16:47,903 [INFO] ==============================
+MNIST: 2024-09-07 13:19:17,019 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 13:19:17,019 [INFO] ==============================
+MNIST: 2024-09-07 13:23:20,975 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 13:23:20,975 [INFO] ==============================
+MNIST: 2024-09-07 13:27:26,825 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 13:27:26,825 [INFO] ==============================
+MNIST: 2024-09-07 13:27:32,838 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 13:27:34,307 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 13:29:07,926 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 13:29:07,926 [INFO] ==============================
+MNIST: 2024-09-07 13:29:12,832 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 13:29:14,313 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 13:31:22,531 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 13:31:22,531 [INFO] ==============================
+MNIST: 2024-09-07 13:31:26,462 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 13:31:27,936 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 13:31:29,737 [INFO] use_for_loop=False
+MNIST: 2024-09-07 16:56:50,125 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 16:56:50,125 [INFO] ==============================
+MNIST: 2024-09-07 16:56:55,758 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 16:56:57,235 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 16:56:59,049 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:03:47,276 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 17:03:47,276 [INFO] ==============================
+MNIST: 2024-09-07 17:03:51,863 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 17:03:53,335 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 17:03:55,145 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:04:54,113 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 17:04:54,113 [INFO] ==============================
+MNIST: 2024-09-07 17:04:58,706 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 17:05:00,178 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 17:05:01,997 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:07:40,274 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 17:07:40,274 [INFO] ==============================
+MNIST: 2024-09-07 17:07:46,079 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 17:07:47,551 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 17:07:49,359 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:07:49,377 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:07:49,378 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 17:19:30,553 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 17:19:30,553 [INFO] ==============================
+MNIST: 2024-09-07 17:19:35,829 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 17:19:37,300 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 17:19:39,096 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:19:39,113 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:19:39,114 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 17:31:25,041 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 17:31:25,041 [INFO] ==============================
+MNIST: 2024-09-07 17:31:28,414 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 17:31:29,889 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 17:31:31,703 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:31:31,720 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:31:31,722 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 17:54:09,215 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 17:54:09,215 [INFO] ==============================
+MNIST: 2024-09-07 17:54:13,338 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 17:54:14,820 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 17:54:16,630 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:54:16,648 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:54:16,649 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 17:57:00,257 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 17:57:00,257 [INFO] ==============================
+MNIST: 2024-09-07 17:57:05,113 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 17:57:06,587 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 17:57:08,399 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:57:08,416 [INFO] use_for_loop=False
+MNIST: 2024-09-07 17:57:08,417 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 20:01:54,142 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 20:01:54,143 [INFO] ==============================
+MNIST: 2024-09-07 20:02:00,338 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 20:02:01,811 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 20:02:03,611 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:02:03,628 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:02:03,629 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 20:13:25,661 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 20:13:25,661 [INFO] ==============================
+MNIST: 2024-09-07 20:13:30,677 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 20:13:32,156 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 20:13:33,965 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:13:33,982 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:13:33,983 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 20:16:18,707 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 20:16:18,707 [INFO] ==============================
+MNIST: 2024-09-07 20:16:21,968 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 20:16:23,436 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 20:16:25,230 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:16:25,247 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:16:25,248 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 20:27:24,336 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 20:27:24,336 [INFO] ==============================
+MNIST: 2024-09-07 20:27:30,394 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 20:27:31,868 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 20:27:33,679 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:27:33,696 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:27:33,697 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 20:33:03,982 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 20:33:03,982 [INFO] ==============================
+MNIST: 2024-09-07 20:33:08,899 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 20:33:10,379 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 20:33:12,185 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:33:12,202 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:33:12,203 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 20:36:43,609 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 20:36:43,609 [INFO] ==============================
+MNIST: 2024-09-07 20:36:47,150 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 20:36:48,622 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 20:36:50,422 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:36:50,439 [INFO] use_for_loop=False
+MNIST: 2024-09-07 20:36:50,440 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 21:04:22,829 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 21:04:22,829 [INFO] ==============================
+MNIST: 2024-09-07 21:04:28,059 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 21:05:18,254 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 21:05:18,254 [INFO] ==============================
+MNIST: 2024-09-07 21:05:22,955 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 21:05:24,430 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 21:07:37,553 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 21:07:37,553 [INFO] ==============================
+MNIST: 2024-09-07 21:07:42,744 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 21:07:44,224 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 21:09:09,189 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 21:09:09,190 [INFO] ==============================
+MNIST: 2024-09-07 21:09:13,618 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 21:09:15,091 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 21:10:02,994 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 21:10:02,994 [INFO] ==============================
+MNIST: 2024-09-07 21:10:07,075 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 21:10:08,555 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 21:10:10,374 [INFO] use_for_loop=False
+MNIST: 2024-09-07 21:10:10,391 [INFO] use_for_loop=False
+MNIST: 2024-09-07 21:10:10,392 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 21:12:23,692 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 21:12:23,692 [INFO] ==============================
+MNIST: 2024-09-07 21:12:27,448 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 21:12:28,922 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 21:12:30,728 [INFO] use_for_loop=False
+MNIST: 2024-09-07 21:12:30,745 [INFO] use_for_loop=False
+MNIST: 2024-09-07 21:12:30,746 [INFO] Start to train for 5000 iterations.
+MNIST: 2024-09-07 21:13:44,280 [INFO] EvoJAX MNIST Demo
+MNIST: 2024-09-07 21:13:44,280 [INFO] ==============================
+MNIST: 2024-09-07 21:13:50,262 [INFO] ConvNetPolicy.num_params = 770881
+MNIST: 2024-09-07 21:13:51,737 [INFO] ConvNetPolicy.num_params = 398539
+MNIST: 2024-09-07 21:13:53,533 [INFO] use_for_loop=False
+MNIST: 2024-09-07 21:13:53,550 [INFO] use_for_loop=False
+MNIST: 2024-09-07 21:13:53,551 [INFO] Start to train for 5000 iterations.
