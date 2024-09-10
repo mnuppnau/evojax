@@ -86,8 +86,8 @@ class Trainer(object):
         else:
             self._logger = logger
 
-        self.batch_stats_gen = policy_gen.init_batch_stats_gen
-        self.batch_stats_disc = policy_disc.init_batch_stats_disc
+        self.batch_stats_gen = policy_gen.flat_batch_stats_gen
+        self.batch_stats_disc = policy_disc.flat_batch_stats_disc
 
         self.fake_imgs = None
         self.cat_codes = None
@@ -181,6 +181,8 @@ class Trainer(object):
                 if isinstance(self.solver_gen, QualityDiversityMethod):
                     self.solver_gen.observe_bd(bds_gen)
                 self.solver_gen.tell(fitness=scores_gen)
+
+                #self.fake_imgs = jnp.squeeze(self.fake_imgs, axis=0)
 
                 scores_disc, bds_disc, _, _, _, _ = self.sim_mgr_disc.eval_params(
                     params_gen=None, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=False, cat_codes=self.cat_codes, fake_imgs=self.fake_imgs, test=False

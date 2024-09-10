@@ -32,9 +32,9 @@ from evojax import util
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--pop-size', type=int, default=128, help='NE population size.')
+        '--pop-size', type=int, default=64, help='NE population size.')
     parser.add_argument(
-        '--batch-size', type=int, default=1024, help='Batch size for training.')
+        '--batch-size', type=int, default=512, help='Batch size for training.')
     parser.add_argument(
         '--max-iter', type=int, default=5000, help='Max training iterations.')
     parser.add_argument(
@@ -69,6 +69,9 @@ def main(config):
     policy_gen = GenPolicy(logger=logger)
     policy_disc = DiscPolicy(policy_gen, logger=logger)
 
+    init_params_gen = policy_gen.init_params_gen
+    flat_params_gen = policy_gen.flat_params_gen
+    flat_params_disc = policy_disc.flat_params_disc
     train_task_mnist = MNIST(batch_size=config.batch_size, test=False)
     test_task_mnist = MNIST(batch_size=config.batch_size, test=True)
     
@@ -78,6 +81,7 @@ def main(config):
     solver_gen = PGPE(
         pop_size=config.pop_size,
         param_size=policy_gen.num_params,
+        init_params=flat_params_gen,
         optimizer='adam',
         center_learning_rate=config.center_lr,
         stdev_learning_rate=config.std_lr,
@@ -89,6 +93,7 @@ def main(config):
     solver_disc = PGPE(
         pop_size=config.pop_size,
         param_size=policy_disc.num_params,
+        init_params=flat_params_disc,
         optimizer='adam',
         center_learning_rate=config.center_lr,
         stdev_learning_rate=config.std_lr,

@@ -19,6 +19,7 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 from jax import random
+from flax import linen as nn
 from flax.struct import dataclass
 
 from evojax.task.base import VectorizedTask
@@ -29,8 +30,8 @@ class State(TaskState):
     obs: jnp.ndarray
     #latent_input: jnp.ndarray
     cat_codes: jnp.ndarray
-    batch_stats_gen: any = None
-    batch_stats_disc: any = None
+    batch_stats_gen: any
+    batch_stats_disc: any
 
 def sample_batch(key: jnp.ndarray,
                  latent_inputs: jnp.ndarray,
@@ -52,28 +53,36 @@ class Latent_Points(VectorizedTask):
     def __init__(self,
                  batch_size: int = 1024,
                  dataset_size: int = 60000,  # Similar to MNIST
-                 latent_dim: int = 62,
+                 latent_dim: int = 64,
                  n_classes: int = 10,
                  test: bool = False):
         self.max_steps = 1
         self.obs_shape = (latent_dim + n_classes,)
-        self.act_shape = (28, 28, 1)  # Assuming MNIST-like output
+
+        self.batch_stats_gen = None
+        self.batch_stats_disc = None
         
         # Generate the dataset
         key = random.PRNGKey(0)
         latent_key, cat_key = random.split(key)
         
-        self.latent_inputs = random.normal(latent_key, (dataset_size, latent_dim))
+        latent_inputs = random.normal(latent_key, (dataset_size, latent_dim))
         cat_codes = random.randint(cat_key, (dataset_size,), 0, n_classes)
         self.cat_codes = jax.nn.one_hot(cat_codes, n_classes)
 
+        jax.debug.print('latent input shape : {} ', latent_inputs.shape)
+        jax.debug.print('cat codes shape : {} ', self.cat_codes.shape)
+
+        self.latent_inputs = jnp.concatenate([latent_inputs, self.cat_codes], axis=-1)
+
+        jax.debug.print('latent input shape after concat : {} ', self.latent_inputs.shape)
         def reset_fn(key):
             if test:
                 batch_latent, batch_cat = self.latent_inputs, self.cat_codes
             else:
                 batch_latent, batch_cat = sample_batch(
                     key, self.latent_inputs, self.cat_codes, batch_size)
-            return State(obs=batch_latent, cat_codes=batch_cat)
+            return State(obs=batch_latent, cat_codes=batch_cat, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc)
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
@@ -81,12 +90,16 @@ class Latent_Points(VectorizedTask):
             
             q_cat = jax.nn.log_softmax(q, axis=-1)
             loss_mi = loss_mutual_information(state.cat_codes, q_cat)
-            loss_d = -jnp.mean(jnp.log(jnp.nn.sigmoid(action)))
+            loss_d = -jnp.mean(jnp.log(nn.sigmoid(action)))
             loss = loss_mi + loss_d
             reward = -loss # Minimize the loss
             return state, reward, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
+
+    #def set_batch_stats(self, batch_stats_gen, batch_stats_disc):
+    #    self.batch_stats_gen = batch_stats_gen
+    #    self.batch_stats_disc = batch_stats_disc
 
     def reset(self, key: jnp.ndarray) -> State:
         return self._reset_fn(key)
