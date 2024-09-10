@@ -20,6 +20,7 @@ import jax
 import jax.numpy as jnp
 from jax import random
 from flax.struct import dataclass
+from flax import linen as nn
 
 from evojax.task.base import VectorizedTask
 from evojax.task.base import TaskState
@@ -74,6 +75,8 @@ class MNIST(VectorizedTask):
         self.batch_stats_gen = batch_stats_gen 
         self.batch_stats_disc = batch_stats_disc
 
+        self.fake_imgs = None
+        self.cat_codes = None
         # Delayed importing of torchvision
 
         try:
@@ -101,26 +104,28 @@ class MNIST(VectorizedTask):
         data = np.expand_dims(dataset.data.numpy() / 255., axis=-1)
         labels = dataset.targets.numpy()
 
-        print(f"Data shape: {data.shape}")
-
         def reset_fn(key):
             if test:
                 batch_data, batch_labels = data, labels
             else:
                 batch_data, batch_labels = sample_batch(
                     key, data, labels, batch_size)
-            return State(obs=batch_data, labels=batch_labels)
+            return State(obs=batch_data, labels=batch_labels, cat_codes=self.cat_codes, fake_imgs=self.fake_imgs, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc)
+
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
         def step_fn(state, real_preds, action, q):
             # Compute the loss
-            q_cat = jnp.nn.log_softmax(q, axis=-1)
+            q_cat = nn.log_softmax(q, axis=-1)
             loss_mi = loss_mutual_information(state.cat_codes, q_cat)
             
             real_loss = bce_logits(real_preds, jnp.ones((), dtype=jnp.int32))
             fake_loss = bce_logits(action, jnp.zeros((), dtype=jnp.int32))
             
             loss = (real_loss + fake_loss) / 2 + loss_mi
+            
+            reward = -loss
+
             return state, reward, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))

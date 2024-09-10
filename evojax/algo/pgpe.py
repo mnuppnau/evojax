@@ -157,11 +157,13 @@ class PGPE(NEAlgorithm):
             )
         self._num_directions = self.pop_size // 2
 
+        jax.debug.print('init params in PGPE before array {} : ', init_params)
         if init_params is None:
             self._center = np.zeros(abs(param_size))
         else:
             self._center = init_params
         self._center = jnp.array(self._center)
+        print('init params in PGPE after array {} : ', self._center)
         if isinstance(init_stdev, float):
             self._stdev = np.ones(abs(param_size)) * abs(init_stdev)
         self._stdev = jnp.array(self._stdev)
