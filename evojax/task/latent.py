@@ -63,7 +63,7 @@ class Latent_Points(VectorizedTask):
         self.batch_stats_disc = None
         
         # Generate the dataset
-        key = random.PRNGKey(0)
+        key = random.PRNGKey(94)
         latent_key, cat_key = random.split(key)
         
         latent_inputs = random.normal(latent_key, (dataset_size, latent_dim))
@@ -78,7 +78,8 @@ class Latent_Points(VectorizedTask):
         jax.debug.print('latent input shape after concat : {} ', self.latent_inputs.shape)
         def reset_fn(key):
             if test:
-                batch_latent, batch_cat = self.latent_inputs, self.cat_codes
+                batch_latent, batch_cat = sample_batch(
+                    key, self.latent_inputs, self.cat_codes, 10) 
             else:
                 batch_latent, batch_cat = sample_batch(
                     key, self.latent_inputs, self.cat_codes, batch_size)

@@ -61,7 +61,7 @@ class Generator(nn.Module):
 
     @nn.compact
     def __call__(self, z):
-        jax.debug.print('z shape : {} ', z.shape)
+        #jax.debug.print('z shape : {} ', z.shape)
         #if len(z.shape) == 3:
         #    z = z.reshape((z.shape[0], z.shape[1], 1, 1, z.shape[2]))
         #else:
@@ -134,7 +134,7 @@ class GenPolicy(PolicyNetwork):
         
         latent = jnp.concatenate([noise, c], axis=-1)
 
-        jax.debug.print('latent shape before init : {} ', latent.shape)
+        #jax.debug.print('latent shape before init : {} ', latent.shape)
 
         variables_gen = self.model_gen.init(key_gen, jnp.ones([1,74], jnp.float32))
 
@@ -168,7 +168,15 @@ class GenPolicy(PolicyNetwork):
         
             (preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
-            return fake_data, vars_g['batch_stats'], preds, q, vars_d['batch_stats']
+            leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
+
+            flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+
+            leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(vars_d['batch_stats'])
+
+            flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
+
+            return fake_data, flat_batch_stats_gen, preds, q, flat_batch_stats_disc
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -193,7 +201,7 @@ class GenPolicy(PolicyNetwork):
         batch_stats_gen = self._format_batch_stats_gen_fn(t_states.batch_stats_gen)
         batch_stats_disc = self._format_batch_stats_disc_fn(t_states.batch_stats_disc)
        
-        jax.debug.print('params gen : {} ', params_gen)
+        #jax.debug.print('params gen : {} ', params_gen)
 
         fake_data, batch_stats_g, preds, q, batch_stats_d = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
         
@@ -251,7 +259,11 @@ class DiscPolicy(PolicyNetwork):
             (real_preds, _), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, real_data, mutable=['batch_stats'])
             (fake_preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
-            return real_preds, fake_preds, q, vars_d
+            leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(vars_d['batch_stats'])
+
+            flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
+
+            return real_preds, fake_preds, q, flat_batch_stats_disc
 
         self._forward_fn_disc = jax.vmap(forward_fn_disc)
 
@@ -266,6 +278,6 @@ class DiscPolicy(PolicyNetwork):
         # squeeze first dimension of fake_imgs
         #fake_imgs = jnp.squeeze(fake_imgs, axis=0)
 
-        real_preds, fake_preds, q, vars_d = self._forward_fn_disc(params_disc, batch_stats_disc, t_states.obs, fake_imgs)
+        real_preds, fake_preds, q, batch_stats_disc = self._forward_fn_disc(params_disc, batch_stats_disc, t_states.obs, fake_imgs)
 
-        return real_preds, fake_preds, q, vars_d['batch_stats'], p_states
+        return real_preds, fake_preds, q, batch_stats_disc, p_states

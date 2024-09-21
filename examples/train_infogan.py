@@ -32,23 +32,29 @@ from evojax import util
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--pop-size', type=int, default=64, help='NE population size.')
+        '--pop-size', type=int, default=128, help='NE population size.')
     parser.add_argument(
         '--batch-size', type=int, default=512, help='Batch size for training.')
     parser.add_argument(
-        '--max-iter', type=int, default=5000, help='Max training iterations.')
+        '--max-iter', type=int, default=12000, help='Max training iterations.')
     parser.add_argument(
-        '--test-interval', type=int, default=1000, help='Test interval.')
+        '--test-interval', type=int, default=50, help='Test interval.')
     parser.add_argument(
         '--log-interval', type=int, default=100, help='Logging interval.')
     parser.add_argument(
         '--seed', type=int, default=42, help='Random seed for training.')
     parser.add_argument(
-        '--center-lr', type=float, default=0.006, help='Center learning rate.')
+        '--center-lr-gen', type=float, default=0.0001, help='Center learning rate.')
     parser.add_argument(
-        '--std-lr', type=float, default=0.089, help='Std learning rate.')
+        '--std-lr-gen', type=float, default=0.04, help='Std learning rate.')
     parser.add_argument(
-        '--init-std', type=float, default=0.039, help='Initial std.')
+        '--init-std-gen', type=float, default=0.01, help='Initial std.')
+    parser.add_argument(
+        '--center-lr-disc', type=float, default=0.0001, help='Center learning rate.')
+    parser.add_argument(
+        '--std-lr-disc', type=float, default=0.04, help='Std learning rate.')
+    parser.add_argument(
+        '--init-std-disc', type=float, default=0.01, help='Initial std.')
     parser.add_argument(
         '--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument(
@@ -59,6 +65,7 @@ def parse_args():
 
 def main(config):
     log_dir = './log/mnist'
+    model_dir = './log/mnist/'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir, exist_ok=True)
     logger = util.create_logger(
@@ -83,9 +90,9 @@ def main(config):
         param_size=policy_gen.num_params,
         init_params=flat_params_gen,
         optimizer='adam',
-        center_learning_rate=config.center_lr,
-        stdev_learning_rate=config.std_lr,
-        init_stdev=config.init_std,
+        center_learning_rate=config.center_lr_gen,
+        stdev_learning_rate=config.std_lr_gen,
+        init_stdev=config.init_std_gen,
         logger=logger,
         seed=config.seed,
     )
@@ -95,11 +102,11 @@ def main(config):
         param_size=policy_disc.num_params,
         init_params=flat_params_disc,
         optimizer='adam',
-        center_learning_rate=config.center_lr,
-        stdev_learning_rate=config.std_lr,
-        init_stdev=config.init_std,
+        center_learning_rate=config.center_lr_disc,
+        stdev_learning_rate=config.std_lr_disc,
+        init_stdev=config.init_std_disc,
         logger=logger,
-        seed=config.seed + 1,
+        seed=config.seed + 12,
     )
 
     # Train.
@@ -113,6 +120,7 @@ def main(config):
         train_task_disc=train_task_mnist,
         test_task_disc=test_task_mnist,
         #test_task=test_task,
+        model_dir=model_dir, 
         max_iter=config.max_iter,
         log_interval=config.log_interval,
         test_interval=config.test_interval,

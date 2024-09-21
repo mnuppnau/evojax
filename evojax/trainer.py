@@ -16,6 +16,7 @@ import logging
 import time
 from typing import Optional, Callable
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -26,7 +27,7 @@ from evojax.algo import QualityDiversityMethod
 from evojax.sim_mgr import SimManager
 from evojax.obs_norm import ObsNormalizer
 from evojax.util import create_logger
-from evojax.util import load_model
+from evojax.util import load_model_gen, load_model_disc
 from evojax.util import save_model
 from evojax.util import save_lattices
 
@@ -47,7 +48,7 @@ class Trainer(object):
                  log_interval: int = 20,
                  test_interval: int = 100,
                  n_repeats: int = 1,
-                 test_n_repeats: int = 1,
+                 test_n_repeats: int = 2,
                  n_evaluations: int = 100,
                  seed: int = 42,
                  debug: bool = False,
@@ -140,8 +141,9 @@ class Trainer(object):
         """Start the training / test process."""
 
         if self.model_dir is not None:
-            params, obs_params = load_model(model_dir=self.model_dir)
-            self.sim_mgr.obs_params = obs_params
+            params_gen, self.batch_stats_gen = load_model_gen(model_dir=self.model_dir)
+            params_disc, self.batch_stats_disc = load_model_disc(model_dir=self.model_dir)
+            #self.sim_mgr.obs_params = obs_params
             self._logger.info(
                 'Loaded model parameters from {}.'.format(self.model_dir))
         else:
@@ -192,64 +194,93 @@ class Trainer(object):
                     self.solver_disc.observe_bd(bds_disc)
                 self.solver_disc.tell(fitness=scores_disc)
 
-                if i > 0:#and i % self._log_interval == 0:
-                    scores = np.array(scores)
+                if i > 0 and i % self._log_interval == 0:
+                    scores_gen = np.array(scores_gen)
+                    self._logger.info('Generator:')
                     self._logger.info(
                         'Iter={0}, size={1}, max={2:.4f}, '
                         'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
-                            i, scores.size, scores.max(), scores.mean(),
-                            scores.min(), scores.std()))
-                    with open('/home/gh0st/Downloads/pgpe_main.csv', 'a') as file:
-                        file.write(f'Iter: {i}, Max: {scores.max()}, Mean: {scores.mean()}, Std: {scores.std()}, Min: {scores.min()}\n')
-                    self._log_scores_fn(i, scores, "train")
+                            i, scores_gen.size, scores_gen.max(), scores_gen.mean(),
+                            scores_gen.min(), scores_gen.std()))
+                    scores_disc = np.array(scores_disc)
+                    #self._logger.info('Discriminator:')
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, scores_disc.size, scores_disc.max(), scores_disc.mean(),
+                            scores_disc.min(), scores_disc.std()))
+                    #with open('/home/gh0st/Downloads/pgpe_main.csv', 'a') as file:
+                        #file.write(f'Iter: {i}, Max: {scores.max()}, Mean: {scores.mean()}, Std: {scores.std()}, Min: {scores.min()}\n')
+                    #self._log_scores_fn(i, scores, "train")
 
                 if i > 0 and i % self._test_interval == 0:
-                    best_params = self.solver.best_params
-                    test_scores, _ = self.sim_mgr.eval_params(
-                        params=best_params, test=True)
+                    best_params_gen = self.solver_gen.best_params
+                    best_params_disc = self.solver_disc.best_params
+
+                    #jax.debug.print('batch stats gen shape : {} ', self.batch_stats_gen.shape)
+
+                    test_scores, _, _, _, fake_imgs, _ = self.sim_mgr_gen.eval_params(
+                        params_gen=best_params_gen, params_disc=best_params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, cat_codes=self.cat_codes, fake_imgs=None, test=False
+                    )
                     self._logger.info(
                         '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
                         'min={4:.4f}, std={5:.4f}'.format(
                             i, test_scores.size, test_scores.max(),
                             test_scores.mean(), test_scores.min(),
                             test_scores.std()))
+                    
+                    filename = f"iteration-{i}.npy"
+                    np.save(filename, fake_imgs[0, 0, :10, :, :, :])
+
+                    jax.debug.print('testing, fake_imgs shape : {} ', self.fake_imgs.shape)
+
                     self._log_scores_fn(i, test_scores, "test")
                     mean_test_score = test_scores.mean()
-                    save_model(
-                        model_dir=self._log_dir,
-                        model_name='iter_{}'.format(i),
-                        params=best_params,
-                        obs_params=self.sim_mgr.obs_params,
-                        best=mean_test_score > best_score,
-                    )
-                    best_score = max(best_score, mean_test_score)
+                    #save_model(
+                    #    model_dir=self._log_dir,
+                    #    model_name='iter_{}'.format(i),
+                    #    params=best_params,
+                    #    obs_params=self.sim_mgr.obs_params,
+                    #    best=mean_test_score > best_score,
+                    #)
+                    #best_score = max(best_score, mean_test_score)
 
             # Test and save the final model.
-            best_params = self.solver.best_params
-            test_scores, _ = self.sim_mgr.eval_params(
-                params=best_params, test=True)
-            self._logger.info(
-                '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
-                'min={4:.4f}, std={5:.4f}'.format(
-                    self._max_iter, test_scores.size, test_scores.max(),
-                    test_scores.mean(), test_scores.min(), test_scores.std()))
-            mean_test_score = test_scores.mean()
+            best_params_gen = self.solver_gen.best_params
+            best_params_disc = self.solver_disc.best_params
+            #test_scores, _ = self.sim_mgr.eval_params(
+            #    params=best_params, test=True)
+            #self._logger.info(
+            #    '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
+            #    'min={4:.4f}, std={5:.4f}'.format(
+            #        self._max_iter, test_scores.size, test_scores.max(),
+            #        test_scores.mean(), test_scores.min(), test_scores.std()))
+            #mean_test_score = test_scores.mean()
             save_model(
                 model_dir=self._log_dir,
-                model_name='final',
-                params=best_params,
-                obs_params=self.sim_mgr.obs_params,
-                best=mean_test_score > best_score,
+                model_name='final_model_gen',
+                params=best_params_gen,
+                obs_params=self.sim_mgr_gen.obs_params,
+                batch_stats=self.batch_stats_gen,
+                #best=mean_test_score > best_score,
             )
-            best_score = max(best_score, mean_test_score)
-            if isinstance(self.solver, QualityDiversityMethod):
-                save_lattices(
-                    log_dir=self._log_dir,
-                    file_name='qd_lattices',
-                    fitness_lattice=self.solver.fitness_lattice,
-                    params_lattice=self.solver.params_lattice,
-                    occupancy_lattice=self.solver.occupancy_lattice,
-                )
+            save_model(
+                model_dir=self._log_dir,
+                model_name='final_model_disc',
+                params=best_params_disc,
+                obs_params=self.sim_mgr_disc.obs_params,
+                batch_stats=self.batch_stats_disc,
+                #best=mean_test_score > best_score,
+            )
+            #best_score = max(best_score, mean_test_score)
+            #if isinstance(self.solver, QualityDiversityMethod):
+            #    save_lattices(
+            #        log_dir=self._log_dir,
+            #        file_name='qd_lattices',
+            #        fitness_lattice=self.solver.fitness_lattice,
+            #        params_lattice=self.solver.params_lattice,
+            #        occupancy_lattice=self.solver.occupancy_lattice,
+            #    )
             self._logger.info(
                 'Training done, best_score={0:.4f}'.format(best_score))
 
