@@ -14,6 +14,7 @@
 
 import os
 import logging
+import jax
 import numpy as np
 from typing import Union
 from typing import Tuple
@@ -72,29 +73,47 @@ def create_logger(name: str,
     return logger
 
 
-def load_model(model_dir: str) -> Tuple[np.ndarray, np.ndarray]:
+def load_model_gen(model_dir: str) -> Tuple[np.ndarray, np.ndarray]:
     """Load policy parameters from the specified directory.
 
     Args:
         model_dir - Directory to load the model from.
     Returns:
         A pair of parameters, the shapes of which are
-        (param_size,) and (1 + 2 * obs_params_size,).
+        (param_size,) and (1 + 2 * batch_stats_size,).
     """
 
-    model_file = os.path.join(model_dir, 'model.npz')
+    model_file = os.path.join(model_dir, 'bp_model_gen.npz')
     if not os.path.exists(model_file):
         raise ValueError('Model file {} does not exist.')
     with np.load(model_file) as data:
         params = data['params']
-        obs_params = data['obs_params']
-    return params, obs_params
+        batch_stats = data['batch_stats']
+    return params, batch_stats
 
+def load_model_disc(model_dir: str) -> Tuple[np.ndarray, np.ndarray]:
+    """Load policy parameters from the specified directory.
+
+    Args:
+        model_dir - Directory to load the model from.
+    Returns:
+        A pair of parameters, the shapes of which are
+        (param_size,) and (1 + 2 * batch_stats_size,).
+    """
+
+    model_file = os.path.join(model_dir, 'bp_model_disc.npz')
+    if not os.path.exists(model_file):
+        raise ValueError('Model file {} does not exist.')
+    with np.load(model_file) as data:
+        params = data['params']
+        batch_stats = data['batch_stats']
+    return params, batch_stats
 
 def save_model(model_dir: str,
                model_name: str,
                params: Union[np.ndarray, jnp.ndarray],
                obs_params: Union[np.ndarray, jnp.ndarray] = None,
+               batch_stats: Union[np.ndarray, jnp.ndarray] = None,
                best: bool = False) -> None:
     """Save policy parameters to the specified directory.
 
@@ -109,7 +128,8 @@ def save_model(model_dir: str,
     model_file = os.path.join(model_dir, '{}.npz'.format(model_name))
     np.savez(model_file,
              params=np.array(params),
-             obs_params=np.array(obs_params))
+             obs_params=np.array(obs_params),
+             batch_stats=np.array(batch_stats))
     if best:
         model_file = os.path.join(model_dir, 'best.npz')
         np.savez(model_file,
