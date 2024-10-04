@@ -190,8 +190,8 @@ class PGPE(NEAlgorithm):
         elif optimizer == "clipup":
             opt_init, opt_update, get_params = clipup(
                 step_size=lambda x: self._center_lr * jnp.power(decay_coef, x),
-                momentum=optimizer_config.get("momentum", 0.9),
-                max_speed=optimizer_config.get("max_speed", 0.15),
+                momentum=optimizer_config.get("momentum", 0.99),
+                max_speed=optimizer_config.get("max_speed", 0.55),
                 fix_gradient_size=optimizer_config.get(
                     "fix_gradient_size", True
                 ),

@@ -164,6 +164,7 @@ class GenPolicy(PolicyNetwork):
           
             #z_input, cat_one_hot = generate_latent_points(key, self.latent_dim, self.batch_size)
 
+            #jax.debug.print('latent input : {} ', latent_input[:10, -10:])
             fake_data, vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
         
             (preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
