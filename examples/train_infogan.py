@@ -34,27 +34,27 @@ def parse_args():
     parser.add_argument(
         '--pop-size', type=int, default=128, help='NE population size.')
     parser.add_argument(
-        '--batch-size', type=int, default=512, help='Batch size for training.')
+        '--batch-size', type=int, default=128, help='Batch size for training.')
     parser.add_argument(
-        '--max-iter', type=int, default=12000, help='Max training iterations.')
+        '--max-iter', type=int, default=50000, help='Max training iterations.')
     parser.add_argument(
-        '--test-interval', type=int, default=50, help='Test interval.')
+        '--test-interval', type=int, default=200, help='Test interval.')
     parser.add_argument(
         '--log-interval', type=int, default=100, help='Logging interval.')
     parser.add_argument(
         '--seed', type=int, default=42, help='Random seed for training.')
     parser.add_argument(
-        '--center-lr-gen', type=float, default=0.0001, help='Center learning rate.')
+        '--center-lr-gen', type=float, default=0.006, help='Center learning rate.')
     parser.add_argument(
-        '--std-lr-gen', type=float, default=0.04, help='Std learning rate.')
+        '--std-lr-gen', type=float, default=0.089, help='Std learning rate.')
     parser.add_argument(
-        '--init-std-gen', type=float, default=0.01, help='Initial std.')
+        '--init-std-gen', type=float, default=0.039, help='Initial std.')
     parser.add_argument(
-        '--center-lr-disc', type=float, default=0.0001, help='Center learning rate.')
+        '--center-lr-disc', type=float, default=0.006, help='Center learning rate.')
     parser.add_argument(
-        '--std-lr-disc', type=float, default=0.04, help='Std learning rate.')
+        '--std-lr-disc', type=float, default=0.089, help='Std learning rate.')
     parser.add_argument(
-        '--init-std-disc', type=float, default=0.01, help='Initial std.')
+        '--init-std-disc', type=float, default=0.039, help='Initial std.')
     parser.add_argument(
         '--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument(
@@ -83,7 +83,7 @@ def main(config):
     test_task_mnist = MNIST(batch_size=config.batch_size, test=True)
     
     train_task_latent = Latent_Points(batch_size=config.batch_size, test=False)
-    test_task_latent = Latent_Points(batch_size=config.batch_size, test=True)
+    test_task_latent = Latent_Points(batch_size=config.batch_size, testing=True, test=False)
 
     solver_gen = PGPE(
         pop_size=config.pop_size,
@@ -106,7 +106,7 @@ def main(config):
         stdev_learning_rate=config.std_lr_disc,
         init_stdev=config.init_std_disc,
         logger=logger,
-        seed=config.seed + 12,
+        seed=config.seed + 1,
     )
 
     # Train.
@@ -120,7 +120,7 @@ def main(config):
         train_task_disc=train_task_mnist,
         test_task_disc=test_task_mnist,
         #test_task=test_task,
-        model_dir=model_dir, 
+        #model_dir=model_dir, 
         max_iter=config.max_iter,
         log_interval=config.log_interval,
         test_interval=config.test_interval,

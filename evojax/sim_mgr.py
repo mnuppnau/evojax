@@ -30,6 +30,27 @@ from evojax.policy.base import PolicyState
 from evojax.policy.base import PolicyNetwork
 from evojax.util import create_logger
 
+@partial(jax.jit, static_argnums=(2, 3, 4, 5, 6))
+def get_task_reset_keys_testing(key1: jnp.ndarray,
+                        key2: jnp.ndarray,
+                        test: bool,
+                        pop_size: int,
+                        n_tests: int,
+                        n_repeats: int,
+                        ma_training: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    # Split the first key
+    key1, subkey1 = random.split(key=key1)
+    
+    # Split both keys under "if testing" condition
+    key2, subkey2 = random.split(key=key2)
+    
+    reset_keys1 = random.split(subkey1, n_repeats)
+    reset_keys1 = jnp.tile(reset_keys1, (pop_size, 1))
+
+    reset_keys2 = random.split(subkey2, n_repeats)
+    reset_keys2 = jnp.tile(reset_keys2, (pop_size, 1))
+
+    return key1, reset_keys1, reset_keys2
 
 @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
 def get_task_reset_keys(key: jnp.ndarray,
@@ -205,7 +226,7 @@ class SimManager(object):
         def rollout_gen(task_states, policy_states, params_gen, params_disc, obs_params,
                     step_once_gen_fn, max_steps):
             accumulated_rewards = jnp.zeros(params_gen.shape[0])
-            fake_imgs = jnp.zeros((64,512,28, 28, 1))
+            fake_imgs = jnp.zeros((64,128,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params,
               accumulated_rewards, fake_imgs, valid_masks),
@@ -330,6 +351,7 @@ class SimManager(object):
                     generator: bool = True,
                     cat_codes: jnp.ndarray = None,
                     fake_imgs: jnp.ndarray = None,
+                    testing: bool = False,
                     test: bool = False) -> Tuple[jnp.ndarray, TaskState]:
         """Evaluate population parameters or test the best parameter.
 
@@ -340,9 +362,9 @@ class SimManager(object):
             An array of fitness scores.
         """
         if self._use_for_loop:
-            return self._for_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, generator, cat_codes, fake_imgs, test)
+            return self._for_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, generator, cat_codes, fake_imgs, testing, test)
         else:
-            return self._scan_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, generator, cat_codes, fake_imgs, test)
+            return self._scan_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, generator, cat_codes, fake_imgs, testing, test)
 
     def _for_loop_eval(self,
                        params: jnp.ndarray,
@@ -401,6 +423,7 @@ class SimManager(object):
                         generator: bool = True,
                         cat_codes: jnp.ndarray = None,
                         fake_imgs: jnp.ndarray = None,
+                        testing: bool = False,
                         test: bool = False) -> Tuple[jnp.ndarray, TaskState]:
         """Rollout using jax.lax.scan."""
         policy_reset_func = self._policy_reset_fn
@@ -428,7 +451,14 @@ class SimManager(object):
             if generator:
                 params_gen = duplicate_params(
                     params_gen[None, :], self._n_evaluations, False)
-            params_disc = duplicate_params(params_disc[None, :], self._n_evaluations, False)
+            params_disc = duplicate_params(params_disc[None, :], self._n_evaluations, False) 
+        elif testing: 
+            n_repeats = self._n_repeats
+            task_reset_func = self._valid_reset_fn
+            if generator:
+                rollout_func = self._train_rollout_gen_fn
+            else:
+                rollout_func = self._train_rollout_disc_fn
         else:
             n_repeats = self._n_repeats
             task_reset_func = self._train_reset_fn
@@ -462,13 +492,28 @@ class SimManager(object):
         
         params_disc = duplicate_params(params_disc, n_repeats, self._ma_training)
 
-        self._key, reset_keys = get_task_reset_keys(
-            self._key, test, self._pop_size, self._n_evaluations, n_repeats,
-            self._ma_training)
+        #split the reset keys, one for noise vect and one for cat codes
+        noise_keys, cat_keys = random.split(self._key, 2)
 
+        if generator:
+            self._key, reset_keys1, reset_keys2 = get_task_reset_keys_testing(
+                noise_keys, cat_keys, testing, self._pop_size, self._n_evaluations, n_repeats, self._ma_training)
+        else:
+            self._key, reset_keys = get_task_reset_keys(
+                self._key, test, self._pop_size, self._n_evaluations, n_repeats,self._ma_training)
+
+        #jax.debug.print('reset keys 1 shape : {}', reset_keys1.shape)
+        #jax.debug.print('reset keys 2 shape : {}', reset_keys2.shape)
         # Reset the tasks and the policy.
-        task_state = task_reset_func(reset_keys)
- 
+        if generator:
+            task_state = task_reset_func(reset_keys1, reset_keys2)
+        else:
+            task_state = task_reset_func(reset_keys)
+
+        #if testing:
+            # obs is shape (128, 512, 74), let's look at the first individual and first image and last ten features
+            #jax.debug.print('task state obs : {}', task_state.obs[0, 0:100, -10:])
+            #jax.debug.print('task state obs : {}', task_state.obs)
         #task_state.set_batch_stats(self.batch_stats_gen, self.batch_stats_disc)
 
         #jax.debug.print('batch_stats_gen shape : {}', self.batch_stats_gen.shape)
@@ -495,7 +540,7 @@ class SimManager(object):
             policy_state = split_states_for_pmap(policy_state)
             batch_stats_disc = split_params_for_pmap(batch_stats_disc)
 
-        jax.debug.print('obs params : {}', self.obs_params)
+        #jax.debug.print('obs params : {}', self.obs_params)
         # Do the rollouts.
         if generator:
            scores, all_obs, masks, final_states, fake_imgs = rollout_func(
@@ -514,8 +559,17 @@ class SimManager(object):
         batch_stats_gen_updated = final_states.batch_stats_gen
         batch_stats_disc_updated = final_states.batch_stats_disc
 
+        noise_keys, cat_keys = random.split(self._key, 2)
+
         if generator:
-            cat_codes = final_states.cat_codes
+            self._key, reset_keys1, reset_keys2 = get_task_reset_keys_testing(
+                noise_keys, cat_keys, testing, self._pop_size, self._n_evaluations, n_repeats, self._ma_training)
+
+        if generator:
+            task_state = task_reset_func(reset_keys1, reset_keys2)
+
+        if generator:
+            cat_codes = task_state.cat_codes
         else:
             cat_codes = None
             fake_imgs = None

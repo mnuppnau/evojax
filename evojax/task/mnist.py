@@ -123,7 +123,8 @@ class MNIST(VectorizedTask):
             fake_loss = bce_logits(action, jnp.zeros((), dtype=jnp.int32))
             
             loss = (real_loss + fake_loss) / 2 + loss_mi
-            
+            #loss = real_loss + fake_loss
+
             reward = -loss
 
             return state, reward, jnp.ones(())
