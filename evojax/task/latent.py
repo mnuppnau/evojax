@@ -47,6 +47,11 @@ def loss_mutual_information(code_cat, q_cat):
     mi_loss = cat_loss
     return mi_loss
 
+def bce_logits(logit, label):
+    neg_abs = -jnp.abs(logit)
+    batch_bce = jnp.maximum(logit, 0) - logit * label + jnp.log(1 + jnp.exp(neg_abs))
+    return jnp.mean(batch_bce)
+
 class Latent_Points(VectorizedTask):
     """Latent point task for InfoGAN Generator."""
 
@@ -55,7 +60,6 @@ class Latent_Points(VectorizedTask):
                  dataset_size: int = 800,  # Similar to MNIST
                  latent_dim: int = 64,
                  n_classes: int = 10,
-                 testing: bool = False,
                  test: bool = False):
         self.max_steps = 1
         self.obs_shape = (latent_dim + n_classes,)
@@ -83,16 +87,17 @@ class Latent_Points(VectorizedTask):
 
         jax.debug.print('latent input shape after concat : {} ', self.latent_inputs.shape)
         def reset_fn(noise_key, cat_key):
-            if testing:
+            if test:
                 #batch_latent_concat, batch_cat_one_hot = sample_batch(
                 #    key, self.latent_inputs, self.cat_codes, 10) 
-                batch_latent = random.normal(noise_key, (self.batch_size, self.latent_dim))
+                batch_latent = random.normal(noise_key, (30, self.latent_dim))
                 
                 #structured_codes = jnp.tile(jnp.arange(10), 10)  # Shape: (100,)
                 #structured_codes = nn.one_hot(structured_codes, 10)
 
                 #jax.debug.print('structured codes : {}', structured_codes)
-                c = jnp.ones((128,)) + 5
+                #c = jnp.ones((self.batch_size,)) + 5
+                c = jnp.tile(jnp.arange(10),3)
                 batch_cat_one_hot = jax.nn.one_hot(c, 10)
                 
                 # Step 2: Generate the remaining random one-hot encoded vectors
@@ -104,7 +109,7 @@ class Latent_Points(VectorizedTask):
                 # Step 3: Concatenate the structured and random codes
                 #batch_cat_one_hot = jnp.concatenate([structured_codes, random_cat_codes], axis=0)
 
-                batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=-1)
+                batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=1)
                 #batch_cat = random.randint(key, (self.batch_size,), 0, self.n_classes)
                 #batch_latent_concat = jnp.concatenate([batch_latent, jax.nn.one_hot(batch_cat, self.n_classes)], axis=-1)
 
@@ -116,9 +121,11 @@ class Latent_Points(VectorizedTask):
                 #latent_key, cat_key = random.split(self.key)
                 batch_latent = random.normal(noise_key, (self.batch_size, self.latent_dim))
                 batch_cat = random.randint(cat_key, (self.batch_size,), 0, self.n_classes)
-                batch_latent_concat = jnp.concatenate([batch_latent, jax.nn.one_hot(batch_cat, self.n_classes)], axis=-1)
+                #batch_latent_concat = jnp.concatenate([batch_latent, jax.nn.one_hot(batch_cat, self.n_classes)], axis=-1)
 
                 batch_cat_one_hot = jax.nn.one_hot(batch_cat, self.n_classes)
+
+                batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=1)
 
             return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc)
         
@@ -128,13 +135,20 @@ class Latent_Points(VectorizedTask):
            
             #jax.debug.print('q shape : {} ', q.shape)
             q_cat = jax.nn.log_softmax(q, axis=-1)
-            #jax.debug.print('q cat : {} ', q_cat)
+            #jax.debug.print('q cat shape : {} ', q_cat.shape)
+            # print last 10 features of the latent input batch
+            #jax.debug.print('latent input : {} ', state.obs[:,-10:]) 
             #jax.debug.print('cat codes : {} ', state.cat_codes)
             loss_mi = loss_mutual_information(state.cat_codes, q_cat)
-            loss_d = -jnp.mean(jnp.log(nn.sigmoid(action)))
-            loss = loss_mi + loss_d
+            loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
+            #loss_d = -jnp.mean(jnp.log(nn.sigmoid(action)))
+            
             #jax.debug.print('loss d: {} ', loss_d)
-            #jax.debug.print('loss mi: {} ', loss_mi)
+            #Add weight to loss_mi
+            #loss_mi = 1.8 * loss_mi
+            loss = loss_mi + loss_g
+            #jax.debug.print('loss d: {} ', loss_d)
+            #jax.debug.print('loss mi gen : {} ', loss_mi)
             reward = -loss # Minimize the loss
             return state, reward, jnp.ones(())
         

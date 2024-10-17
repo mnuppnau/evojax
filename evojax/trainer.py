@@ -176,26 +176,36 @@ class Trainer(object):
                 params_gen = self.solver_gen.ask()
                 params_disc = self.solver_disc.ask()
                 
-                scores_gen, bds_gen, self.batch_stats_gen, self.batch_stats_disc, self.fake_imgs, self.cat_codes = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, cat_codes=self.cat_codes, fake_imgs=None, test=False
+                scores_disc, bds_disc, self.batch_stats_gen, self.batch_stats_disc, _ = self.sim_mgr_disc.eval_params(
+                    params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=False, test=False
+                )
+
+                if isinstance(self.solver_disc, QualityDiversityMethod):
+                    self.solver_disc.observe_bd(bds_disc)
+               
+                self.solver_disc.tell(fitness=scores_disc)
+ 
+                scores_gen, bds_gen, self.batch_stats_gen, self.batch_stats_disc, _ = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, test=False
                 )
 
                 if isinstance(self.solver_gen, QualityDiversityMethod):
                     self.solver_gen.observe_bd(bds_gen)
+                
                 self.solver_gen.tell(fitness=scores_gen)
 
                 #self.fake_imgs = jnp.squeeze(self.fake_imgs, axis=0)
 
                 #if (i > 1000 and i % 2 == 0) or i < 1001:
-                scores_disc, bds_disc, _, _, _, _ = self.sim_mgr_disc.eval_params(
-                    params_gen=None, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=False, cat_codes=self.cat_codes, fake_imgs=self.fake_imgs, test=False
-                )
+                #scores_disc, bds_disc, _, _, _, _ = self.sim_mgr_disc.eval_params(
+                #    params_gen=None, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=False, cat_codes=self.cat_codes, fake_imgs=self.fake_imgs, test=False
+                #)
 
-                if isinstance(self.solver_disc, QualityDiversityMethod):
-                    self.solver_disc.observe_bd(bds_disc)
+                #if isinstance(self.solver_disc, QualityDiversityMethod):
+                #    self.solver_disc.observe_bd(bds_disc)
                 
                 #if (i > 1000 and i % 2 == 0) or i < 1001:
-                self.solver_disc.tell(fitness=scores_disc)
+                #self.solver_disc.tell(fitness=scores_disc)
 
                 if i > 0 and i % self._log_interval == 0:
                     scores_gen = np.array(scores_gen)
@@ -222,8 +232,8 @@ class Trainer(object):
 
                     #jax.debug.print('batch stats gen shape : {} ', self.batch_stats_gen.shape)
 
-                    test_scores, _, _, _, fake_imgs, _ = self.sim_mgr_gen.eval_params(
-                        params_gen=best_params_gen, params_disc=best_params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, cat_codes=self.cat_codes, fake_imgs=None, testing=True, test=False
+                    test_scores, _, _, _, fake_imgs = self.sim_mgr_gen.eval_params(
+                        params_gen=best_params_gen, params_disc=best_params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, test=True
                     )
                     test_scores = np.array(test_scores)
                     self._logger.info(
@@ -235,7 +245,7 @@ class Trainer(object):
                    
                     #jax.debug.print('test scores shape : {} ', test_scores.shape)
                     filename = f"iteration-{i}.npy"
-                    np.save(filename, fake_imgs[0, 0, :100, :, :, :])
+                    np.save(filename, fake_imgs[0, 0, :, :, :, :])
 
                     #jax.debug.print('testing, fake_imgs shape : {} ', self.fake_imgs.shape)
 
