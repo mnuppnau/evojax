@@ -2,7 +2,7 @@
 .DS_Store
 /data/
 /local/
-
+/test-images/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

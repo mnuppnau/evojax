@@ -29,9 +29,11 @@ from evojax.task.base import TaskState
 @dataclass
 class State(TaskState):
     obs: jnp.ndarray
+    latent: jnp.ndarray
+    cat_codes: jnp.ndarray
     labels: jnp.ndarray
     cat_codes: jnp.ndarray
-    fake_imgs: jnp.ndarray
+    #fake_imgs: jnp.ndarray
     batch_stats_gen: any = None
     batch_stats_disc: any = None
 
@@ -75,8 +77,8 @@ class MNIST(VectorizedTask):
         self.batch_stats_gen = batch_stats_gen 
         self.batch_stats_disc = batch_stats_disc
 
-        self.fake_imgs = None
-        self.cat_codes = None
+        #self.fake_imgs = None
+        #self.cat_codes = None
         # Delayed importing of torchvision
 
         try:
@@ -104,13 +106,19 @@ class MNIST(VectorizedTask):
         data = np.expand_dims(dataset.data.numpy() / 255., axis=-1)
         labels = dataset.targets.numpy()
 
-        def reset_fn(key):
+        def reset_fn(key, noise_key, cat_key):
             if test:
                 batch_data, batch_labels = data, labels
             else:
                 batch_data, batch_labels = sample_batch(
                     key, data, labels, batch_size)
-            return State(obs=batch_data, labels=batch_labels, cat_codes=self.cat_codes, fake_imgs=self.fake_imgs, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc)
+                batch_latent = random.normal(noise_key, (batch_size, 64))
+                batch_cat = random.randint(cat_key, (batch_size), 0, 10)
+                batch_latent_concat = jnp.concatenate([batch_latent, jax.nn.one_hot(batch_cat, 10)], axis=-1)
+
+                batch_cat_one_hot = jax.nn.one_hot(batch_cat, 10)
+
+            return State(obs=batch_data, latent=batch_latent_concat, cat_codes=batch_cat_one_hot, labels=batch_labels, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc)
 
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
@@ -121,8 +129,11 @@ class MNIST(VectorizedTask):
             
             real_loss = bce_logits(real_preds, jnp.ones((), dtype=jnp.int32))
             fake_loss = bce_logits(action, jnp.zeros((), dtype=jnp.int32))
-            
-            loss = (real_loss + fake_loss) / 2 + loss_mi
+           
+            # add weight to loss mi
+            #loss_mi = 1.4 * loss_mi
+            #jax.debug.print('loss mi disc : {}', loss_mi)
+            loss = (real_loss + fake_loss)
             #loss = real_loss + fake_loss
 
             reward = -loss
@@ -131,8 +142,8 @@ class MNIST(VectorizedTask):
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
-    def reset(self, key: jnp.ndarray) -> State:
-        return self._reset_fn(key)
+    def reset(self, key: jnp.ndarray, noise_key: jnp.ndarray, cat_key: jnp.ndarray) -> State:
+        return self._reset_fn(key, noise_key, cat_key)
 
     def step(self,
              state: TaskState,
