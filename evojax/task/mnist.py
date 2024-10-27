@@ -133,7 +133,7 @@ class MNIST(VectorizedTask):
             # add weight to loss mi
             #loss_mi = 1.4 * loss_mi
             #jax.debug.print('loss mi disc : {}', loss_mi)
-            loss = (real_loss + fake_loss)
+            loss = (real_loss + fake_loss) / 2 + loss_mi
             #loss = real_loss + fake_loss
 
             reward = -loss

@@ -30,29 +30,29 @@ from evojax.policy.base import PolicyState
 from evojax.policy.base import PolicyNetwork
 from evojax.util import create_logger
 
-@partial(jax.jit, static_argnums=(2, 3, 4, 5))
-def get_task_reset_keys_latent(key1: jnp.ndarray,
-                        key2: jnp.ndarray,
-                        pop_size: int,
-                        n_tests: int,
-                        n_repeats: int,
-                        ma_training: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    # Split the first key
-    key1, subkey1 = random.split(key=key1)
-    
-    # Split both keys under "if testing" condition
-    key2, subkey2 = random.split(key=key2)
-    
-    reset_keys1 = random.split(subkey1, n_repeats)
-    reset_keys1 = jnp.tile(reset_keys1, (pop_size, 1))
-
-    reset_keys2 = random.split(subkey2, n_repeats)
-    reset_keys2 = jnp.tile(reset_keys2, (pop_size, 1))
-
-    return key1, reset_keys1, reset_keys2
+#@partial(jax.jit, static_argnums=(2, 3, 4, 5))
+#def get_task_reset_keys_latent(key1: jnp.ndarray,
+#                        key2: jnp.ndarray,
+#                        pop_size: int,
+#                        n_tests: int,
+#                        n_repeats: int,
+#                        ma_training: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
+#    # Split the first key
+#    key1, subkey1 = random.split(key=key1)
+#    
+#    # Split both keys under "if testing" condition
+#    key2, subkey2 = random.split(key=key2)
+#    
+#    reset_keys1 = random.split(subkey1, n_repeats)
+#    reset_keys1 = jnp.tile(reset_keys1, (pop_size, 1))
+#
+#    reset_keys2 = random.split(subkey2, n_repeats)
+#    reset_keys2 = jnp.tile(reset_keys2, (pop_size, 1))
+#
+#    return key1, reset_keys1, reset_keys2
 
 @partial(jax.jit, static_argnums=(3, 4, 5, 6))
-def get_task_reset_keys_mnist(key1: jnp.ndarray,
+def get_task_reset_keys(key1: jnp.ndarray,
                         key2: jnp.ndarray,
                         key3: jnp.ndarray,
                         pop_size: int,
@@ -79,23 +79,23 @@ def get_task_reset_keys_mnist(key1: jnp.ndarray,
     return key1, reset_keys1, reset_keys2, reset_keys3
 
 
-@partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
-def get_task_reset_keys(key: jnp.ndarray,
-                        test: bool,
-                        pop_size: int,
-                        n_tests: int,
-                        n_repeats: int,
-                        ma_training: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    key, subkey = random.split(key=key)
-    if ma_training:
-        reset_keys = random.split(subkey, n_repeats)
-    else:
-        if test:
-            reset_keys = random.split(subkey, n_tests * n_repeats)
-        else:
-            reset_keys = random.split(subkey, n_repeats)
-            reset_keys = jnp.tile(reset_keys, (pop_size, 1))
-    return key, reset_keys
+#@partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
+#def get_task_reset_keys(key: jnp.ndarray,
+#                        test: bool,
+#                        pop_size: int,
+#                        n_tests: int,
+#                        n_repeats: int,
+#                        ma_training: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
+#    key, subkey = random.split(key=key)
+#    if ma_training:
+#        reset_keys = random.split(subkey, n_repeats)
+#    else:
+#        if test:
+#            reset_keys = random.split(subkey, n_tests * n_repeats)
+#        else:
+#            reset_keys = random.split(subkey, n_repeats)
+#            reset_keys = jnp.tile(reset_keys, (pop_size, 1))
+#    return key, reset_keys
 
 
 @jax.jit
@@ -225,7 +225,7 @@ class SimManager(object):
             task_state = task_state.replace(obs=normed_obs)
             #jax.debug.print('task state batch stats gen shape : {}', task_state.batch_stats_gen.shape)
             #jax.debug.print('params gen shape in step_once_gen : {}', params_gen.shape)
-            fake_imgs, actions, q, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
+            fake_imgs, actions, disc_logits, mu, var, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
             #leaves_batch_stats_gen = jax.tree_util.tree_flatten(batch_stats_gen[0])
             #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
@@ -240,7 +240,7 @@ class SimManager(object):
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, reward, done = task.step(task_state, actions, q)
+            task_state, reward, done = task.step(task_state, actions, disc_logits, mu, var)
             if task.multi_agent_training:
                 reward = reward.ravel()
                 done = jnp.repeat(done, num_agents, axis=0)
@@ -274,7 +274,7 @@ class SimManager(object):
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
             #task_state = task_state.replace(fake_imgs=jnp.squeeze(task_state.fake_imgs, axis=0))
-            real_preds, actions, q, batch_stats_disc, batch_stats_gen, policy_state = policy_net.get_actions(
+            real_preds, actions, disc_logits, mu, var, batch_stats_disc, batch_stats_gen, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
             task_state = task_state.replace(batch_stats_disc=batch_stats_disc)
             task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
@@ -285,7 +285,7 @@ class SimManager(object):
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, reward, done = task.step(task_state, real_preds, actions, q)
+            task_state, reward, done = task.step(task_state, real_preds, actions, disc_logits)
             if task.multi_agent_training:
                 reward = reward.ravel()
                 done = jnp.repeat(done, num_agents, axis=0)
@@ -321,7 +321,7 @@ class SimManager(object):
             task_state = task_state.replace(obs=normed_obs)
             #jax.debug.print('task state batch stats gen shape : {}', task_state.batch_stats_gen.shape)
             #jax.debug.print('params gen shape in step_once_gen : {}', params_gen.shape)
-            fake_imgs, actions, q, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
+            fake_imgs, actions, disc_logits, mu, var, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
             #leaves_batch_stats_gen = jax.tree_util.tree_flatten(batch_stats_gen[0])
             #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
@@ -336,7 +336,7 @@ class SimManager(object):
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, reward, done = task.step(task_state, actions, q)
+            task_state, reward, done = task.step(task_state, actions, disc_logits, mu, var)
             if task.multi_agent_training:
                 reward = reward.ravel()
                 done = jnp.repeat(done, num_agents, axis=0)
@@ -542,20 +542,20 @@ class SimManager(object):
         params_disc = duplicate_params(params_disc, n_repeats, self._ma_training)
 
         #split the reset keys, one for noise vect and one for cat codes
-        key, noise_keys, cat_keys, new_key = random.split(self._key, 4)
+        key, noise_keys, cat_keys, con_keys, new_key = random.split(self._key, 5)
 
         if generator:
-            self._key, reset_keys_latent, reset_keys_cat_code = get_task_reset_keys_latent(
-                noise_keys, cat_keys, self._pop_size, self._n_evaluations, n_repeats, self._ma_training)
+            self._key, reset_keys_latent, reset_keys_cat_code, reset_keys_con_code = get_task_reset_keys(
+                noise_keys, cat_keys, con_keys, self._pop_size, self._n_evaluations, n_repeats, self._ma_training)
         else:
-            self._key, reset_keys_mnist, reset_keys_latent, reset_keys_cat_code = get_task_reset_keys_mnist(
+            self._key, reset_keys_mnist, reset_keys_latent, reset_keys_cat_code = get_task_reset_keys(
                 key, noise_keys, cat_keys, self._pop_size, self._n_evaluations, n_repeats,self._ma_training)
 
         #jax.debug.print('reset keys 1 shape : {}', reset_keys1.shape)
         #jax.debug.print('reset keys 2 shape : {}', reset_keys2.shape)
         # Reset the tasks and the policy.
         if generator:
-            task_state = task_reset_func(reset_keys_latent, reset_keys_cat_code)
+            task_state = task_reset_func(reset_keys_latent, reset_keys_cat_code, reset_keys_con_code)
         else:
             task_state = task_reset_func(reset_keys_mnist, reset_keys_latent, reset_keys_cat_code)
 

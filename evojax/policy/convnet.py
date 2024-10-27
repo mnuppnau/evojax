@@ -61,34 +61,22 @@ class Generator(nn.Module):
 
     @nn.compact
     def __call__(self, z):
-    #    #jax.debug.print('z shape : {} ', z.shape)
-    #    #if len(z.shape) == 3:
-    #    #    z = z.reshape((z.shape[0], z.shape[1], 1, 1, z.shape[2]))
-    #    #else:
-    #    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-    #    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
-    #    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    #    x = nn.relu(x)
-    #    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
-    #    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    #    x = nn.relu(x)
-    #    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    #    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    #    x = nn.relu(x)
-    #    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    #    x = jnp.tanh(x)
-        # create a simlpified version of the generator
-        x = nn.ConvTranspose(72, 1024, 1, 1, 'VALID', kernel_init=normal_init(0.02))(z)
+        #jax.debug.print('z shape : {} ', z.shape)
+        #if len(z.shape) == 3:
+        #    z = z.reshape((z.shape[0], z.shape[1], 1, 1, z.shape[2]))
+        #else:
+        z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+        x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
         x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
         x = nn.relu(x)
-        x = nn.ConvTranspose(1024, 128, 7, 1, 'VALID', kernel_init=normal_init(0.02))(x)
+        x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
         x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
         x = nn.relu(x)
-        x = nn.ConvTranspose(128, 64, 4, 2, 'VALID', kernel_init=normal_init(0.02))(x)
+        x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
         x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
         x = nn.relu(x)
-        x = nn.ConvTranspose(64, 1, 4, 2, 'VALID', kernel_init=normal_init(0.02))(x)
-        x = jax.nn.sigmoid(x)
+        x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+        x = jnp.tanh(x)
         return x
 
 
@@ -100,58 +88,31 @@ class Discriminator(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        #x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-        #x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-        #x = nn.leaky_relu(x, 0.2)
-        #x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-        #x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-        #x = nn.leaky_relu(x, 0.2)
+        x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+        x = nn.leaky_relu(x, 0.2)
+        x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+        x = nn.leaky_relu(x, 0.2)
         #
-        ## Discriminator output
-        #d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-        #d = d.reshape((d.shape[0], -1))
-
-        ## Q outpiut
-        #q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-        #q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
-        #q = nn.leaky_relu(q, 0.2)
-        #q = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
-        #q = q.reshape((q.shape[0], -1))
-        # create a simlpified version of the discriminator
-        x = nn.Conv(1, 64, 4, 2, 'VALID', kernel_init=normal_init(0.02))(x)
-        x = nn.leaky_relu(x, 0.1)
-        x = nn.Conv(64, 128, 4, 2, 1, 'VALID', kernel_init=normal_init(0.02))(x)
-        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-        x = nn.leaky_relu(x, 0.1)
-        x = nn.Conv(128, 1024, 7, 'VALID', kernel_init=normal_init(0.02))(x)
-        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-        x = nn.leaky_relu(x, 0.1)
-
         # Discriminator output
-        d = nn.Conv(1024, 1, 1, 'VALID', kernel_init=normal_init(0.02))(x)
-        d = jax.nn.sigmoid(d)
+        d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+        d = d.reshape((d.shape[0], -1))
 
-        # Q output
-        q = nn.Conv(1024, 128, 1, 'VALID', kernel_init=normal_init(0.02))(x)
+        # Q outpiut
+        q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
         q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
-        q = nn.leaky_relu(q, 0.1)
+        q = nn.leaky_relu(q, 0.2)
+        
 
-        conv_disc = nn.Conv(128, 10, 1, 'VALID', kernel_init=normal_init(0.02))(q)
-        # squeeze the output
-        disc_logits = jnp.squeeze(conv_disc, axis=(1, 2, 3))
-
-        conv_mu = nn.Conv(128, 2, 1, 'VALID', kernel_init=normal_init(0.02))(q)
-        # squeeze the output
-        mu = jnp.squeeze(conv_mu, axis=(1, 2, 3))
-
-        conv_var = nn.Conv(128, 2, 1, 'VALID', kernel_init=normal_init(0.02))(q)
-        # squeeze the output and exponentiate
-        var = jnp.exp(jnp.squeeze(conv_var, axis=(1, 2, 3)))
-
-        return disc_logits, mu, var
-
-        #return d, q
-
+        disc_logits = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
+        disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
+               
+        mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
+        log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
+        var = jnp.squeeze(log_var)
+    
+        return d, disc_logits, mu.squeeze(), jnp.exp(var)
 
 class GenPolicy(PolicyNetwork):
     """A convolutional neural network for the MNIST classification task."""
@@ -168,16 +129,16 @@ class GenPolicy(PolicyNetwork):
 
         key, key_gen, key_disc, key_latent = random.split(key, 4)
 
-        noise = random.normal(key_latent, (100, 64))
-        c = jnp.tile(jnp.arange(10), 10)
-        c = jax.nn.one_hot(c, 10)
+        #noise = random.normal(key_latent, (100, 64))
+        #c = jnp.tile(jnp.arange(10), 10)
+        #c = jax.nn.one_hot(c, 10)
 
         #cat_codes = random.randint(key_latent, (64, 100), 0, 10)
 
         # Apply one-hot encoding
         #c = nn.one_hot(cat_codes, 10)
         
-        latent = jnp.concatenate([noise, c], axis=-1)
+        #latent = jnp.concatenate([noise, c], axis=-1)
 
         #jax.debug.print('latent shape before init : {} ', latent.shape)
 
@@ -212,7 +173,7 @@ class GenPolicy(PolicyNetwork):
             #jax.debug.print('latent input : {} ', latent_input[:, -10:])
             fake_data, vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
         
-            (preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
+            (preds, disc_logits, mu, var), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
             leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
 
@@ -222,7 +183,7 @@ class GenPolicy(PolicyNetwork):
 
             flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
-            return fake_data, flat_batch_stats_gen, preds, q, flat_batch_stats_disc
+            return fake_data, flat_batch_stats_gen, preds, disc_logits, mu, var, flat_batch_stats_disc
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -249,9 +210,9 @@ class GenPolicy(PolicyNetwork):
        
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, batch_stats_g, preds, q, batch_stats_d = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
+        fake_data, batch_stats_g, preds, disc_logits, mu, var, batch_stats_d = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
         
-        return fake_data, preds, q, batch_stats_g, batch_stats_d, p_states
+        return fake_data, preds, disc_logits, mu, var, batch_stats_g, batch_stats_d, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
@@ -309,9 +270,9 @@ class DiscPolicy(PolicyNetwork):
             
             fake_data, vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
 
-            (real_preds, _), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, real_data, mutable=['batch_stats'])
+            (real_preds, _, _, _), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, real_data, mutable=['batch_stats'])
             
-            (fake_preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
+            (fake_preds, disc_logits, mu, var), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d['batch_stats']}, fake_data, mutable=['batch_stats'])
 
             leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(vars_d['batch_stats'])
 
@@ -321,7 +282,7 @@ class DiscPolicy(PolicyNetwork):
 
             flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
 
-            return real_preds, fake_preds, q, flat_batch_stats_disc, flat_batch_stats_gen
+            return real_preds, fake_preds, disc_logits, mu, var, flat_batch_stats_disc, flat_batch_stats_gen
 
         self._forward_fn_disc = jax.vmap(forward_fn_disc)
 
@@ -339,6 +300,6 @@ class DiscPolicy(PolicyNetwork):
        
         #jax.debug.print('params gen : {} ', params_gen)
 
-        real_preds, fake_preds, q, batch_stats_d, batch_stats_g = self._forward_fn_disc(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs, t_states.latent, t_states.cat_codes)
+        real_preds, fake_preds, disc_logits, mu, var, batch_stats_d, batch_stats_g = self._forward_fn_disc(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs, t_states.latent, t_states.cat_codes)
                 
-        return real_preds, fake_preds, q, batch_stats_d, batch_stats_g, p_states
+        return real_preds, fake_preds, disc_logits, mu, var, batch_stats_d, batch_stats_g, p_states
