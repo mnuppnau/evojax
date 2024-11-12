@@ -28,6 +28,20 @@ import jax
 import jax.numpy as jnp
 from jax import random
 
+from evojax.algo.cultural.belief_space import (
+    initialize_belief_space,
+    get_updated_params,
+)
+
+from evojax.algo.cultural.knowledge_sources import (
+    update_knowledge_sources,
+    update_topographic_ks,
+    update_normative_ks,
+    add_ind_topographic_ks,
+)
+
+from evojax.algo.cultural.population_space import update_population
+
 try:
     from jax.example_libraries import optimizers
 except ModuleNotFoundError:
@@ -35,7 +49,7 @@ except ModuleNotFoundError:
 
 from evojax.algo.base import NEAlgorithm
 from evojax.util import create_logger
-
+from evojax.algo.cultural.helper_functions import calculate_entropy
 
 @partial(jax.jit, static_argnums=(1,))
 def process_scores(
@@ -49,7 +63,7 @@ def process_scores(
         ranks = ranks.at[x.argsort()].set(jnp.arange(x.size)).reshape(x.shape)
         return ranks / ranks.max() - 0.5
     else:
-        return x
+        return x, jnp.array(x).max(), jnp.array(x).mean()
 
 
 @jax.jit
@@ -121,6 +135,7 @@ class PGPE(NEAlgorithm):
         stdev_max_change: float = 0.2,
         solution_ranking: bool = True,
         seed: int = 0,
+        belief_space: jnp.ndarray = None,
         logger: logging.Logger = None,
     ):
         """Initialization function.
@@ -209,9 +224,16 @@ class PGPE(NEAlgorithm):
         self._solutions = None
         self._scaled_noises = None
 
+        self.belief_space = belief_space if belief_space is not None else initialize_belief_space(
+            population_size=self.pop_size, param_size=abs(param_size), key=self._key)
+
     def ask(self) -> jnp.ndarray:
-        
-        center, stdev = self._center, self._stdev
+        if self._t > 25000 and self._t % 10 == 0:
+            center, stdev = get_updated_params(
+                self.belief_space, self._center, self._stdev, self._t
+            )
+        else:
+            center, stdev = self._center, self._stdev
 
         self._key, self._scaled_noises, self._solutions = ask_func(
             self._key,
@@ -221,24 +243,29 @@ class PGPE(NEAlgorithm):
             self._center.size,
         )
 
-        return self._solutions
+        return self._solutions, self.belief_space
 
 
-    def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:
-        fitness_scores = process_scores(fitness, self._solution_ranking)
-        
+    def tell(self, fitness: Union[np.ndarray, jnp.ndarray], pop_stats: jnp.ndarry) -> None:
+        fitness_scores, self._best_score, self._avg_score = process_scores(fitness, self._solution_ranking)
         grad_center, grad_stdev = compute_reinforce_update(
             fitness_scores=fitness_scores,
             scaled_noises=self._scaled_noises,
             stdev=self._stdev,
         )
-        
         self._opt_state = self._opt_update(
             self._t // self._lr_decay_steps, -grad_center, self._opt_state
         )
-        
         self._t += 1
-        
+       
+        self.population, best_individual = update_population(
+            fitness_scores=fitness_scores,
+            center=self._center,
+            stdev=self._stdev,
+        )
+
+        norm_entropy = calculate_entropy(self._solutions)
+
         self._center = self._get_params(self._opt_state)
         
         self._stdev = update_stdev(
@@ -247,6 +274,24 @@ class PGPE(NEAlgorithm):
             max_change=self._stdev_max_change,
             grad=grad_stdev,
         )
+
+        self.belief_space = update_knowledge_sources(
+            self.belief_space,
+            (
+                self._center,
+                self._stdev,
+                best_individual[2],
+            )
+        )
+
+        self.belief_space, _ = update_normative_ks(
+            self.belief_space,
+            best_fitness=self._best_score,
+            avg_fitness=self._avg_score,
+            norm_entropy=norm_entropy,
+            pop_stats=pop_stats,
+        )
+
 
     @property
     def best_params(self) -> jnp.ndarray:

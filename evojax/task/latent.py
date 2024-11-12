@@ -31,6 +31,12 @@ class State(TaskState):
     #latent_input: jnp.ndarray
     cat_codes: jnp.ndarray
     con_codes: jnp.ndarray
+    mean_g: jnp.ndarray
+    var_g: jnp.ndarray
+    mean_mi: jnp.ndarray
+    var_mi: jnp.ndarray
+    mean_con: jnp.ndarray
+    var_con: jnp.ndarray
     batch_stats_gen: any
     batch_stats_disc: any
 
@@ -162,12 +168,12 @@ class Latent_Points(VectorizedTask):
             #jax.debug.print('loss g: {} ', loss_g)
             #Add weight to loss_mi
             #loss_mi = 1.8 * loss_mi
-            loss = loss_mi + loss_g + loss_con
+            #loss = loss_mi + loss_g + loss_con
             #jax.debug.print('loss d: {} ', loss_d)
             #jax.debug.print('loss mi gen : {} ', loss_mi)
             #jax.debug.print('loss con gen : {} ', loss_con)
-            reward = -loss # Minimize the loss
-            return state, reward, jnp.ones(())
+            #reward = -loss # Minimize the loss
+            return state, loss_mi, loss_g, loss_con, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
 

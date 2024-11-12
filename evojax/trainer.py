@@ -138,6 +138,19 @@ class Trainer(object):
         )
 
     def run(self, demo_mode: bool = False) -> float:
+
+        def gather_pop_stats(belief_space):
+
+            mean_mi = belief_space[5][9]
+            mean_g = belief_space[5][10]
+            mean_cond = belief_space[5][11]
+
+            var_mi = belief_space[5][12]
+            var_g = belief_space[5][13]
+            var_cond = belief_space[5][14]
+        
+            return jnp.array([mean_mi, mean_g, mean_cond, var_mi, var_g, var_cond])
+
         """Start the training / test process."""
 
         if self.model_dir is not None:
@@ -173,7 +186,7 @@ class Trainer(object):
 
             for i in range(self._max_iter):
                 # Generator step.
-                params_gen = self.solver_gen.ask()
+                params_gen, belief_space = self.solver_gen.ask()
                 params_disc = self.solver_disc.ask()
                 
                 scores_disc, bds_disc, self.batch_stats_gen, self.batch_stats_disc, _ = self.sim_mgr_disc.eval_params(
@@ -185,14 +198,16 @@ class Trainer(object):
                
                 self.solver_disc.tell(fitness=scores_disc)
  
-                scores_gen, bds_gen, self.batch_stats_gen, self.batch_stats_disc, _ = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, test=False
+                pop_stats = gather_pop_stats(belief_space)
+
+                scores_gen, bds_gen, self.batch_stats_gen, self.batch_stats_disc, _, pop_stats_updated = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, generator=True, test=False
                 )
 
                 if isinstance(self.solver_gen, QualityDiversityMethod):
                     self.solver_gen.observe_bd(bds_gen)
                 
-                self.solver_gen.tell(fitness=scores_gen)
+                self.solver_gen.tell(fitness=scores_gen, pop_stats=pop_stats_updated)
 
                 #self.fake_imgs = jnp.squeeze(self.fake_imgs, axis=0)
 
