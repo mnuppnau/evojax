@@ -21,11 +21,13 @@ import argparse
 import os
 import shutil
 
+from jax import random
 from evojax import Trainer
 from evojax.task.mnist import MNIST
 from evojax.task.latent import Latent_Points
 from evojax.policy.convnet import GenPolicy, DiscPolicy
-from evojax.algo import PGPE
+from evojax.algo import PGPE, PGPE_CA
+from evojax.algo.cultural.belief_space import initialize_belief_space
 from evojax import util
 
 
@@ -81,11 +83,14 @@ def main(config):
     flat_params_disc = policy_disc.flat_params_disc
     train_task_mnist = MNIST(batch_size=config.batch_size, test=False)
     test_task_mnist = MNIST(batch_size=config.batch_size, test=True)
-    
+  
+    belief_space_key = random.PRNGKey(config.seed+12)
+    belief_space = initialize_belief_space(population_size=config.pop_size, param_size=policy_gen.num_params, key=belief_space_key)
+
     train_task_latent = Latent_Points(batch_size=config.batch_size, test=False)
     test_task_latent = Latent_Points(batch_size=config.batch_size, test=True)
 
-    solver_gen = PGPE(
+    solver_gen = PGPE_CA(
         pop_size=config.pop_size,
         param_size=policy_gen.num_params,
         init_params=flat_params_gen,
@@ -95,6 +100,7 @@ def main(config):
         init_stdev=config.init_std_gen,
         logger=logger,
         seed=config.seed,
+        belief_space=belief_space,
     )
 
     solver_disc = PGPE(

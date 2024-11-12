@@ -240,7 +240,42 @@ class SimManager(object):
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, reward, done = task.step(task_state, actions, disc_logits, mu, var)
+            task_state, loss_mi, loss_g, loss_con, done = task.step(task_state, actions, disc_logits, mu, var)
+            #jax.debug.print('loss_mi : {}', loss_mi.shape)
+            #jax.debug.print('loss_g : {}', loss_g.shape)
+            #jax.debug.print('loss_con : {}', loss_con.shape)
+           
+            # use ema to standardize the loss values
+            prev_mean_mi = task_state.mean_mi
+            prev_mean_g = task_state.mean_g
+            prev_mean_con = task_state.mean_con
+
+            prev_var_mi = task_state.var_mi
+            prev_var_g = task_state.var_g
+            prev_var_con = task_state.var_con
+
+            curr_mean_mi = jnp.mean(loss_mi)
+            curr_mean_g = jnp.mean(loss_g)
+            curr_mean_con = jnp.mean(loss_con)
+
+            curr_var_mi = jnp.var(loss_mi) + 1e-8
+            curr_var_g = jnp.var(loss_g) + 1e-8
+            curr_var_con = jnp.var(loss_con) + 1e-8
+            
+            mean_mi = prev_mean_mi * 0.99 + curr_mean_mi * 0.01
+            mean_g = prev_mean_g * 0.99 + curr_mean_g * 0.01
+            mean_con = prev_mean_con * 0.99 + curr_mean_con * 0.01
+
+            var_mi = prev_var_mi * 0.99 + curr_var_mi * 0.01
+            var_g = prev_var_g * 0.99 + curr_var_g * 0.01
+            var_con = prev_var_con * 0.99 + curr_var_con * 0.01
+
+            loss_mi_std = (loss_mi - mean_mi) / (jnp.sqrt(var_mi) + 1e-8)
+            loss_g_std = (loss_g - mean_g) / (jnp.sqrt(var_g) + 1e-8)
+            loss_con_std = (loss_con - mean_con) / (jnp.sqrt(var_con) + 1e-8)
+
+            reward = -(loss_mi_std + loss_g_std + loss_con_std)
+
             if task.multi_agent_training:
                 reward = reward.ravel()
                 done = jnp.repeat(done, num_agents, axis=0)
@@ -413,6 +448,7 @@ class SimManager(object):
                     params_disc: jnp.ndarray,
                     batch_stats_gen: dict,
                     batch_stats_disc: dict,
+                    pop_stats: jnp.ndarray,
                     generator: bool,
                     test: bool) -> Tuple[jnp.ndarray, TaskState]:
         """Evaluate population parameters or test the best parameter.
@@ -426,7 +462,7 @@ class SimManager(object):
         if self._use_for_loop:
             return self._for_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, generator, test)
         else:
-            return self._scan_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, generator, test)
+            return self._scan_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, pop_stats, generator, test)
 
     def _for_loop_eval(self,
                        params: jnp.ndarray,
@@ -482,6 +518,7 @@ class SimManager(object):
                         params_disc: jnp.ndarray,
                         batch_stats_gen: dict,
                         batch_stats_disc: dict,
+                        pop_stats: jnp.ndarray,
                         generator: bool,
                         test: bool) -> Tuple[jnp.ndarray, TaskState]:
         """Rollout using jax.lax.scan."""

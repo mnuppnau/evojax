@@ -16,6 +16,7 @@ from .base import NEAlgorithm
 from .base import QualityDiversityMethod
 from .cma_wrapper import CMA
 from .pgpe import PGPE
+from .pgpe_ca import PGPE as PGPE_CA
 from .ars import ARS
 from .simple_ga import SimpleGA
 from .open_es import OpenES
@@ -32,6 +33,7 @@ from .fpgpec import FPGPEC
 Strategies = {
     "CMA": CMA,
     "PGPE": PGPE,
+    "PGPE_CA": PGPE_CA,
     "SimpleGA": SimpleGA,
     "ARS": ARS,
     "OpenES": OpenES,
@@ -51,6 +53,7 @@ __all__ = [
     "QualityDiversityMethod",
     "CMA",
     "PGPE",
+    "PGPE_CA",
     "ARS",
     "SimpleGA",
     "OpenES",
