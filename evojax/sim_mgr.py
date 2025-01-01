@@ -115,6 +115,10 @@ def reshape_data_from_pmap(data: jnp.ndarray) -> jnp.ndarray:
     data = data.transpose([1, 0] + [i for i in range(2, data.ndim)])
     return jnp.reshape(data, (data.shape[0], data.shape[1] * data.shape[2], -1))
 
+@jax.jit
+# reshape two dim array to one dim array
+def combine_ind_scalar(data: jnp.ndarray) -> jnp.ndarray:
+    return jnp.reshape(data, (data.shape[0] * data.shape[1],))
 
 @jax.jit
 def merge_state_from_pmap(state: TaskState) -> TaskState:
@@ -215,7 +219,7 @@ class SimManager(object):
 
         def step_once_gen(carry, input_data, task):
             (task_state, policy_state, params_gen, params_disc, obs_params,
-             accumulated_reward, valid_mask) = carry
+             accumulated_reward, loss_mi, loss_g, loss_con, valid_mask) = carry
             if task.multi_agent_training:
                 num_tasks, num_agents = task_state.obs.shape[:2]
                 task_state = task_state.replace(
@@ -225,8 +229,12 @@ class SimManager(object):
             task_state = task_state.replace(obs=normed_obs)
             #jax.debug.print('task state batch stats gen shape : {}', task_state.batch_stats_gen.shape)
             #jax.debug.print('params gen shape in step_once_gen : {}', params_gen.shape)
-            fake_imgs, actions, disc_logits, mu, var, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
+            fake_imgs, activations, actions, disc_logits, mu, var, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
+            act1, act2, act3 = activations
+            #jax.debug.print('activations 1 shape : {}', act1.shape)
+            #jax.debug.print('activations 2 shape : {}', act2.shape)
+            #jax.debug.print('activations 3 shape : {}', act3.shape)
             #leaves_batch_stats_gen = jax.tree_util.tree_flatten(batch_stats_gen[0])
             #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
             #leaves_batch_stats_disc = jax.tree_util.tree_flatten(batch_stats_disc[0])
@@ -262,41 +270,62 @@ class SimManager(object):
             curr_var_g = jnp.var(loss_g) + 1e-8
             curr_var_con = jnp.var(loss_con) + 1e-8
             
-            mean_mi = prev_mean_mi * 0.99 + curr_mean_mi * 0.01
-            mean_g = prev_mean_g * 0.99 + curr_mean_g * 0.01
-            mean_con = prev_mean_con * 0.99 + curr_mean_con * 0.01
+            #mean_mi = prev_mean_mi * 0.01 + curr_mean_mi * 0.94
+            #mean_g = prev_mean_g * 0.01 + curr_mean_g * 0.94
+            #mean_con = prev_mean_con * 0.01 + curr_mean_con * 0.94
 
-            var_mi = prev_var_mi * 0.99 + curr_var_mi * 0.01
-            var_g = prev_var_g * 0.99 + curr_var_g * 0.01
-            var_con = prev_var_con * 0.99 + curr_var_con * 0.01
+            #var_mi = prev_var_mi * 0.01 + curr_var_mi * 0.94
+            #var_g = prev_var_g * 0.01 + curr_var_g * 0.94
+            #var_con = prev_var_con * 0.01 + curr_var_con * 0.94
 
-            loss_mi_std = (loss_mi - mean_mi) / (jnp.sqrt(var_mi) + 1e-8)
-            loss_g_std = (loss_g - mean_g) / (jnp.sqrt(var_g) + 1e-8)
-            loss_con_std = (loss_con - mean_con) / (jnp.sqrt(var_con) + 1e-8)
+            mean_mi = curr_mean_mi * 0.95
+            mean_g = curr_mean_g * 0.95
+            mean_con = curr_mean_con * 0.95
 
-            reward = -(loss_mi_std + loss_g_std + loss_con_std)
+            var_mi = curr_var_mi * 0.95
+            var_g = curr_var_g * 0.95
+            var_con = curr_var_con * 0.95
 
+
+            loss_mi_std = (loss_mi - mean_mi.squeeze()) / (jnp.sqrt(var_mi.squeeze()) + 1e-8)
+            # get absolute value of loss_mi_std
+            loss_mi_std = jnp.abs(loss_mi_std)
+            loss_g_std = (loss_g - mean_g.squeeze()) / (jnp.sqrt(var_g.squeeze()) + 1e-8)
+            loss_g_std = jnp.abs(loss_g_std)
+            loss_con_std = (loss_con - mean_con.squeeze()) / (jnp.sqrt(var_con.squeeze()) + 1e-8)
+
+            loss_con_std = jnp.abs(loss_con_std)
+            #reward = -loss_mi_std*1.0 - loss_g_std*20.0 - loss_con_std*0.4
+            #jax.debug.print('loss_mi_std : {}', loss_mi_std)
+            #jax.debug.print('loss_g_std : {}', loss_g_std)
+            #jax.debug.print('loss_con_std : {}', loss_con_std)
+            reward = -loss_mi - loss_g - loss_con*0.1
+           
             if task.multi_agent_training:
                 reward = reward.ravel()
                 done = jnp.repeat(done, num_agents, axis=0)
             accumulated_reward = accumulated_reward + reward * valid_mask
+            #jax.debug.print('accumulated reward in gen step : {}', accumulated_reward.shape)
             valid_mask = valid_mask * (1 - done.ravel())
             return ((task_state, policy_state, params_gen, params_disc, obs_params,
-                     accumulated_reward, valid_mask),
+                     accumulated_reward, loss_mi, loss_g, loss_con, valid_mask),
                     (org_obs, valid_mask))
 
         def rollout_gen(task_states, policy_states, params_gen, params_disc, obs_params,
                     step_once_gen_fn, max_steps):
             accumulated_rewards = jnp.zeros(params_gen.shape[0])
+            loss_mi = jnp.zeros(self._pop_size//2)
+            loss_g = jnp.zeros(self._pop_size//2)
+            loss_con = jnp.zeros(self._pop_size//2)
             #fake_imgs = jnp.zeros((64,128,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params,
-              accumulated_rewards, valid_masks),
+              accumulated_rewards, loss_mi, loss_g, loss_con, valid_masks),
              (obs_set, obs_mask)) = jax.lax.scan(
                 step_once_gen_fn,
                 (task_states, policy_states, params_gen, params_disc, obs_params,
-                 accumulated_rewards, valid_masks), (), max_steps)
-            return accumulated_rewards, obs_set, obs_mask, task_states
+                 accumulated_rewards, loss_mi, loss_g, loss_con, valid_masks), (), max_steps)
+            return accumulated_rewards, obs_set, obs_mask, task_states, loss_mi, loss_g, loss_con
 
         def step_once_disc(carry, input_data, task):
             (task_state, policy_state, params_gen, params_disc, obs_params,
@@ -321,10 +350,12 @@ class SimManager(object):
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
             task_state, reward, done = task.step(task_state, real_preds, actions, disc_logits)
+            #jax.debug.print('reward in disc step : {}', reward.shape)
             if task.multi_agent_training:
                 reward = reward.ravel()
                 done = jnp.repeat(done, num_agents, axis=0)
             accumulated_reward = accumulated_reward + reward * valid_mask
+            #jax.debug.print('accumulated reward in disc step : {}', accumulated_reward.shape)
             valid_mask = valid_mask * (1 - done.ravel())
             #task_state = task_state.replace(fake_imgs=jnp.expand_dims(task_state.fake_imgs, axis=0))
             return ((task_state, policy_state, params_gen, params_disc, obs_params,
@@ -356,7 +387,7 @@ class SimManager(object):
             task_state = task_state.replace(obs=normed_obs)
             #jax.debug.print('task state batch stats gen shape : {}', task_state.batch_stats_gen.shape)
             #jax.debug.print('params gen shape in step_once_gen : {}', params_gen.shape)
-            fake_imgs, actions, disc_logits, mu, var, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
+            fake_imgs, activations, actions, disc_logits, mu, var, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
             #leaves_batch_stats_gen = jax.tree_util.tree_flatten(batch_stats_gen[0])
             #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
@@ -371,7 +402,8 @@ class SimManager(object):
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, reward, done = task.step(task_state, actions, disc_logits, mu, var)
+            task_state, loss_mi, loss_g, loss_con, done = task.step(task_state, actions, disc_logits, mu, var)
+            reward = -loss_mi - loss_g - loss_con
             if task.multi_agent_training:
                 reward = reward.ravel()
                 done = jnp.repeat(done, num_agents, axis=0)
@@ -608,7 +640,23 @@ class SimManager(object):
         #    task_state = task_state.replace(cat_codes=cat_codes)
         #   task_state = task_state.replace(fake_imgs=fake_imgs)
             
-        #if generator:
+        if generator and not test: 
+            mean_mi, mean_g, mean_con, var_mi, var_g, var_con = jnp.split(pop_stats,6)
+            #jax.debug.print('mean mi shape : {}', mean_mi.shape)
+            mean_mi = jnp.repeat(mean_mi[None, :], self._pop_size, axis=0)
+            mean_g = jnp.repeat(mean_g[None, :], self._pop_size, axis=0)
+            mean_con = jnp.repeat(mean_con[None, :], self._pop_size, axis=0)
+            var_mi = jnp.repeat(var_mi[None, :], self._pop_size, axis=0)
+            var_g = jnp.repeat(var_g[None, :], self._pop_size, axis=0)
+            var_con = jnp.repeat(var_con[None, :], self._pop_size, axis=0)
+
+            task_state = task_state.replace(mean_mi=mean_mi)
+            task_state = task_state.replace(mean_g=mean_g)
+            task_state = task_state.replace(mean_con=mean_con)
+            task_state = task_state.replace(var_mi=var_mi)
+            task_state = task_state.replace(var_g=var_g)
+            task_state = task_state.replace(var_con=var_con)
+
         task_state = task_state.replace(batch_stats_gen=self.batch_stats_gen)
 
         task_state = task_state.replace(batch_stats_disc=self.batch_stats_disc)
@@ -632,19 +680,51 @@ class SimManager(object):
         if test:
             scores, all_obs, masks, final_states, fake_imgs = rollout_func(
                 task_state, policy_state, params_gen, params_disc, self.obs_params)
-        else:
-            scores, all_obs, masks, final_states = rollout_func(
+        elif generator:
+            scores, all_obs, masks, final_states, loss_mi, loss_g, loss_con = rollout_func(
             task_state, policy_state, params_gen, params_disc, self.obs_params)
-        #else: 
-        #    scores, all_obs, masks, final_states = rollout_func(
-        #        task_state, policy_state, params_gen, params_disc, self.obs_params)
+        else: 
+            scores, all_obs, masks, final_states = rollout_func(
+                task_state, policy_state, params_gen, params_disc, self.obs_params)
 
         if self._num_device > 1:
             all_obs = reshape_data_from_pmap(all_obs)
             masks = reshape_data_from_pmap(masks)
             final_states = merge_state_from_pmap(final_states)
-            #if generator:
-            #    fake_imgs = reshape_data_from_pmap(fake_imgs)
+            if generator and not test:
+                loss_mi = combine_ind_scalar(loss_mi)
+                loss_g = combine_ind_scalar(loss_g)
+                loss_con = combine_ind_scalar(loss_con)
+            #    fake_imgs = combine_ind_scalar(fake_imgs)
+
+        if generator and not test:
+            # update the population mean_mi, mean_g, mean_con, var_mi, var_g, var_con in the task state
+            curr_mean_mi = jnp.mean(loss_mi)
+            curr_mean_g = jnp.mean(loss_g)
+            curr_mean_con = jnp.mean(loss_con)
+
+            curr_var_mi = jnp.var(loss_mi) + 1e-8
+            curr_var_g = jnp.var(loss_g) + 1e-8
+            curr_var_con = jnp.var(loss_con) + 1e-8
+
+            prev_mean_mi = jnp.mean(final_states.mean_mi)
+            prev_mean_g = jnp.mean(final_states.mean_g)
+            prev_mean_con = jnp.mean(final_states.mean_con)
+
+            prev_var_mi = jnp.mean(final_states.var_mi)
+            prev_var_g = jnp.mean(final_states.var_g)
+            prev_var_con = jnp.mean(final_states.var_con)
+
+            mean_mi = prev_mean_mi * 0.1 + curr_mean_mi * 0.9
+            mean_g = prev_mean_g * 0.1 + curr_mean_g * 0.9
+            mean_con = prev_mean_con * 0.1 + curr_mean_con * 0.9
+
+            var_mi = prev_var_mi * 0.1 + curr_var_mi * 0.9
+            var_g = prev_var_g * 0.1 + curr_var_g * 0.9
+            var_con = prev_var_con * 0.1 + curr_var_con * 0.9
+
+            pop_stats = jnp.array([mean_mi, mean_g, mean_con, var_mi, var_g, var_con])
+
 
         batch_stats_gen_updated = final_states.batch_stats_gen
         batch_stats_disc_updated = final_states.batch_stats_disc
@@ -658,7 +738,7 @@ class SimManager(object):
         #if generator:
         #    task_state = task_reset_func(reset_keys1, reset_keys2)
 
-        #if generator:
+        ##if generator:
         #    cat_codes = task_state.cat_codes
         #else:
         #    cat_codes = None
@@ -691,4 +771,4 @@ class SimManager(object):
         #        final_states)
 
         self._key = new_key
-        return scores, self._bd_summarize_fn(final_states), batch_stats_gen_updated, batch_stats_disc_updated, fake_imgs
+        return scores, self._bd_summarize_fn(final_states), batch_stats_gen_updated, batch_stats_disc_updated, fake_imgs, pop_stats

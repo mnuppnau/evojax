@@ -189,8 +189,10 @@ class Trainer(object):
                 params_gen, belief_space = self.solver_gen.ask()
                 params_disc = self.solver_disc.ask()
                 
-                scores_disc, bds_disc, self.batch_stats_gen, self.batch_stats_disc, _ = self.sim_mgr_disc.eval_params(
-                    params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=False, test=False
+                pop_stats = None
+                
+                scores_disc, bds_disc, self.batch_stats_gen, self.batch_stats_disc, _, _ = self.sim_mgr_disc.eval_params(
+                    params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, generator=False, test=False
                 )
 
                 if isinstance(self.solver_disc, QualityDiversityMethod):
@@ -247,8 +249,8 @@ class Trainer(object):
 
                     #jax.debug.print('batch stats gen shape : {} ', self.batch_stats_gen.shape)
 
-                    test_scores, _, _, _, fake_imgs = self.sim_mgr_gen.eval_params(
-                        params_gen=best_params_gen, params_disc=best_params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, test=True
+                    test_scores, _, _, _, fake_imgs, _ = self.sim_mgr_gen.eval_params(
+                        params_gen=best_params_gen, params_disc=best_params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, test=True, pop_stats=pop_stats_updated
                     )
                     test_scores = np.array(test_scores)
                     self._logger.info(

@@ -78,6 +78,14 @@ class Latent_Points(VectorizedTask):
         self.batch_stats_gen = None
         self.batch_stats_disc = None
         
+        self.mean_mi = jnp.array([0.0])
+        self.mean_g = jnp.array([0.0])
+        self.mean_con = jnp.array([0.0])
+
+        self.var_mi = jnp.array([0.0000001])
+        self.var_g = jnp.array([0.0000001])
+        self.var_con = jnp.array([0.0000001])
+        
         self.batch_size = batch_size
         self.latent_dim = latent_dim
         self.n_classes = n_classes
@@ -148,7 +156,7 @@ class Latent_Points(VectorizedTask):
 
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot, batch_con], axis=1)
 
-            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, con_codes=batch_con, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc)
+            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, con_codes=batch_con, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, mean_g=self.mean_g, var_g=self.var_g, mean_mi=self.mean_mi, var_mi=self.var_mi, mean_con=self.mean_con, var_con=self.var_con)
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
@@ -162,7 +170,7 @@ class Latent_Points(VectorizedTask):
             #jax.debug.print('cat codes : {} ', state.cat_codes)
             loss_mi = loss_mutual_information(state.cat_codes, q_cat)
             loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
-            loss_con = neg_log_likelihood_normal(state.con_codes, mu, logvar)*0.1
+            loss_con = neg_log_likelihood_normal(state.con_codes, mu, logvar)
             #loss_d = -jnp.mean(jnp.log(nn.sigmoid(action)))
             
             #jax.debug.print('loss g: {} ', loss_g)
