@@ -49,7 +49,7 @@ except ModuleNotFoundError:
 
 from evojax.algo.base import NEAlgorithm
 from evojax.util import create_logger
-from evojax.algo.cultural.helper_functions import calculate_entropy
+from evojax.algo.cultural.helper_functions import calculate_entropy_sampling
 
 @partial(jax.jit, static_argnums=(1,))
 def process_scores(
@@ -61,10 +61,17 @@ def process_scores(
     if use_ranking:
         ranks = jnp.zeros(x.size, dtype=int)
         ranks = ranks.at[x.argsort()].set(jnp.arange(x.size)).reshape(x.shape)
-        return ranks / ranks.max() - 0.5
+        return ranks / ranks.max() - 0.5, jnp.array(x).max(), jnp.array(x).mean()
     else:
         return x, jnp.array(x).max(), jnp.array(x).mean()
 
+@jax.jit
+def normalize_gradients(
+    grad_center: jnp.ndarray, grad_stdev: jnp.ndarray
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    grad_center = grad_center / jnp.linalg.norm(grad_center)
+    grad_stdev = grad_stdev / jnp.linalg.norm(grad_stdev)
+    return grad_center, grad_stdev
 
 @jax.jit
 def compute_reinforce_update(
@@ -221,6 +228,7 @@ class PGPE(NEAlgorithm):
         self._get_params = jax.jit(get_params)
 
         self._key = random.PRNGKey(seed=seed)
+        self._key, self._subkey = random.split(self._key)
         self._solutions = None
         self._scaled_noises = None
 
@@ -228,7 +236,7 @@ class PGPE(NEAlgorithm):
             population_size=self.pop_size, param_size=abs(param_size), key=self._key)
 
     def ask(self) -> jnp.ndarray:
-        if self._t > 25000 and self._t % 10 == 0:
+        if self._t > 10000:
             center, stdev = get_updated_params(
                 self.belief_space, self._center, self._stdev, self._t
             )
@@ -246,26 +254,77 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness: Union[np.ndarray, jnp.ndarray], pop_stats: jnp.ndarry) -> None:
+    def tell(self, fitness: Union[np.ndarray, jnp.ndarray], pop_stats: jnp.ndarray) -> None:
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness, self._solution_ranking)
         grad_center, grad_stdev = compute_reinforce_update(
             fitness_scores=fitness_scores,
             scaled_noises=self._scaled_noises,
             stdev=self._stdev,
         )
-        self._opt_state = self._opt_update(
-            self._t // self._lr_decay_steps, -grad_center, self._opt_state
-        )
-        self._t += 1
-       
+
+        grad_center_norm, grad_stdev_norm = normalize_gradients(grad_center, grad_stdev)
+
         self.population, best_individual = update_population(
             fitness_scores=fitness_scores,
             center=self._center,
             stdev=self._stdev,
         )
 
-        norm_entropy = calculate_entropy(self._solutions)
+        #jax.debug.print('solutions shape in tell : {} ', self._solutions.shape)
+        self._subkey, norm_entropy = calculate_entropy_sampling(self._subkey, self._solutions)
 
+        ##norm_entropy = 0.0
+
+        best_score = jnp.array([self._best_score])
+
+        if self._t > 6000 and self._t < 10000 and self._t % 40 == 0:
+            self.belief_space = add_ind_topographic_ks(
+                self.belief_space, grad_center_norm, grad_stdev_norm, best_score, max_individuals=20
+            )
+        elif self._t >= 10000 and self._t % 40 == 0:
+            self.belief_space = update_topographic_ks(
+                self.belief_space, grad_center_norm, grad_stdev_norm, best_score, max_individuals=20
+            )
+
+        if self._t > 2000:
+            self.belief_space, ks_weights = update_normative_ks(
+                self.belief_space,
+                best_fitness=self._best_score,
+                avg_fitness=self._avg_score,
+                norm_entropy=norm_entropy,
+                pop_stats=pop_stats,
+            )
+
+            ##jax.debug.print('ks weights before update : {} ', ks_weights) 
+            min_index = jnp.argmin(ks_weights)
+            result = jnp.zeros(4)
+            ks_weights = result.at[min_index].set(1.0)
+
+        ##jax.debug.print('ks weights after update : {} ', ks_weights)
+        if self._t > 2000:
+            if min_index == 3 and self._t > 10000:
+                updated_grad_center = self.belief_space[4][3]
+                updated_grad_stdev = self.belief_space[4][4]
+
+                cluster_weights_center = self.belief_space[4][7]
+                cluster_weights_stdev = self.belief_space[4][8]
+
+                weighted_sum_center = jnp.sum(
+                    cluster_weights_center[:, None] * updated_grad_center, axis=0
+                )
+                weighted_sum_stdev = jnp.sum(
+                    cluster_weights_stdev[:, None] * updated_grad_stdev, axis=0
+                )
+                grad_center = weighted_sum_center * 0.7 + grad_center * 0.3
+                grad_stdev = weighted_sum_stdev * 0.7 + grad_stdev * 0.3
+        #elif min_index == 0:
+        #    grad_center = processed_activation_grads * 0.32 + grad_center * 0.68
+
+        self._opt_state = self._opt_update(
+            self._t // self._lr_decay_steps, -grad_center, self._opt_state
+        )
+        self._t += 1
+       
         self._center = self._get_params(self._opt_state)
         
         self._stdev = update_stdev(
@@ -281,17 +340,9 @@ class PGPE(NEAlgorithm):
                 self._center,
                 self._stdev,
                 best_individual[2],
-            )
+            ),
+            pop_stats,
         )
-
-        self.belief_space, _ = update_normative_ks(
-            self.belief_space,
-            best_fitness=self._best_score,
-            avg_fitness=self._avg_score,
-            norm_entropy=norm_entropy,
-            pop_stats=pop_stats,
-        )
-
 
     @property
     def best_params(self) -> jnp.ndarray:

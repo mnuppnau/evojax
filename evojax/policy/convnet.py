@@ -69,16 +69,18 @@ class Generator(nn.Module):
         x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
         x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
         x = nn.relu(x)
+        activations1 = x
         x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
         x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
         x = nn.relu(x)
+        activations2 = x
         x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
         x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
         x = nn.relu(x)
+        activations3 = x
         x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
         x = jnp.tanh(x)
-        return x
-
+        return x, activations1, activations2, activations3
 
 class Discriminator(nn.Module):
     features: int = 64
@@ -171,8 +173,10 @@ class GenPolicy(PolicyNetwork):
             #z_input, cat_one_hot = generate_latent_points(key, self.latent_dim, self.batch_size)
 
             #jax.debug.print('latent input : {} ', latent_input[:, -10:])
-            fake_data, vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
-        
+            (fake_data, act1, act2, act3), vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
+       
+            #act1, act2, act3 = activations
+
             (preds, disc_logits, mu, var), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
             leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
@@ -183,7 +187,7 @@ class GenPolicy(PolicyNetwork):
 
             flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
-            return fake_data, flat_batch_stats_gen, preds, disc_logits, mu, var, flat_batch_stats_disc
+            return fake_data, (act1,act2,act3), flat_batch_stats_gen, preds, disc_logits, mu, var, flat_batch_stats_disc
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -210,9 +214,9 @@ class GenPolicy(PolicyNetwork):
        
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, batch_stats_g, preds, disc_logits, mu, var, batch_stats_d = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
+        fake_data, activations, batch_stats_g, preds, disc_logits, mu, var, batch_stats_d = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
         
-        return fake_data, preds, disc_logits, mu, var, batch_stats_g, batch_stats_d, p_states
+        return fake_data, activations, preds, disc_logits, mu, var, batch_stats_g, batch_stats_d, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
@@ -268,7 +272,7 @@ class DiscPolicy(PolicyNetwork):
 
         def forward_fn_disc(params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, real_data, latent_input, cat_codes):
             
-            fake_data, vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
+            (fake_data, act1, act2, act3), vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
 
             (real_preds, _, _, _), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, real_data, mutable=['batch_stats'])
             

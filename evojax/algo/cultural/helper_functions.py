@@ -58,20 +58,38 @@ def least_frequent_cluster(arr):
     return least_frequent_element, first_index
 
 @jit
-def calculate_entropy(population):
-    # Normalize the population matrix
-    population_norm = population / jnp.linalg.norm(population, axis=1, keepdims=True)
-    
-    # Calculate the cosine similarity matrix
-    cosine_sim = jnp.dot(population_norm, population_norm.T)
-    
-    # Calculate the mean cosine similarity
+def calculate_entropy_sampling(key, population, num_samples=800):
+    n_models = population.shape[0]
+    pop_norm = population / jnp.linalg.norm(population, axis=1, keepdims=True)
+
+    key1, key2, key3 = random.split(key, 3)
+    idx1 = random.randint(key1, (num_samples,), 0, n_models)
+    idx2 = random.randint(key2, (num_samples,), 0, n_models)
+
+    vec1 = pop_norm[idx1]
+    vec2 = pop_norm[idx2]
+
+    cosine_sim = jnp.sum(vec1 * vec2, axis=1)
+
     mean_cosine_sim = jnp.mean(cosine_sim)
-    
-    # Convert cosine similarity to cosine distance
-    mean_cosine_distance = 1 - mean_cosine_sim
-    
-    return mean_cosine_distance
+    return key3, 1 - mean_cosine_sim 
+
+
+#@jit
+#def calculate_entropy(population):
+#    # Normalize the population matrix
+#    population_norm = population / jnp.linalg.norm(population, axis=1, keepdims=True)
+#    
+#    # Calculate the cosine similarity matrix
+#    cosine_sim = jnp.dot(population_norm, population_norm.T)
+#    
+#    # Calculate the mean cosine similarity
+#    mean_cosine_sim = jnp.mean(cosine_sim)
+#    
+#    # Convert cosine similarity to cosine distance
+#    mean_cosine_distance = 1 - mean_cosine_sim
+#    
+#    return mean_cosine_distance
 
 @jit
 def calculate_slopes(avg_fitness_window, best_fitness_window, norm_entropy_window):
