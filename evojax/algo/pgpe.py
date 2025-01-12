@@ -175,9 +175,9 @@ class PGPE(NEAlgorithm):
 
         if optimizer_config is None:
             optimizer_config = {}
-        decay_coef = optimizer_config.get("center_lr_decay_coef", 1.0)
+        decay_coef = optimizer_config.get("center_lr_decay_coef", 0.8)
         self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 1000
+            "center_lr_decay_steps", 20000
         )
 
         if optimizer == "adam":
@@ -239,14 +239,14 @@ class PGPE(NEAlgorithm):
         
         self._t += 1
         
+        #if (self._t % 100) < 90:  
         self._center = self._get_params(self._opt_state)
-        
         self._stdev = update_stdev(
-            stdev=self._stdev,
-            lr=self._stdev_lr,
-            max_change=self._stdev_max_change,
-            grad=grad_stdev,
-        )
+                stdev=self._stdev,
+                lr=self._stdev_lr,
+                max_change=self._stdev_max_change,
+                grad=grad_stdev,
+            )
 
     @property
     def best_params(self) -> jnp.ndarray:

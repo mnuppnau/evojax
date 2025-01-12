@@ -162,6 +162,8 @@ cython_debug/
 examples/data
 examples/log
 
+mnist-classification/
+
 # Benchmark residuals
 grid_*
 default

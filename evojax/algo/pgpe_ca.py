@@ -197,9 +197,9 @@ class PGPE(NEAlgorithm):
 
         if optimizer_config is None:
             optimizer_config = {}
-        decay_coef = optimizer_config.get("center_lr_decay_coef", 1.0)
+        decay_coef = optimizer_config.get("center_lr_decay_coef", 0.8)
         self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 1000
+            "center_lr_decay_steps", 20000
         )
 
         if optimizer == "adam":
@@ -236,7 +236,7 @@ class PGPE(NEAlgorithm):
             population_size=self.pop_size, param_size=abs(param_size), key=self._key)
 
     def ask(self) -> jnp.ndarray:
-        if self._t > 10000:
+        if self._t > 94000:
             center, stdev = get_updated_params(
                 self.belief_space, self._center, self._stdev, self._t
             )
@@ -254,18 +254,49 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness: Union[np.ndarray, jnp.ndarray], pop_stats: jnp.ndarray) -> None:
-        fitness_scores, self._best_score, self._avg_score = process_scores(fitness, self._solution_ranking)
-        grad_center, grad_stdev = compute_reinforce_update(
-            fitness_scores=fitness_scores,
-            scaled_noises=self._scaled_noises,
-            stdev=self._stdev,
-        )
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray],fitness_bin: Union[np.ndarray, jnp.ndarray],fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], pop_stats: jnp.ndarray) -> None:
+        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_adv, self._solution_ranking)
+        fitness_scores_bin, best_score_bin, avg_score_bin = process_scores(fitness_bin, self._solution_ranking)
+        fitness_scores_mi, self._best_score_mi, self._avg_score_mi = process_scores(fitness_mi, self._solution_ranking)
+        fitness_scores_con, _, _ = process_scores(fitness_con, self._solution_ranking)
 
-        grad_center_norm, grad_stdev_norm = normalize_gradients(grad_center, grad_stdev)
+        
+        #if self._t % 5 == 0:
+        #    grad_center, grad_stdev = compute_reinforce_update(
+        #        fitness_scores=fitness_scores_mi,
+        #        scaled_noises=self._scaled_noises,
+        #       stdev=self._stdev,
+        #    )
+        #else:
+        grad_center, grad_stdev = compute_reinforce_update(
+                fitness_scores=fitness_scores,
+                scaled_noises=self._scaled_noises,
+                stdev=self._stdev,
+            )
+        
+        #grad_center_bin, grad_stdev_bin = compute_reinforce_update(
+        #    fitness_scores=fitness_scores_bin,
+        #    scaled_noises=self._scaled_noises,
+        #    stdev=self._stdev,
+        #)
+
+
+        #grad_center_mi, grad_stdev_mi = compute_reinforce_update(
+        #    fitness_scores=fitness_scores_mi,
+        #    scaled_noises=self._scaled_noises,
+        #    stdev=self._stdev,
+        #)
+
+        #grad_center_con, grad_stdev_con = compute_reinforce_update(
+        #    fitness_scores=fitness_scores_con,
+        #    scaled_noises=self._scaled_noises,
+        #    stdev=self._stdev,
+        #)
+
+        ##grad_center_norm, grad_stdev_norm = normalize_gradients(grad_center, grad_stdev)
 
         self.population, best_individual = update_population(
-            fitness_scores=fitness_scores,
+            fitness_scores=fitness_scores_mi,
             center=self._center,
             stdev=self._stdev,
         )
@@ -276,21 +307,32 @@ class PGPE(NEAlgorithm):
         ##norm_entropy = 0.0
 
         best_score = jnp.array([self._best_score])
+        best_score_mi = jnp.array([self._best_score_mi])
 
-        if self._t > 6000 and self._t < 10000 and self._t % 40 == 0:
+        if self._t > 90000 and self._t < 94000 and self._t % 20 == 0:
+            #grad_center_topo = grad_center_mi*0.7 + grad_center_con*0.3
+            #grad_stdev_topo = grad_stdev_mi*0.7 + grad_stdev_con*0.3
+
+            #grad_center_topo_norm, grad_stdev_topo_norm = normalize_gradients(grad_center_topo, grad_stdev_topo)
             self.belief_space = add_ind_topographic_ks(
-                self.belief_space, grad_center_norm, grad_stdev_norm, best_score, max_individuals=20
+                self.belief_space, grad_center, grad_stdev, best_score_mi, max_individuals=20
             )
-        elif self._t >= 10000 and self._t % 40 == 0:
+        elif self._t >= 94000 and self._t % 2 == 0:
+            #grad_center_topo = grad_center_mi*0.7 + grad_center_con*0.3
+            #grad_stdev_topo = grad_stdev_mi*0.7 + grad_stdev_con*0.3
+
+            #grad_center_topo_norm, grad_stdev_topo_norm = normalize_gradients(grad_center_topo, grad_stdev_topo)
             self.belief_space = update_topographic_ks(
-                self.belief_space, grad_center_norm, grad_stdev_norm, best_score, max_individuals=20
+                self.belief_space, grad_center, grad_stdev, best_score_mi, max_individuals=20
             )
 
-        if self._t > 2000:
+        min_index = 0
+
+        if self._t > 90000:
             self.belief_space, ks_weights = update_normative_ks(
                 self.belief_space,
-                best_fitness=self._best_score,
-                avg_fitness=self._avg_score,
+                best_fitness=self._best_score_mi,
+                avg_fitness=self._avg_score_mi,
                 norm_entropy=norm_entropy,
                 pop_stats=pop_stats,
             )
@@ -301,8 +343,8 @@ class PGPE(NEAlgorithm):
             ks_weights = result.at[min_index].set(1.0)
 
         ##jax.debug.print('ks weights after update : {} ', ks_weights)
-        if self._t > 2000:
-            if min_index == 3 and self._t > 10000:
+        if self._t > 94000:
+            if min_index== 3:
                 updated_grad_center = self.belief_space[4][3]
                 updated_grad_stdev = self.belief_space[4][4]
 
@@ -317,22 +359,40 @@ class PGPE(NEAlgorithm):
                 )
                 grad_center = weighted_sum_center * 0.7 + grad_center * 0.3
                 grad_stdev = weighted_sum_stdev * 0.7 + grad_stdev * 0.3
-        #elif min_index == 0:
-        #    grad_center = processed_activation_grads * 0.32 + grad_center * 0.68
+        
+                #grad_center_norm, grad_stdev_norm = normalize_gradients(grad_center, grad_stdev)
+            #elif min_index == 0 and self._t % 5 == 0:
+            #     #    grad_center = processed_activation_grads * 0.32 + grad_center * 0.68
+            #    grad_center = grad_center_bin
+            #    grad_stdev = grad_stdev_bin
+            #elif min_index == 1 and self._t % 5 == 0:
+            #    grad_center = grad_center_bin
+            #    grad_stdev = grad_stdev_bin
 
+            #    #grad_center_norm, grad_stdev_norm = normalize_gradients(grad_center_sit, grad_stdev_sit)
+            #elif min_index == 2:
+            #    grad_center = grad_center*0.95 + grad_center_bin*0.05
+            #    grad_stdev = grad_stdev*0.95 + grad_stdev_bin*0.05
+
+            #    #grad_center_norm, grad_stdev_norm = normalize_gradients(grad_center_hist, grad_stdev_hist)
+            #else:
+            #    grad_center = grad_center
+            #    grad_stdev = grad_stdev
+
+        
         self._opt_state = self._opt_update(
-            self._t // self._lr_decay_steps, -grad_center, self._opt_state
+                self._t // self._lr_decay_steps, -grad_center, self._opt_state
         )
         self._t += 1
        
         self._center = self._get_params(self._opt_state)
         
         self._stdev = update_stdev(
-            stdev=self._stdev,
-            lr=self._stdev_lr,
-            max_change=self._stdev_max_change,
-            grad=grad_stdev,
-        )
+                stdev=self._stdev,
+                lr=self._stdev_lr,
+                max_change=self._stdev_max_change,
+                grad=grad_stdev,
+            )
 
         self.belief_space = update_knowledge_sources(
             self.belief_space,

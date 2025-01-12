@@ -15,10 +15,13 @@
 import logging
 from typing import Tuple
 
+import orbax.checkpoint as orbax_cp
+import optax
 import jax
 import jax.numpy as jnp
 from jax import random
 from flax import linen as nn
+from flax.training import train_state
 
 from jax.nn.initializers import normal as normal_init
 from evojax.policy.base import PolicyNetwork
@@ -53,6 +56,25 @@ def generate_latent_points(rng, latent_dim, n_samples):
     
       return z_input, cat_codes
 
+def create_train_state(rng, learning_rate=1e-3):
+    model = BinaryMNISTClassifier() 
+    dummy_input = jnp.ones((1, 784), jnp.float32)
+    params = model.init(rng, dummy_input)['params']
+
+    tx = optax.adam(learning_rate)
+
+    state = train_state.TrainState.create(
+        apply_fn=model.apply,
+        params=params,
+        tx=tx
+    )
+    return state, model
+
+def load_model(state, path):
+    checkpointer = orbax_cp.PyTreeCheckpointer()
+    restored_state = checkpointer.restore(path, item=state)
+    return restored_state
+
 class Generator(nn.Module):
     """ Generator CNN for MNIST """
 
@@ -81,6 +103,29 @@ class Generator(nn.Module):
         x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
         x = jnp.tanh(x)
         return x, activations1, activations2, activations3
+
+class BinaryMNISTClassifier(nn.Module):
+    """CNN for MNIST."""
+
+    @nn.compact
+    def __call__(self, x, training: bool = True): 
+        x = x.reshape((x.shape[0], 28, 28, 1))
+
+        x = nn.Conv(features=16, kernel_size=(3, 3))(x)
+        x = nn.relu(x)
+        x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
+
+        x = nn.Conv(features=32, kernel_size=(3, 3))(x)
+        x = nn.relu(x)
+        x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
+
+        x = x.reshape((x.shape[0], -1))  # flatten
+
+        x = nn.Dense(features=64)(x)
+        x = nn.relu(x)
+
+        x = nn.Dense(features=1)(x)
+        return jnp.squeeze(x)
 
 class Discriminator(nn.Module):
     features: int = 64
@@ -126,10 +171,18 @@ class GenPolicy(PolicyNetwork):
             self._logger = logger
 
         self.model_gen = Generator()
+       
+        #self.model_bin_classifier = BinaryMNISTClassifier()
         
         key = random.PRNGKey(0)
 
-        key, key_gen, key_disc, key_latent = random.split(key, 4)
+        key, key_gen, key_disc, key_bin = random.split(key, 4)
+
+        empty_state, self.model_bin_classifier = create_train_state(key_bin)
+        
+        loaded_state = load_model(empty_state, '/home/gh0st/projects/evojax/mnist-classification/models/state/')
+
+        self.variables_bin_classifier = {'params': loaded_state.params}
 
         #noise = random.normal(key_latent, (100, 64))
         #c = jnp.tile(jnp.arange(10), 10)
@@ -177,6 +230,8 @@ class GenPolicy(PolicyNetwork):
        
             #act1, act2, act3 = activations
 
+            bin_logits = self.model_bin_classifier.apply(self.variables_bin_classifier, fake_data)
+
             (preds, disc_logits, mu, var), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
             leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
@@ -187,7 +242,7 @@ class GenPolicy(PolicyNetwork):
 
             flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
-            return fake_data, (act1,act2,act3), flat_batch_stats_gen, preds, disc_logits, mu, var, flat_batch_stats_disc
+            return fake_data, (act1,act2,act3), flat_batch_stats_gen, bin_logits, preds, disc_logits, mu, var, flat_batch_stats_disc
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -214,9 +269,9 @@ class GenPolicy(PolicyNetwork):
        
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, activations, batch_stats_g, preds, disc_logits, mu, var, batch_stats_d = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
+        fake_data, activations, batch_stats_g, bin_logits, preds, disc_logits, mu, var, batch_stats_d = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
         
-        return fake_data, activations, preds, disc_logits, mu, var, batch_stats_g, batch_stats_d, p_states
+        return fake_data, activations, bin_logits, preds, disc_logits, mu, var, batch_stats_g, batch_stats_d, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):

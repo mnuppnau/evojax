@@ -34,13 +34,13 @@ from evojax import util
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--pop-size', type=int, default=64, help='NE population size.')
+        '--pop-size', type=int, default=128, help='NE population size.')
     parser.add_argument(
-        '--batch-size', type=int, default=32, help='Batch size for training.')
+        '--batch-size', type=int, default=256, help='Batch size for training.')
     parser.add_argument(
-        '--max-iter', type=int, default=90000, help='Max training iterations.')
+        '--max-iter', type=int, default=100000, help='Max training iterations.')
     parser.add_argument(
-        '--test-interval', type=int, default=100, help='Test interval.')
+        '--test-interval', type=int, default=1000, help='Test interval.')
     parser.add_argument(
         '--log-interval', type=int, default=100, help='Logging interval.')
     parser.add_argument(
@@ -48,13 +48,13 @@ def parse_args():
     parser.add_argument(
         '--center-lr-gen', type=float, default=0.0064, help='Center learning rate.')
     parser.add_argument(
-        '--std-lr-gen', type=float, default=0.089, help='Std learning rate.')
+        '--std-lr-gen', type=float, default=0.079, help='Std learning rate.')
     parser.add_argument(
         '--init-std-gen', type=float, default=0.039, help='Initial std.')
     parser.add_argument(
-        '--center-lr-disc', type=float, default=0.0074, help='Center learning rate.')
+        '--center-lr-disc', type=float, default=0.0064, help='Center learning rate.')
     parser.add_argument(
-        '--std-lr-disc', type=float, default=0.089, help='Std learning rate.')
+        '--std-lr-disc', type=float, default=0.079, help='Std learning rate.')
     parser.add_argument(
         '--init-std-disc', type=float, default=0.039, help='Initial std.')
     parser.add_argument(

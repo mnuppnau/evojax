@@ -191,25 +191,28 @@ class Trainer(object):
                 
                 pop_stats = None
                 
-                scores_disc, bds_disc, self.batch_stats_gen, self.batch_stats_disc, _, _ = self.sim_mgr_disc.eval_params(
+                scores_disc, _, _, _, bds_disc, self.batch_stats_gen, self.batch_stats_disc, _, _ = self.sim_mgr_disc.eval_params(
                     params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, generator=False, test=False
                 )
 
                 if isinstance(self.solver_disc, QualityDiversityMethod):
                     self.solver_disc.observe_bd(bds_disc)
                
-                self.solver_disc.tell(fitness=scores_disc)
+                #self.solver_disc.tell(fitness=scores_disc)
  
                 pop_stats = gather_pop_stats(belief_space)
 
-                scores_gen, bds_gen, self.batch_stats_gen, self.batch_stats_disc, _, pop_stats_updated = self.sim_mgr_gen.eval_params(
+                scores_gen_adv, scores_gen_bin, scores_gen_mi, scores_gen_con, bds_gen, self.batch_stats_gen, self.batch_stats_disc, _, pop_stats_updated = self.sim_mgr_gen.eval_params(
                 params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, generator=True, test=False
                 )
+
+                if np.array(scores_disc).max() < -0.03:
+                    self.solver_disc.tell(fitness=scores_disc)
 
                 if isinstance(self.solver_gen, QualityDiversityMethod):
                     self.solver_gen.observe_bd(bds_gen)
                 
-                self.solver_gen.tell(fitness=scores_gen, pop_stats=pop_stats_updated)
+                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_bin=scores_gen_bin, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, pop_stats=pop_stats_updated)
 
                 #self.fake_imgs = jnp.squeeze(self.fake_imgs, axis=0)
 
@@ -225,13 +228,13 @@ class Trainer(object):
                 #self.solver_disc.tell(fitness=scores_disc)
 
                 if i > 0 and i % self._log_interval == 0:
-                    scores_gen = np.array(scores_gen)
+                    scores_gen_adv = np.array(scores_gen_adv)
                     self._logger.info('Generator:')
                     self._logger.info(
                         'Iter={0}, size={1}, max={2:.4f}, '
                         'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
-                            i, scores_gen.size, scores_gen.max(), scores_gen.mean(),
-                            scores_gen.min(), scores_gen.std()))
+                            i, scores_gen_adv.size, scores_gen_adv.max(), scores_gen_adv.mean(),
+                            scores_gen_adv.min(), scores_gen_adv.std()))
                     scores_disc = np.array(scores_disc)
                     #self._logger.info('Discriminator:')
                     self._logger.info(
@@ -249,7 +252,7 @@ class Trainer(object):
 
                     #jax.debug.print('batch stats gen shape : {} ', self.batch_stats_gen.shape)
 
-                    test_scores, _, _, _, fake_imgs, _ = self.sim_mgr_gen.eval_params(
+                    test_scores, _, _, _, _, _, _, fake_imgs, _ = self.sim_mgr_gen.eval_params(
                         params_gen=best_params_gen, params_disc=best_params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, test=True, pop_stats=pop_stats_updated
                     )
                     test_scores = np.array(test_scores)

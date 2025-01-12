@@ -413,6 +413,7 @@ def get_center_guidance(belief_space, t, center):
 
     ks_weights = result.at[min_index].set(1)
 
+    #jax.debug.print('ks weights {} : ', ks_weights)
     decay_factor_history = 0.95
     decay_factor_situational = 0.9
 
@@ -425,7 +426,10 @@ def get_center_guidance(belief_space, t, center):
     situational_ks_center = belief_space[2][0]  # [:,:n]
     history_ks_center = belief_space[3][0]  # [:,:t]
 
-    topographic_ks_center = topographic_ks[4]
+    topographic_ks_centroid_centers = topographic_ks[4]
+
+    # average the topographic centroids of shape (num_clusters, param_size)
+    topographic_ks_center = jnp.mean(topographic_ks_centroid_centers, axis=0)
 
     situational_valid_columns_mask = jnp.arange(situational_ks_center.shape[1]) < t
 
@@ -464,7 +468,7 @@ def get_center_guidance(belief_space, t, center):
     domain_ks_center_weighted = domain_ks_center * ks_weights[0]
     situational_row_averages_weighted = situational_weighted_averages * ks_weights[1]
     history_row_averages_weighted = history_weighted_averages * ks_weights[2]
-    topographic_ks_center_weighted = center * ks_weights[3]
+    topographic_ks_center_weighted = topographic_ks_center * ks_weights[3]
 
     return (
         jnp.sum(
