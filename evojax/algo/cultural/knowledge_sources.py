@@ -23,22 +23,13 @@ from evojax.algo.cultural.helper_functions import (
 
 def initialize_domain_ks(param_size: int):
     return (
-        jnp.zeros(param_size),  # center
-        jnp.ones(param_size),  # stdev
-        jnp.array([0.0]),  # fitness_score
-        [
-            (
-                jnp.zeros((90, 28, 28, 8)),
-                jnp.zeros((90, 14, 14, 16)),
-                jnp.zeros((90, 784)),
-            )
-            for _ in range(40)
-        ],  # activations
-        (
-            jnp.zeros((90, 28, 28, 8)),
-            jnp.zeros((90, 14, 14, 16)),
-            jnp.zeros((90, 784)),
-        ),  # average activations
+        jnp.zeros((20,param_size)),  # parameter sets
+        jnp.zeros((20,param_size)),  # standard deviations
+        jnp.zeros((20,param_size)),  # scaled noises
+        jnp.array([jnp.zeros(20)]),  # fitness values, adversarial
+        jnp.array([jnp.zeros(20)]),  # fitness values, mutual information
+        jnp.array([jnp.zeros(20)]),  # Tchebyschev fitness values
+
     )
 
 
@@ -82,21 +73,24 @@ def initialize_topographic_ks(
 
 def initialize_normative_ks(param_size: int, pop_size: int = 64):
     return (
-        jnp.ones(40),  # rolling_avg_fitness
-        jnp.ones(40),  # rolling_best_fitness
-        jnp.ones(40),  # rolling_norm_entropy
-        jnp.array([0.0]),  # avg_fitness_slope
-        jnp.array([0.0]),  # best_fitness_slope
-        jnp.array([0.0]),  # norm_entropy_slope
-        jnp.array([0.0]),  # stagnation_slope
-        jnp.ones(60),  # rolling_best_fitness_variance
-        jnp.array([0.0]),  # best_fitness_variance_ratio
-        jnp.array([0.0]),  # mean_mi
-        jnp.array([0.0]),  # mean_g
-        jnp.array([0.0]),  # mean_con
-        jnp.array([0.000001]),  # var_mi
-        jnp.array([0.000001]),  # var_g
-        jnp.array([0.000001]),  # var_con
+        jnp.ones(40),  # rolling_best_fitness_adv
+        jnp.ones(40),  # rolling_best_fitness_mi
+        jnp.ones(40),  # rolling_avg_fitness_adv
+        jnp.ones(40),  # rolling_avg_fitness_mi
+        jnp.ones(40),  # rolling_rng_adv
+        jnp.ones(40),  # rolling_rng_mi
+        jnp.ones(40),  # rolling_best_tchebyschev_scores
+        jnp.ones(40),  # rolling_avg_tchebyscheff_scores
+        jnp.array([0.0]),  # best_fitness_adv
+        jnp.array([0.0]),  # best_fitness_mi
+        jnp.array([0.0]),  # best_fitness_slope_adv
+        jnp.array([0.0]),  # best_fitness_slope_mi
+        jnp.array([0.0]),  # avg_fitness_slope_adv
+        jnp.array([0.0]),  # avg_fitness_slope_mi
+        #jnp.array([0.0]),  # norm_entropy_slope
+        #jnp.array([0.0]),  # stagnation_slope
+        #jnp.ones(60),  # rolling_best_fitness_variance
+        #jnp.array([0.0]),  # best_fitness_variance_ratio
 
     )
 
@@ -301,93 +295,137 @@ def update_topographic_ks(
 
 @jax.jit
 def update_normative_ks(
-    belief_space, best_fitness, avg_fitness, norm_entropy, pop_stats
+    belief_space, best_fitness, best_fitness_mi, avg_fitness, avg_fitness_mi, best_adv, best_mi, rng_adv, rng_mi, best_tchebycheff_scores, avg_tchebycheff_scores
 ):
     normative_ks = belief_space[5]
 
     one_dim_avg_fitness = jnp.array([avg_fitness])
     one_dim_best_fitness = jnp.array([best_fitness])
-    one_dim_norm_entropy = jnp.array([norm_entropy])
+    one_dim_best_fitness_mi = jnp.array([best_fitness_mi])
+    one_dim_avg_fitness_mi = jnp.array([avg_fitness_mi])
+    one_dim_rng_adv = jnp.array([rng_adv])
+    one_dim_rng_mi = jnp.array([rng_mi])
 
-    updated_rolling_avg_fitness = jnp.concatenate(
-        [normative_ks[0], -one_dim_avg_fitness], axis=0
-    )[1:]
-
+    #one_dim_norm_entropy = jnp.array([norm_entropy])
+    
     updated_rolling_best_fitness = jnp.concatenate(
-        [normative_ks[1], -one_dim_best_fitness], axis=0
+        [normative_ks[0], -one_dim_best_fitness], axis=0
+    )[1:]
+  
+    updated_rolling_best_fitness_mi = jnp.concatenate(
+        [normative_ks[1], -one_dim_best_fitness_mi], axis=0
     )[1:]
     
-    updated_rolling_norm_entropy = jnp.concatenate(
-        [normative_ks[2], one_dim_norm_entropy], axis=0
+    updated_rolling_avg_fitness = jnp.concatenate(
+        [normative_ks[2], one_dim_avg_fitness], axis=0
     )[1:]
 
-    (
-        scaled_rolling_avg_fitness,
-        scaled_rolling_best_fitness,
-        scaled_rolling_norm_entropy,
-    ) = scale_arrays(
-        [
-            updated_rolling_avg_fitness,
-            updated_rolling_best_fitness,
-            updated_rolling_norm_entropy,
-        ]
-    )
-
-    scaled_rolling_best_fitness_variance = jnp.var(scaled_rolling_best_fitness)
-
-    one_dim_best_fitness_variance = jnp.array([scaled_rolling_best_fitness_variance])
-
-    updated_rolling_best_fitness_variance = jnp.concatenate(
-        [normative_ks[7], one_dim_best_fitness_variance], axis=0
+    updated_rolling_avg_fitness_mi = jnp.concatenate(
+        [normative_ks[3], one_dim_avg_fitness_mi], axis=0
     )[1:]
 
-    top_20_variances = jax.lax.top_k(updated_rolling_best_fitness_variance, 20)[0]
+    updated_rolling_rng_adv = jnp.concatenate(
+        [normative_ks[4], one_dim_rng_adv], axis=0
+    )[1:]
 
-    average_rolling_best_fitness_variance = jnp.mean(top_20_variances)
+    updated_rolling_rng_mi = jnp.concatenate(
+        [normative_ks[5], one_dim_rng_mi], axis=0
+    )[1:]
 
-    best_fitness_variance_ratio = (
-        scaled_rolling_best_fitness_variance / average_rolling_best_fitness_variance
-    )
+    updated_rolling_best_tchebyscheff_scores = jnp.concatenate(
+        [normative_ks[6], one_dim_best_fitness], axis=0
+    )[1:]
 
-    avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope = (
-        calculate_slopes(
-            avg_fitness_window=scaled_rolling_avg_fitness,
-            best_fitness_window=scaled_rolling_best_fitness,
-            norm_entropy_window=scaled_rolling_norm_entropy,
-        )
-    )
+    updated_rolling_avg_tchebyscheff_scores = jnp.concatenate(
+        [normative_ks[7], one_dim_avg_fitness], axis=0
+    )[1:]
+    #updated_rolling_norm_entropy = jnp.concatenate(
+    #    [normative_ks[2], one_dim_norm_entropy], axis=0
+    #)[1:]
 
-    ks_weights = update_ks_weights(
-        avg_fitness_slope,
-        best_fitness_slope,
-        norm_entropy_slope,
-        stagnation_slope,
-        best_fitness_variance_ratio,
-    )
+    #(
+    #    scaled_rolling_avg_fitness,
+    #    scaled_rolling_best_fitness,
+    #    scaled_rolling_norm_entropy,
+    #) = scale_arrays(
+    #    [
+    #        updated_rolling_avg_fitness,
+    #        updated_rolling_best_fitness,
+    #        updated_rolling_norm_entropy,
+    #    ]
+    #)
+
+    #scaled_rolling_best_fitness_variance = jnp.var(scaled_rolling_best_fitness)
+
+    #one_dim_best_fitness_variance = jnp.array([scaled_rolling_best_fitness_variance])
+
+    #updated_rolling_best_fitness_variance = jnp.concatenate(
+    #    [normative_ks[7], one_dim_best_fitness_variance], axis=0
+    #)[1:]
+
+    #top_20_variances = jax.lax.top_k(updated_rolling_best_fitness_variance, 20)[0]
+
+    #average_rolling_best_fitness_variance = jnp.mean(top_20_variances)
+
+    #best_fitness_variance_ratio = (
+    #    scaled_rolling_best_fitness_variance / average_rolling_best_fitness_variance
+    #)
+
+    #avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope = (
+    #    calculate_slopes(
+    #        avg_fitness_window=scaled_rolling_avg_fitness,
+    #        best_fitness_window=scaled_rolling_best_fitness,
+    #        norm_entropy_window=scaled_rolling_norm_entropy,
+    #    )
+    #)
+
+    #ks_weights = update_ks_weights(
+    #    avg_fitness_slope,
+    #    best_fitness_slope,
+    #    norm_entropy_slope,
+    #    stagnation_slope,
+    #    best_fitness_variance_ratio,
+    #)
 
     updated_normative_ks = (
-        updated_rolling_avg_fitness,
         updated_rolling_best_fitness,
-        updated_rolling_norm_entropy,
-        avg_fitness_slope,
-        best_fitness_slope,
-        norm_entropy_slope,
-        stagnation_slope,
-        updated_rolling_best_fitness_variance,
-        best_fitness_variance_ratio,
-        pop_stats[0],
-        pop_stats[1],
-        pop_stats[2],
-        pop_stats[3],
-        pop_stats[4],
-        pop_stats[5],
+        updated_rolling_best_fitness_mi,
+        updated_rolling_avg_fitness,
+        updated_rolling_avg_fitness_mi,
+        updated_rolling_rng_adv,
+        updated_rolling_rng_mi,
+        updated_rolling_best_tchebyscheff_scores,
+        updated_rolling_avg_tchebyscheff_scores,
+        best_adv,
+        best_mi,
+        normative_ks[10],
+        normative_ks[11],
+        normative_ks[12],
+        normative_ks[13],
     )
+    #updated_normative_ks = (
+    #    updated_rolling_avg_fitness,
+    #    updated_rolling_best_fitness,
+    #    updated_rolling_norm_entropy,
+    #    avg_fitness_slope,
+    #    best_fitness_slope,
+    #    norm_entropy_slope,
+    #    stagnation_slope,
+    #    updated_rolling_best_fitness_variance,
+    #    best_fitness_variance_ratio,
+    #    pop_stats[0],
+    #    pop_stats[1],
+    #    pop_stats[2],
+    #    pop_stats[3],
+    #    pop_stats[4],
+    #    pop_stats[5],
+    #)
 
     updated_belief_space_normative = (
         belief_space[:5] + (updated_normative_ks,)
     )
 
-    return updated_belief_space_normative, ks_weights
+    return updated_belief_space_normative#, ks_weights
 
 
 def get_center_guidance(belief_space, t, center):

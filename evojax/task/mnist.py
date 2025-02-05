@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import sys
+import optax
 import numpy as np
 from typing import Tuple
 
@@ -31,6 +32,7 @@ class State(TaskState):
     obs: jnp.ndarray
     latent: jnp.ndarray
     cat_codes: jnp.ndarray
+    #con_codes: jnp.ndarray
     labels: jnp.ndarray
     cat_codes: jnp.ndarray
     #fake_imgs: jnp.ndarray
@@ -57,7 +59,7 @@ def bce_logits(logit, label):
     return jnp.mean(batch_bce)
 
 def loss_mutual_information(code_cat, q_cat):
-    cat_loss = -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
+    cat_loss = jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
     mi_loss = cat_loss
     return mi_loss
 
@@ -74,6 +76,7 @@ class MNIST(VectorizedTask):
         self.obs_shape = tuple([28, 28, 1])
         self.act_shape = tuple([10, ])
 
+        self.batch_size = batch_size
         self.batch_stats_gen = batch_stats_gen 
         self.batch_stats_disc = batch_stats_disc
 
@@ -106,18 +109,23 @@ class MNIST(VectorizedTask):
         data = np.expand_dims(dataset.data.numpy() / 255., axis=-1)
         labels = dataset.targets.numpy()
 
-        def reset_fn(key, noise_key, cat_key):
+        def reset_fn(key, noise_key, cat_key, con_key):
             if test:
                 batch_data, batch_labels = data, labels
             else:
                 batch_data, batch_labels = sample_batch(
-                    key, data, labels, batch_size)
-                batch_latent = random.normal(noise_key, (batch_size, 64))
-                batch_cat = random.randint(cat_key, (batch_size), 0, 10)
-                batch_latent_concat = jnp.concatenate([batch_latent, jax.nn.one_hot(batch_cat, 10)], axis=-1)
+                    key, data, labels, self.batch_size)
+                batch_latent = random.normal(noise_key, (self.batch_size, 64))
+                batch_cat = random.randint(cat_key, (self.batch_size,), 0, 10)
+                
+                #batch_con = random.uniform(con_key, (batch_size, 2), minval=-1., maxval=1.)
+
+                #batch_latent_concat = jnp.concatenate([batch_latent, jax.nn.one_hot(batch_cat, 10)], axis=-1)
 
                 batch_cat_one_hot = jax.nn.one_hot(batch_cat, 10)
 
+                batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=-1)
+            
             return State(obs=batch_data, latent=batch_latent_concat, cat_codes=batch_cat_one_hot, labels=batch_labels, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc)
 
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
@@ -125,25 +133,35 @@ class MNIST(VectorizedTask):
         def step_fn(state, real_preds, action, q):
             # Compute the loss
             q_cat = nn.log_softmax(q, axis=-1)
-            loss_mi = loss_mutual_information(state.cat_codes, q_cat)
-            
-            real_loss = bce_logits(real_preds, jnp.ones((), dtype=jnp.int32))
-            fake_loss = bce_logits(action, jnp.zeros((), dtype=jnp.int32))
+            # cross entropy loss for Discrete Codes
+            loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
+            #loss_q_disc = optax.softmax_cross_entropy(state.cat_codes, q_cat).mean()
+            # Gaussian log likelihood loss for Continuous Codes
+            #loss_q_cont = -jnp.mean(jnp.sum(0.5 * jnp.log(2 * jnp.pi * var) + 0.5 * (state.con_codes - mu) ** 2 / var, axis=-1))
+
+            #real_loss = bce_logits(real_preds, jnp.ones((batch_size,1), dtype=jnp.float32))
+            #fake_loss = bce_logits(action, jnp.zeros((batch_size,1), dtype=jnp.float32))
            
+            real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones((batch_size,1), dtype=jnp.float32)).mean()
+            fake_loss = optax.sigmoid_binary_cross_entropy(action, jnp.zeros((batch_size,1), dtype=jnp.float32)).mean()
             # add weight to loss mi
             #loss_mi = 1.4 * loss_mi
             #jax.debug.print('loss mi disc : {}', loss_mi)
-            loss = (real_loss + fake_loss) #/ 2 + loss_mi
+            loss = (real_loss + fake_loss) #/ 2 + loss_q_disc
             #loss = real_loss + fake_loss
+
+            #loss_mi = loss_q_disc + loss_q_cont
+
+            reward_mi = loss_q_disc
 
             reward = -loss
 
-            return state, reward, jnp.ones(())
+            return state, reward, reward_mi, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
-    def reset(self, key: jnp.ndarray, noise_key: jnp.ndarray, cat_key: jnp.ndarray) -> State:
-        return self._reset_fn(key, noise_key, cat_key)
+    def reset(self, key: jnp.ndarray, noise_key: jnp.ndarray, cat_key: jnp.ndarray, con_key: jnp.ndarray) -> State:
+        return self._reset_fn(key, noise_key, cat_key, con_key)
 
     def step(self,
              state: TaskState,

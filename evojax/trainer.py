@@ -40,6 +40,7 @@ class Trainer(object):
                  policy_disc: PolicyNetwork,
                  solver_gen: NEAlgorithm,
                  solver_disc: NEAlgorithm,
+                 solver_q: NEAlgorithm,
                  train_task_gen: VectorizedTask,
                  test_task_disc: VectorizedTask,
                  train_task_disc: VectorizedTask,
@@ -108,6 +109,7 @@ class Trainer(object):
 
         self.solver_gen = solver_gen
         self.solver_disc = solver_disc
+        self.solver_q = solver_q
 
         self.sim_mgr_gen = SimManager(
             n_repeats=n_repeats,
@@ -142,12 +144,12 @@ class Trainer(object):
         def gather_pop_stats(belief_space):
 
             mean_mi = belief_space[5][9]
-            mean_g = belief_space[5][10]
-            mean_cond = belief_space[5][11]
+            mean_g = belief_space[5][9]
+            mean_cond = belief_space[5][9]
 
-            var_mi = belief_space[5][12]
-            var_g = belief_space[5][13]
-            var_cond = belief_space[5][14]
+            var_mi = belief_space[5][9]
+            var_g = belief_space[5][9]
+            var_cond = belief_space[5][9]
         
             return jnp.array([mean_mi, mean_g, mean_cond, var_mi, var_g, var_cond])
 
@@ -160,7 +162,7 @@ class Trainer(object):
             self._logger.info(
                 'Loaded model parameters from {}.'.format(self.model_dir))
         else:
-            params_gen, params_disc = None, None
+            params_gen, params_disc, params_q = None, None, None
 
         if demo_mode:
             if params is None:
@@ -177,42 +179,50 @@ class Trainer(object):
             self._logger.info(
                 'Start to train for {} iterations.'.format(self._max_iter))
 
-            if params_gen is not None and params_disc is not None:
+            if params_gen is not None and params_disc is not None and params_q is not None:
                 # Continue training from the breakpoint.
                 self.solver_gen.best_params = params_gen
                 self.solver_disc.best_params = params_disc
+                self.solver_q.best_params = params_q
 
-            best_score_gen, best_score_disc = -float('Inf'), -float('Inf')
+            best_score_gen, best_score_disc, best_score_q = -float('Inf'), -float('Inf'), -float('Inf')
 
             for i in range(self._max_iter):
                 # Generator step.
                 params_gen, belief_space = self.solver_gen.ask()
                 params_disc = self.solver_disc.ask()
-                
+                params_q = self.solver_q.ask() 
+
                 pop_stats = None
-                
-                scores_disc, _, _, _, bds_disc, self.batch_stats_gen, self.batch_stats_disc, _, _ = self.sim_mgr_disc.eval_params(
-                    params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, generator=False, test=False
+
+                disc_reset_keys = None
+                scores_disc, scores_mi, bds_disc, self.batch_stats_gen, self.batch_stats_disc, _, _, disc_reset_keys_cat_code = self.sim_mgr_disc.eval_params(
+                    params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys, generator=False, test=False
                 )
 
                 if isinstance(self.solver_disc, QualityDiversityMethod):
                     self.solver_disc.observe_bd(bds_disc)
                
-                #self.solver_disc.tell(fitness=scores_disc)
- 
+                self.solver_disc.tell(fitness=scores_disc)
+                self.solver_q.tell(fitness=scores_mi)
+
+                params_disc = self.solver_disc.ask()
+                params_q = self.solver_q.ask()
+
                 pop_stats = gather_pop_stats(belief_space)
 
-                scores_gen_adv, scores_gen_bin, scores_gen_mi, scores_gen_con, bds_gen, self.batch_stats_gen, self.batch_stats_disc, _, pop_stats_updated = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, generator=True, test=False
+                scores_gen_adv, scores_gen_mi, bds_gen, self.batch_stats_gen, self.batch_stats_disc, _, pop_stats_updated, _ = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys_cat_code, generator=True, test=False
                 )
 
-                if np.array(scores_disc).max() < -0.03:
-                    self.solver_disc.tell(fitness=scores_disc)
+                #if np.array(scores_disc).max() < -0.002:
+                #    self.solver_disc.tell(fitness=scores_disc)
 
+                #self.solver_q.tell(fitness=scores_mi)
                 if isinstance(self.solver_gen, QualityDiversityMethod):
                     self.solver_gen.observe_bd(bds_gen)
                 
-                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_bin=scores_gen_bin, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, pop_stats=pop_stats_updated)
+                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_bin=scores_gen_mi, fitness_mi=scores_gen_mi, fitness_con=scores_gen_mi, pop_stats=pop_stats_updated)
 
                 #self.fake_imgs = jnp.squeeze(self.fake_imgs, axis=0)
 
@@ -242,6 +252,13 @@ class Trainer(object):
                         'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
                             i, scores_disc.size, scores_disc.max(), scores_disc.mean(),
                             scores_disc.min(), scores_disc.std()))
+                    scores_mi = np.array(scores_mi)
+                    #self._logger.info('Mutual Information:')
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, scores_mi.size, scores_mi.max(), scores_mi.mean(),
+                            scores_mi.min(), scores_mi.std()))
                     #with open('/home/gh0st/Downloads/pgpe_main.csv', 'a') as file:
                         #file.write(f'Iter: {i}, Max: {scores.max()}, Mean: {scores.mean()}, Std: {scores.std()}, Min: {scores.min()}\n')
                     #self._log_scores_fn(i, scores, "train")
@@ -249,11 +266,11 @@ class Trainer(object):
                 if i > 0 and i % self._test_interval == 0:
                     best_params_gen = self.solver_gen.best_params
                     best_params_disc = self.solver_disc.best_params
-
+                    best_params_q = self.solver_q.best_params
                     #jax.debug.print('batch stats gen shape : {} ', self.batch_stats_gen.shape)
 
-                    test_scores, _, _, _, _, _, _, fake_imgs, _ = self.sim_mgr_gen.eval_params(
-                        params_gen=best_params_gen, params_disc=best_params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, test=True, pop_stats=pop_stats_updated
+                    test_scores, _, _, _, _, fake_imgs, _, _ = self.sim_mgr_gen.eval_params(
+                        params_gen=best_params_gen, params_disc=best_params_disc, params_q=best_params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, test=True, pop_stats=pop_stats_updated, disc_reset_keys_cat_code=disc_reset_keys_cat_code
                     )
                     test_scores = np.array(test_scores)
                     self._logger.info(
@@ -265,7 +282,7 @@ class Trainer(object):
                    
                     #jax.debug.print('test scores shape : {} ', test_scores.shape)
                     filename = f"iteration-{i}.npy"
-                    np.save(filename, fake_imgs[0, 0, :, :, :, :])
+                    np.save(filename, fake_imgs[:, 23, :, :, :, :])
 
                     #jax.debug.print('testing, fake_imgs shape : {} ', self.fake_imgs.shape)
 

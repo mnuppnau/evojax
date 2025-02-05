@@ -27,6 +27,7 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from jax import random
+from jax import lax
 
 from evojax.algo.cultural.belief_space import (
     initialize_belief_space,
@@ -50,6 +51,178 @@ except ModuleNotFoundError:
 from evojax.algo.base import NEAlgorithm
 from evojax.util import create_logger
 from evojax.algo.cultural.helper_functions import calculate_entropy_sampling
+
+@jax.jit
+def compute_weights_by_rank(rank: jnp.ndarray) -> jnp.ndarray:
+    """
+    Given rank[i] in {0, 1, 2, ..., R-1} for each solution i,
+    return harmonic weights so that rank=0 => 1.0, rank=1 => 0.5, etc.
+
+    :param rank:  shape (N,), integer array of ranks
+                  with 0-based indexing (0 = best front).
+    :return:      weights of shape (N,), float array
+    """
+    # Convert to float for division
+    rank_f = rank.astype(jnp.float32)
+    # Harmonic: 1/(rank+1)
+    weights = 1.0 / (rank_f + 1.0)
+    return weights
+
+@jax.jit
+def non_dominated_sort_lax(objectives: jnp.ndarray) -> jnp.ndarray:
+    """
+    Perform non-dominated sorting on a set of points in multi-objective space,
+    using jax.lax.while_loop for the iterative rank assignment.
+    
+    Args:
+        objectives (jnp.ndarray): Array of shape (N, M), where
+            N = number of points,
+            M = number of objectives (assume minimization).
+            
+    Returns:
+        jnp.ndarray of shape (N,):
+            The integer Pareto rank of each point (0 = best/front, 1 = next front, etc.).
+            Points that cannot be assigned (e.g., if a front is not found) remain at -1.
+    """
+    # --- Step A: Build the "dominates" matrix ---
+    # dominates[i, j] = True if point i dominates point j (all dims <=, at least one dim <)
+    less_equal = objectives[:, None, :] <= objectives[None, :, :]  # (N, N, M)
+    strictly_less = objectives[:, None, :] < objectives[None, :, :]  # (N, N, M)
+    all_le = jnp.all(less_equal, axis=-1)    # (N, N)
+    any_lt = jnp.any(strictly_less, axis=-1) # (N, N)
+    dominates = jnp.logical_and(all_le, any_lt)  # (N, N)
+    
+    # --- Step B: Iteratively identify Pareto layers using lax.while_loop ---
+    N = objectives.shape[0]
+    init_ranks = -1 * jnp.ones((N,), dtype=jnp.int32)  # -1 => unassigned
+    init_rank_idx = jnp.int32(0)
+    
+    # A boolean mask of which points are still unranked:
+    init_unranked = (init_ranks == -1)  # True/False array
+    init_done = False  # Will indicate if we should stop
+
+    # Pack into a "carry" tuple to pass between iterations
+    carry_init = (init_ranks, init_rank_idx, init_unranked, init_done)
+
+    def cond_fun(carry):
+        """Return True if we should continue; False if done."""
+        ranks, current_rank, unranked, done = carry
+        return jnp.logical_not(done)
+
+    def body_fun(carry):
+        """One iteration of finding the next front and assigning ranks."""
+        ranks, current_rank, unranked, done = carry
+        
+        # Check if there are still unranked points
+        still_unranked = jnp.any(unranked)  # bool
+        
+        # For each j, check if it is dominated by any unranked i:
+        # dominators[i, j] = (dominates[i, j] & unranked[i])
+        dominators = jnp.logical_and(dominates, unranked[:, None])
+        dominated_by_unranked = jnp.any(dominators, axis=0)
+        
+        # The next front = unranked points NOT dominated by any unranked
+        front_mask = jnp.logical_and(unranked, jnp.logical_not(dominated_by_unranked))
+        
+        # If front_mask is empty, we can't assign a next layer.
+        # So we set a "done" condition to break out of the loop.
+        no_front = jnp.logical_not(jnp.any(front_mask))
+        
+        # We stop if EITHER we have no unranked points left OR no new front is found
+        done_cond = jnp.logical_or(jnp.logical_not(still_unranked), no_front)
+        
+        # Tentative updates if we are NOT done:
+        new_ranks = jnp.where(front_mask, current_rank, ranks)
+        new_unranked = jnp.logical_and(unranked, jnp.logical_not(front_mask))
+        new_current_rank = current_rank + 1
+        new_done = jnp.logical_or(done, done_cond)  # once done => always done
+        
+        # If done_cond is True, keep the old values (no update):
+        new_ranks = jnp.where(done_cond, ranks, new_ranks)
+        new_unranked = jnp.where(done_cond, unranked, new_unranked)
+        new_current_rank = jnp.where(done_cond, current_rank, new_current_rank)
+        
+        return (new_ranks, new_current_rank, new_unranked, new_done)
+
+    # Run the while_loop
+    final_ranks, _, _, _ = lax.while_loop(cond_fun, body_fun, carry_init)
+    return final_ranks
+
+def compute_crowding_distance(objectives: jnp.ndarray,
+                              ranks: jnp.ndarray) -> jnp.ndarray:
+    """
+    Compute crowding distance for each point, given its objectives and Pareto rank.
+
+    Args:
+        objectives: shape (N, M) array of objective values (we assume minimization).
+        ranks: shape (N,) array of Pareto ranks, e.g. from `non_dominated_sort_lax`.
+
+    Returns:
+        cdist: shape (N,) array of crowding distances.
+    """
+    N, M = objectives.shape
+    # Initialize distances to 0
+    cdist = jnp.zeros((N,), dtype=jnp.float32)
+
+    # Gather all unique ranks (excluding -1 if present)
+    unique_ranks = jnp.unique(ranks[ranks >= 0])
+
+    # Because we’re going to do a loop in Python, cdist won't be fully JIT-traceable.
+    # This is typically acceptable for moderate N. For a purely JAX solution, you'd
+    # use lax.fori_loop or other transforms, which is more advanced.
+
+    for rank_val in unique_ranks:
+        # Indices belonging to this front
+        front_mask = (ranks == rank_val)
+        front_idx = jnp.where(front_mask)[0]  # the actual integer indices in this front
+        num_front = front_idx.size
+
+        # If there's fewer than 2 solutions in the front, those points get "infinite" distance
+        if num_front <= 2:
+            # Because we do it with Python, we can’t do an in-place update of cdist as in NumPy.
+            # We’ll just use `jnp.where` to assign inf to these points.
+            cdist = cdist.at[front_idx].set(jnp.inf)
+            continue
+
+        # For each objective dimension, compute partial crowding distances
+        front_obj = objectives[front_idx, :]  # shape (num_front, M)
+
+        # For each objective, sort the front by that objective
+        for m in range(M):
+            sorted_idx_within_front = jnp.argsort(front_obj[:, m], axis=0)
+            sorted_actual_idx = front_idx[sorted_idx_within_front]  # actual indices in original array
+
+            # Mark boundary solutions as infinite
+            cdist = cdist.at[sorted_actual_idx[0]].set(jnp.inf)
+            cdist = cdist.at[sorted_actual_idx[-1]].set(jnp.inf)
+
+            # If all boundary points are inf, only the interior points get calculations
+            # max_obj and min_obj in this front for dimension m
+            obj_min = jnp.min(front_obj[:, m])
+            obj_max = jnp.max(front_obj[:, m])
+            denom = obj_max - obj_min
+            # If denom is zero (all points same in this objective), increments are 0
+
+            def middle_update(i, cd):
+                # i indexes from 1..(num_front-2)
+                left_idx  = sorted_actual_idx[i-1]
+                right_idx = sorted_actual_idx[i+1]
+                mid_idx   = sorted_actual_idx[i]
+
+                # difference in objectives
+                diff = (objectives[right_idx, m] - objectives[left_idx, m]) / jnp.where(denom == 0., 1., denom)
+                return cd.at[mid_idx].add(diff)
+
+            # We can do a python loop or a small lax.fori_loop over i in [1..num_front-2]
+            # Here is a simple Python approach:
+            for i in range(1, num_front - 1):
+                cdist_val = (objectives[sorted_actual_idx[i+1], m]
+                             - objectives[sorted_actual_idx[i-1], m])
+                # Normalize by the range (avoid div by zero)
+                increment = cdist_val / (denom if denom != 0.0 else 1e-30)
+                cdist = cdist.at[sorted_actual_idx[i]].add(increment)
+
+    return cdist
 
 @partial(jax.jit, static_argnums=(1,))
 def process_scores(
@@ -197,9 +370,9 @@ class PGPE(NEAlgorithm):
 
         if optimizer_config is None:
             optimizer_config = {}
-        decay_coef = optimizer_config.get("center_lr_decay_coef", 0.8)
+        decay_coef = optimizer_config.get("center_lr_decay_coef", 1.0)
         self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 20000
+            "center_lr_decay_steps", 1000
         )
 
         if optimizer == "adam":
@@ -236,12 +409,12 @@ class PGPE(NEAlgorithm):
             population_size=self.pop_size, param_size=abs(param_size), key=self._key)
 
     def ask(self) -> jnp.ndarray:
-        if self._t > 94000:
-            center, stdev = get_updated_params(
-                self.belief_space, self._center, self._stdev, self._t
-            )
-        else:
-            center, stdev = self._center, self._stdev
+        #if self._t > 94000:
+        #    center, stdev = get_updated_params(
+        #        self.belief_space, self._center, self._stdev, self._t
+        #    )
+        #else:
+        center, stdev = self._center, self._stdev
 
         self._key, self._scaled_noises, self._solutions = ask_func(
             self._key,
@@ -255,11 +428,113 @@ class PGPE(NEAlgorithm):
 
 
     def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray],fitness_bin: Union[np.ndarray, jnp.ndarray],fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], pop_stats: jnp.ndarray) -> None:
-        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_adv, self._solution_ranking)
-        fitness_scores_bin, best_score_bin, avg_score_bin = process_scores(fitness_bin, self._solution_ranking)
-        fitness_scores_mi, self._best_score_mi, self._avg_score_mi = process_scores(fitness_mi, self._solution_ranking)
-        fitness_scores_con, _, _ = process_scores(fitness_con, self._solution_ranking)
+        #fitness_scores, self._best_score, self._avg_score = process_scores(fitness_adv, self._solution_ranking)
+        #fitness_scores_bin, best_score_bin, avg_score_bin = process_scores(fitness_bin, self._solution_ranking)
+        #fitness_scores_mi, self._best_score_mi, self._avg_score_mi = process_scores(fitness_mi, self._solution_ranking)
+        #fitness_scores_con, _, _ = process_scores(fitness_con, self._solution_ranking)
 
+        # add a dimension to the fitness scores so that (256,) becomes (256, 1)
+        fitness_adv = fitness_adv[:, None]
+        fitness_mi = fitness_mi[:, None]
+
+        objectives = jnp.hstack([abs(fitness_adv), abs(fitness_mi)])
+        ranks = non_dominated_sort_lax(objectives)
+        #jax.debug.print('ranks : {} ', ranks)
+        #get unique ranks
+        #unique_ranks = jnp.unique(ranks)
+        #crowding_distances = compute_crowding_distance_lax(objectives, ranks, unique_ranks)
+
+        # get indices of the top-ranked individuals, rank 0
+        #top_ranked_indices = jnp.where(ranks == 0)[0]
+
+        #cdist = compute_crowding_distance(objectives, ranks)
+
+        #order = jnp.lexsort((-cdist, ranks))
+        
+        #top_four_indices = order[:4]
+
+        #top_four_solutions = self._solutions[top_four_indices]
+        #top_four_scaled_noises = self._scaled_noises[top_four_indices]
+
+        #top_four_fitness_adv = fitness_adv[top_four_indices]
+        #top_four_fitness_mi = fitness_mi[top_four_indices]
+
+        best_fitness_adv = jnp.max(fitness_adv)
+        best_fitness_mi = jnp.max(fitness_mi)
+
+        best_prev_fitness_adv = self.belief_space[5][8]
+        best_prev_fitness_mi = self.belief_space[5][9]
+
+        best_prev_fitness_adv = best_prev_fitness_adv.item()
+        best_prev_fitness_mi = best_prev_fitness_mi.item()
+
+        #jax.debug.print('best fitness adv : {} ', best_fitness_adv)
+        #jax.debug.print('best prev fitness adv : {} ', best_prev_fitness_adv)
+
+        # take the max between the current and previous best
+        if self._t < 2:
+            best_adv = best_fitness_adv
+            best_mi = best_fitness_mi
+        else:
+            best_adv = jnp.max(jnp.array([best_fitness_adv, best_prev_fitness_adv]))
+            best_mi = jnp.max(jnp.array([best_fitness_mi, best_prev_fitness_mi]))
+
+        #jax.debug.print('best adv : {} ', best_adv)
+        #jax.debug.print('best mi : {} ', best_mi)
+
+        avg_fitness_adv = jnp.mean(fitness_adv)
+        avg_fitness_mi = jnp.mean(fitness_mi)
+
+        rng_adv = jnp.max(fitness_adv) - jnp.min(fitness_adv)
+        rng_mi = jnp.max(fitness_mi) - jnp.min(fitness_mi)
+
+       
+        #jax.debug.print('rng adv : {} ', rng_adv)
+        #jax.debug.print('rng mi : {} ', rng_mi)
+
+        norm_fitness_adv = (fitness_adv - best_adv) / rng_adv
+        norm_fitness_mi = (fitness_mi - best_mi) / rng_mi
+
+
+        #jax.debug.print('norm fitness adv avg : {} ', jnp.mean(norm_fitness_adv))
+        #jax.debug.print('norm fitness mi avg : {} ', jnp.mean(norm_fitness_mi))
+        if self._t < 20000:
+            tchebycheff_scores = jnp.minimum(norm_fitness_adv*0.6, norm_fitness_mi*0.4)
+        elif self._t >= 20000 and self._t < 21000:
+            tchebycheff_scores = norm_fitness_adv*0.55 + norm_fitness_mi*0.45
+        elif self._t >= 21000 and self._t < 30000:
+            tchebycheff_scores = norm_fitness_adv*0.7 + norm_fitness_mi*0.3
+        else:
+            tchebycheff_scores = norm_fitness_adv*0.5 + norm_fitness_mi*0.5
+        #tchebycheff_scores = norm_fitness_adv*0.3 + norm_fitness_mi*0.7
+        
+        best_tchebycheff_scores = jnp.max(tchebycheff_scores)
+        avg_tchebycheff_scores = jnp.mean(tchebycheff_scores)
+
+        self.belief_space = update_normative_ks(
+            self.belief_space,
+            best_fitness=best_fitness_adv,
+            best_fitness_mi=best_fitness_mi,
+            avg_fitness=avg_fitness_adv,
+            avg_fitness_mi=avg_fitness_mi,
+            best_adv=best_adv,
+            best_mi=best_mi,
+            rng_adv=rng_adv,
+            rng_mi=rng_mi,
+            best_tchebycheff_scores=best_tchebycheff_scores,
+            avg_tchebycheff_scores=avg_tchebycheff_scores,
+        )
+        #weights = compute_weights_by_rank(ranks)
+       
+        #fitness_adv_std = jnp.std(fitness_adv)
+        #fitness_adv_min = jnp.min(fitness_adv)
+
+        #jax.debug.print('weights : {} ', weights)
+        #weights = fitness_adv_std * weights + fitness_adv_min 
+
+        #jax.debug.print('weights : {} ', weights)
+        #weights = -weights
+        fitness_scores, self._best_score, self._avg_score = process_scores(tchebycheff_scores, False)
         
         #if self._t % 5 == 0:
         #    grad_center, grad_stdev = compute_reinforce_update(
@@ -268,97 +543,80 @@ class PGPE(NEAlgorithm):
         #       stdev=self._stdev,
         #    )
         #else:
+        
+
         grad_center, grad_stdev = compute_reinforce_update(
                 fitness_scores=fitness_scores,
                 scaled_noises=self._scaled_noises,
                 stdev=self._stdev,
             )
         
-        #grad_center_bin, grad_stdev_bin = compute_reinforce_update(
-        #    fitness_scores=fitness_scores_bin,
-        #    scaled_noises=self._scaled_noises,
-        #    stdev=self._stdev,
-        #)
-
-
-        #grad_center_mi, grad_stdev_mi = compute_reinforce_update(
-        #    fitness_scores=fitness_scores_mi,
-        #    scaled_noises=self._scaled_noises,
-        #    stdev=self._stdev,
-        #)
-
-        #grad_center_con, grad_stdev_con = compute_reinforce_update(
-        #    fitness_scores=fitness_scores_con,
-        #    scaled_noises=self._scaled_noises,
-        #    stdev=self._stdev,
-        #)
-
         ##grad_center_norm, grad_stdev_norm = normalize_gradients(grad_center, grad_stdev)
 
-        self.population, best_individual = update_population(
-            fitness_scores=fitness_scores_mi,
-            center=self._center,
-            stdev=self._stdev,
-        )
+        #self.population, best_individual = update_population(
+        #    fitness_scores=fitness_scores_mi,
+        #    center=self._center,
+        #    stdev=self._stdev,
+        #)
 
         #jax.debug.print('solutions shape in tell : {} ', self._solutions.shape)
-        self._subkey, norm_entropy = calculate_entropy_sampling(self._subkey, self._solutions)
+        #self._subkey, norm_entropy = calculate_entropy_sampling(self._subkey, self._solutions)
 
         ##norm_entropy = 0.0
 
-        best_score = jnp.array([self._best_score])
-        best_score_mi = jnp.array([self._best_score_mi])
+        #best_score = jnp.array([self._best_score])
+        #best_score_mi = jnp.array([self._best_score_mi])
 
-        if self._t > 90000 and self._t < 94000 and self._t % 20 == 0:
+        #if self._t > 90000 and self._t < 94000 and self._t % 20 == 0:
             #grad_center_topo = grad_center_mi*0.7 + grad_center_con*0.3
             #grad_stdev_topo = grad_stdev_mi*0.7 + grad_stdev_con*0.3
 
             #grad_center_topo_norm, grad_stdev_topo_norm = normalize_gradients(grad_center_topo, grad_stdev_topo)
-            self.belief_space = add_ind_topographic_ks(
-                self.belief_space, grad_center, grad_stdev, best_score_mi, max_individuals=20
-            )
-        elif self._t >= 94000 and self._t % 2 == 0:
+        #    self.belief_space = add_ind_topographic_ks(
+        #        self.belief_space, grad_center, grad_stdev, best_score_mi, max_individuals=20
+        #    )
+        #elif self._t >= 94000 and self._t % 2 == 0:
             #grad_center_topo = grad_center_mi*0.7 + grad_center_con*0.3
             #grad_stdev_topo = grad_stdev_mi*0.7 + grad_stdev_con*0.3
 
             #grad_center_topo_norm, grad_stdev_topo_norm = normalize_gradients(grad_center_topo, grad_stdev_topo)
-            self.belief_space = update_topographic_ks(
-                self.belief_space, grad_center, grad_stdev, best_score_mi, max_individuals=20
-            )
+       #     self.belief_space = update_topographic_ks(
+       #         self.belief_space, grad_center, grad_stdev, best_score_mi, max_individuals=20
+       #     )
 
-        min_index = 0
+        #min_index = 0
 
-        if self._t > 90000:
-            self.belief_space, ks_weights = update_normative_ks(
-                self.belief_space,
-                best_fitness=self._best_score_mi,
-                avg_fitness=self._avg_score_mi,
-                norm_entropy=norm_entropy,
-                pop_stats=pop_stats,
-            )
+        #if self._t > 90000:
+        #    self.belief_space, ks_weights = update_normative_ks(
+        #        self.belief_space,
+        #        best_fitness=self._best_score_mi,
+        #        avg_fitness=self._avg_score_mi,
+        #        norm_entropy=norm_entropy,
+        #        pop_stats=pop_stats,
+        #    )
 
-            ##jax.debug.print('ks weights before update : {} ', ks_weights) 
-            min_index = jnp.argmin(ks_weights)
-            result = jnp.zeros(4)
-            ks_weights = result.at[min_index].set(1.0)
+        #    ##jax.debug.print('ks weights before update : {} ', ks_weights) 
+        #    min_index = jnp.argmin(ks_weights)
+        #    result = jnp.zeros(4)
+        #    ks_weights = result.at[min_index].set(1.0)
 
-        ##jax.debug.print('ks weights after update : {} ', ks_weights)
-        if self._t > 94000:
-            if min_index== 3:
-                updated_grad_center = self.belief_space[4][3]
-                updated_grad_stdev = self.belief_space[4][4]
+        ###jax.debug.print('ks weights after update : {} ', ks_weights)
+        #if self._t > 94000:
+        #    if min_index== 3:
+        #        updated_grad_center = self.belief_space[4][3]
+        #        updated_grad_stdev = self.belief_space[4][4]
 
-                cluster_weights_center = self.belief_space[4][7]
-                cluster_weights_stdev = self.belief_space[4][8]
+        #        cluster_weights_center = self.belief_space[4][7]
+        #        cluster_weights_stdev = self.belief_space[4][8]
 
-                weighted_sum_center = jnp.sum(
-                    cluster_weights_center[:, None] * updated_grad_center, axis=0
-                )
-                weighted_sum_stdev = jnp.sum(
-                    cluster_weights_stdev[:, None] * updated_grad_stdev, axis=0
-                )
-                grad_center = weighted_sum_center * 0.7 + grad_center * 0.3
-                grad_stdev = weighted_sum_stdev * 0.7 + grad_stdev * 0.3
+        #        weighted_sum_center = jnp.sum(
+        #            cluster_weights_center[:, None] * updated_grad_center, axis=0
+        #        )
+        #        weighted_sum_stdev = jnp.sum(
+        #            cluster_weights_stdev[:, None] * updated_grad_stdev, axis=0
+        #        )
+        #        grad_center = weighted_sum_center * 0.7 + grad_center * 0.3
+        #        grad_stdev = weighted_sum_stdev * 0.7 + grad_stdev * 0.3
         
                 #grad_center_norm, grad_stdev_norm = normalize_gradients(grad_center, grad_stdev)
             #elif min_index == 0 and self._t % 5 == 0:
@@ -394,15 +652,15 @@ class PGPE(NEAlgorithm):
                 grad=grad_stdev,
             )
 
-        self.belief_space = update_knowledge_sources(
-            self.belief_space,
-            (
-                self._center,
-                self._stdev,
-                best_individual[2],
-            ),
-            pop_stats,
-        )
+        #self.belief_space = update_knowledge_sources(
+        #    self.belief_space,
+        #    (
+        #        self._center,
+        #        self._stdev,
+        #        best_individual[2],
+        #    ),
+        #    pop_stats,
+        #)
 
     @property
     def best_params(self) -> jnp.ndarray:

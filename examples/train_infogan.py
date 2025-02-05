@@ -34,11 +34,13 @@ from evojax import util
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        '--pop-size-gen', type=int, default=128, help='NE population size.')
+    parser.add_argument(
         '--pop-size', type=int, default=128, help='NE population size.')
     parser.add_argument(
-        '--batch-size', type=int, default=256, help='Batch size for training.')
+        '--batch-size', type=int, default=128, help='Batch size for training.')
     parser.add_argument(
-        '--max-iter', type=int, default=100000, help='Max training iterations.')
+        '--max-iter', type=int, default=120000, help='Max training iterations.')
     parser.add_argument(
         '--test-interval', type=int, default=1000, help='Test interval.')
     parser.add_argument(
@@ -46,15 +48,15 @@ def parse_args():
     parser.add_argument(
         '--seed', type=int, default=42, help='Random seed for training.')
     parser.add_argument(
-        '--center-lr-gen', type=float, default=0.0064, help='Center learning rate.')
+        '--center-lr-gen', type=float, default=0.006, help='Center learning rate.')
     parser.add_argument(
-        '--std-lr-gen', type=float, default=0.079, help='Std learning rate.')
+        '--std-lr-gen', type=float, default=0.089, help='Std learning rate.')
     parser.add_argument(
         '--init-std-gen', type=float, default=0.039, help='Initial std.')
     parser.add_argument(
-        '--center-lr-disc', type=float, default=0.0064, help='Center learning rate.')
+        '--center-lr-disc', type=float, default=0.006, help='Center learning rate.')
     parser.add_argument(
-        '--std-lr-disc', type=float, default=0.079, help='Std learning rate.')
+        '--std-lr-disc', type=float, default=0.089, help='Std learning rate.')
     parser.add_argument(
         '--init-std-disc', type=float, default=0.039, help='Initial std.')
     parser.add_argument(
@@ -81,6 +83,8 @@ def main(config):
     init_params_gen = policy_gen.init_params_gen
     flat_params_gen = policy_gen.flat_params_gen
     flat_params_disc = policy_disc.flat_params_disc
+    flat_params_q = policy_disc.flat_params_q
+
     train_task_mnist = MNIST(batch_size=config.batch_size, test=False)
     test_task_mnist = MNIST(batch_size=config.batch_size, test=True)
   
@@ -115,12 +119,25 @@ def main(config):
         seed=config.seed + 1,
     )
 
+    solver_q = PGPE(
+        pop_size=config.pop_size,
+        param_size=policy_disc.num_params_q,
+        init_params=flat_params_q,
+        optimizer='adam',
+        center_learning_rate=config.center_lr_disc,
+        stdev_learning_rate=config.std_lr_disc,
+        init_stdev=config.init_std_disc,
+        logger=logger,
+        seed=config.seed + 2,
+    )
+    
     # Train.
     trainer = Trainer(
         policy_gen=policy_gen,
         policy_disc=policy_disc,
         solver_gen=solver_gen,
         solver_disc=solver_disc,
+        solver_q=solver_q,
         train_task_gen=train_task_latent,
         test_task_gen=test_task_latent,
         train_task_disc=train_task_mnist,

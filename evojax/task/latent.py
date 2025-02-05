@@ -17,6 +17,7 @@ import numpy as np
 from typing import Tuple
 
 import jax
+import optax
 import jax.numpy as jnp
 from jax import random
 from flax import linen as nn
@@ -30,13 +31,6 @@ class State(TaskState):
     obs: jnp.ndarray
     #latent_input: jnp.ndarray
     cat_codes: jnp.ndarray
-    con_codes: jnp.ndarray
-    mean_g: jnp.ndarray
-    var_g: jnp.ndarray
-    mean_mi: jnp.ndarray
-    var_mi: jnp.ndarray
-    mean_con: jnp.ndarray
-    var_con: jnp.ndarray
     batch_stats_gen: any
     batch_stats_disc: any
 
@@ -50,7 +44,7 @@ def sample_batch(key: jnp.ndarray,
             jnp.take(cat_codes, indices=ix, axis=0))
 
 def loss_mutual_information(code_cat, q_cat):
-    cat_loss = -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
+    cat_loss = jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
     mi_loss = cat_loss
     return mi_loss
 
@@ -113,14 +107,16 @@ class Latent_Points(VectorizedTask):
             if test:
                 #batch_latent_concat, batch_cat_one_hot = sample_batch(
                 #    key, self.latent_inputs, self.cat_codes, 10) 
-                batch_latent = random.normal(noise_key, (30, self.noise_dim))
+                batch_latent = random.normal(noise_key, (self.batch_size, self.latent_dim))
                 
                 #structured_codes = jnp.tile(jnp.arange(10), 10)  # Shape: (100,)
                 #structured_codes = nn.one_hot(structured_codes, 10)
 
                 #jax.debug.print('structured codes : {}', structured_codes)
-                #c = jnp.ones((self.batch_size,)) + 5
-                c = jnp.tile(jnp.arange(10),3)
+                #c = jnp.ones((30,)) + 2
+                c = jnp.tile(jnp.arange(10),26)
+                # remove the last 4 elements to make it 256
+                c = c[:self.batch_size]
                 batch_cat_one_hot = jax.nn.one_hot(c, 10)
                 
                 # Step 2: Generate the remaining random one-hot encoded vectors
@@ -129,11 +125,13 @@ class Latent_Points(VectorizedTask):
                 #random_cat_codes = random.randint(cat_key, (num_random_samples,), 0, 10)
                 #random_cat_codes = nn.one_hot(random_cat_codes, 10)
 
+                #batch_cat = random.randint(cat_key, (self.batch_size,), 0, n_classes)
+                #batch_cat_one_hot = jax.nn.one_hot(batch_cat, n_classes)
                 # Step 3: Concatenate the structured and random codes
                 #batch_cat_one_hot = jnp.concatenate([structured_codes, random_cat_codes], axis=0)
-                batch_con = random.uniform(con_key, (30, self.n_con), minval=-1, maxval=1)
+                #batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-1, maxval=1)
 
-                batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot, batch_con], axis=1)
+                batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=-1)
 
 
                 #batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=1)
@@ -146,21 +144,27 @@ class Latent_Points(VectorizedTask):
                 #batch_latent, batch_cat = sample_batch(
                 #    key, self.latent_inputs, self.cat_codes, batch_size)
                 #latent_key, cat_key = random.split(self.key)
-                batch_latent = random.normal(noise_key, (self.batch_size, self.noise_dim))
+                batch_latent = random.normal(noise_key, (self.batch_size, self.latent_dim))
+                #jax.debug.print('batch latent : {}', batch_latent)
+
                 batch_cat = random.randint(cat_key, (self.batch_size,), 0, self.n_classes)
+                
                 #batch_latent_concat = jnp.concatenate([batch_latent, jax.nn.one_hot(batch_cat, self.n_classes)], axis=-1)
 
                 batch_cat_one_hot = jax.nn.one_hot(batch_cat, self.n_classes)
 
-                batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-1, maxval=1)
+                #jax.debug.print('batch cat one hot : {}', batch_cat_one_hot)
 
-                batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot, batch_con], axis=1)
+                #batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-1, maxval=1)
 
-            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, con_codes=batch_con, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, mean_g=self.mean_g, var_g=self.var_g, mean_mi=self.mean_mi, var_mi=self.var_mi, mean_con=self.mean_con, var_con=self.var_con)
+                #jax.debug.print('batch con : {}', batch_con)
+                batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=-1)
+
+            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc)
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
-        def step_fn(state, action, q, mu, logvar):
+        def step_fn(state, action, q):
            
             #jax.debug.print('q shape : {} ', q.shape)
             q_cat = jax.nn.log_softmax(q, axis=-1)
@@ -168,20 +172,31 @@ class Latent_Points(VectorizedTask):
             # print last 10 features of the latent input batch
             #jax.debug.print('latent input : {} ', state.obs[:,-10:]) 
             #jax.debug.print('cat codes : {} ', state.cat_codes)
-            loss_mi = loss_mutual_information(state.cat_codes, q_cat)
-            loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
-            loss_con = neg_log_likelihood_normal(state.con_codes, mu, logvar)
-            #loss_d = -jnp.mean(jnp.log(nn.sigmoid(action)))
             
+            loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
+            #loss_q_disc = optax.softmax_cross_entropy(state.cat_codes, q_cat).mean()
+            #loss_q_cont = jnp.mean(jnp.sum(0.5 * jnp.log(2 * jnp.pi * logvar) + 0.5 * (state.con_codes - mu) ** 2 / logvar, axis=-1))
+            
+            
+            #loss_mi = loss_q_disc + loss_q_cont
+
+            #loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
+            loss_g = optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,), dtype=jnp.int32)).mean()
+            ##loss_con = neg_log_likelihood_normal(state.con_codes, mu, logvar)
+            
+            loss_g = -loss_g#*0.1 + loss_q_disc# + loss_q_cont*0.005
+            #1jax.debug.print('loss g shape in latent: {} ', loss_g.shape)
+            #jax.debug.print('loss mi gen : {} ', loss_mi)
+            #jax.debug.print('loss con gen : {} ', loss_con)
+            
+            #loss_d = -jnp.mean(jnp.log(nn.sigmoid(action)))
+            #loss_g = loss_g + loss_mi*0.2 + loss_con*0.05
             #jax.debug.print('loss g: {} ', loss_g)
             #Add weight to loss_mi
             #loss_mi = 1.8 * loss_mi
             #loss = loss_mi + loss_g + loss_con
-            #jax.debug.print('loss d: {} ', loss_d)
-            #jax.debug.print('loss mi gen : {} ', loss_mi)
-            #jax.debug.print('loss con gen : {} ', loss_con)
             #reward = -loss # Minimize the loss
-            return state, loss_mi, loss_g, loss_con, jnp.ones(())
+            return state, loss_q_disc, loss_g, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
@@ -195,7 +210,5 @@ class Latent_Points(VectorizedTask):
     def step(self,
              state: TaskState,
              action: jnp.ndarray,
-             disc_logits: jnp.ndarray,
-             mu: jnp.ndarray,
-             var: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
-        return self._step_fn(state, action, disc_logits, mu, var)
+             disc_logits: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
+        return self._step_fn(state, action, disc_logits)
