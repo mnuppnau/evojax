@@ -1,4 +1,4 @@
-#!/home/gh0st/projects/evojax/venv-infogan-mnist/bin/python3
+#!/home/gh0st/projects/evojax/venv-infogan-mnist/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
