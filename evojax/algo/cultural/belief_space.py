@@ -14,17 +14,18 @@ from evojax.algo.cultural.knowledge_sources import (
 )
 
 def initialize_belief_space(
-    population_size: int,
     param_size: int,
+    population_size: int,
     key: int,
-    num_clusters: int = 4,
+    num_iterations: int = 40,
+    max_individuals: int = 6,
 ):
     belief_space = (
         jnp.array([population_size]),
         initialize_domain_ks(param_size),
         initialize_situational_ks(param_size),
-        initialize_history_ks(param_size, population_size),
-        initialize_topographic_ks(param_size, num_clusters),
+        initialize_history_ks(param_size,num_iterations),
+        initialize_topographic_ks(param_size, max_individuals),
         initialize_normative_ks(param_size)
     )
     return belief_space

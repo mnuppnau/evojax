@@ -8,79 +8,143 @@ import jax.lax
 import numpy as np
 import copy
 
+from jax import lax
 from evojax.algo.cultural.population_space import Individual
 from evojax.algo.cultural.helper_functions import (
-    kmeans,
+    non_dominated_sort_lax,
     calculate_slopes,
     update_ks_weights,
-    least_frequent_cluster,
-    scale_arrays,
-    compute_cluster_weights,
-    inverse_fitness_values,
-    average_activations,
 )
-
 
 def initialize_domain_ks(param_size: int):
     return (
         jnp.zeros((20,param_size)),  # parameter sets
         jnp.zeros((20,param_size)),  # standard deviations
         jnp.zeros((20,param_size)),  # scaled noises
-        jnp.array([jnp.zeros(20)]),  # fitness values, adversarial
-        jnp.array([jnp.zeros(20)]),  # fitness values, mutual information
-        jnp.array([jnp.zeros(20)]),  # Tchebyschev fitness values
-
+        jnp.full((20,),1000),  # fitness values, adversarial
+        jnp.full((20,),1000),  # fitness values, mutual information
+        jnp.full((20,),1000),  # Tchebyschev fitness values
+        jnp.full((20,),1000),  # entropy
     )
 
 
-def initialize_situational_ks(param_size: int, max_individuals: int = 100):
+def initialize_situational_ks(param_size: int):
     # Pre-allocate arrays with zeros for each individual property, given max_individuals
     # Assuming 'center' and 'stdev' are of size 'param_size'
     return (
-        jnp.zeros((param_size, max_individuals)),  # center
-        jnp.zeros((param_size, max_individuals)),  # stdev
-        jnp.zeros(max_individuals),  # fitness_score
+        jnp.zeros((1, param_size)),  # parameter set, best individual 
+        jnp.zeros((1, param_size)),  # stdev, best individual
+        jnp.zeros((1, param_size)),  # scaled noise, best individual
+        jnp.full((1,),1000),  # fitness values, adversarial
+        jnp.full((1,),1000),  # fitness values, mutual information
+        jnp.full((1,),1000),  # Tchebyschev fitness values
+        jnp.full((1,),1000),  # entropy
     )
 
 
 def initialize_history_ks(
-    param_size: int, decay_factor: float = 0.8, num_iterations: int = 200
+    param_size: int, num_iterations: int = 40
 ):
     # Pre-allocate arrays with zeros for each individual property, given num_iterations
     # Assuming 'center' and 'stdev' are of size 'param_size'
     return (
-        jnp.zeros((param_size, num_iterations)),  # center
-        jnp.zeros((param_size, num_iterations)),  # stdev
-        jnp.zeros(num_iterations),  # fitness_score
+        jnp.zeros((num_iterations, param_size)),  # best solutions
+        jnp.zeros((num_iterations, param_size)),  # stdevs
+        jnp.zeros((num_iterations, param_size)),  # scaled noises
+        jnp.full((num_iterations,),1000),  # fitness values, adversarial
+        jnp.full((num_iterations,),1000),  # fitness values, mutual information
+        jnp.full((num_iterations,),1000),  # Tchebyschev fitness values
+        jnp.full((num_iterations,),1000),
     )
 
 
 def initialize_topographic_ks(
-    param_size: int, num_clusters: int = 5, max_individuals: int = 100
+    param_size: int, max_individuals: int = 6
 ):
     return (
-        jnp.zeros((param_size, max_individuals)),  # center
-        jnp.zeros((param_size, max_individuals)),  # stdev
-        jnp.zeros(max_individuals),  # fitness_scores
-        jnp.zeros(num_clusters, param_size),  # cluster_centroids_center
-        jnp.zeros(num_clusters, param_size),  # cluster_centroids_stdev
-        jnp.zeros(max_individuals),  # cluster_assignments_center
-        jnp.zeros(max_individuals),  # cluster_assignments_stdev
-        jnp.zeros(max_individuals),  # cluster_weights_center
-        jnp.zeros(max_individuals),  # cluster_weights_stdev
+        jnp.zeros((max_individuals, param_size)),  # best solutions for 0
+        jnp.zeros((max_individuals, param_size)),  # best stdev for 0
+        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 0
+        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 0
+        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 0
+        jnp.full((max_individuals,),1000),  # q value for 0
+
+        jnp.zeros((max_individuals, param_size)), # best solutions for 1
+        jnp.zeros((max_individuals, param_size)),  # best stdev for 1
+        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 1
+        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 1
+        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 1
+        jnp.full((max_individuals,),1000),  # q value for 1
+
+        jnp.zeros((max_individuals, param_size)), # best solutions for 2
+        jnp.zeros((max_individuals, param_size)),  # best stdev for 2
+        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 2
+        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 2
+        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 2
+        jnp.full((max_individuals,),1000),  # q value for 2
+
+        jnp.zeros((max_individuals, param_size)), # best solutions for 3
+        jnp.zeros((max_individuals, param_size)),  # best stdev for 3
+        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 3
+        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 3
+        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 3
+        jnp.full((max_individuals,),1000),  # q value for 3
+
+        jnp.zeros((max_individuals, param_size)), # best solutions for 4
+        jnp.zeros((max_individuals, param_size)),  # best stdev for 4
+        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 4
+        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 4
+        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 4
+        jnp.full((max_individuals,),1000),  # q value for 4
+        
+        jnp.zeros((max_individuals, param_size)), # best solutions for 5
+        jnp.zeros((max_individuals, param_size)),  # best stdev for 5
+        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 5
+        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 5
+        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 5
+        jnp.full((max_individuals,),1000),  # q value for 5
+
+        jnp.zeros((max_individuals, param_size)), # best solutions for 6
+        jnp.zeros((max_individuals, param_size)),  # best stdev for 6
+        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 6
+        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 6
+        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 6
+        jnp.full((max_individuals,),1000),  # q value for 6
+
+        jnp.zeros((max_individuals, param_size)), # best solutions for 7
+        jnp.zeros((max_individuals, param_size)),  # best stdev for 7
+        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 7
+        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 7
+        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 7
+        jnp.full((max_individuals,),1000),  # q value for 7
+
+        jnp.zeros((max_individuals, param_size)), # best solutions for 8
+        jnp.zeros((max_individuals, param_size)),  # best stdev for 8
+        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 8
+        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 8
+        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 8
+        jnp.full((max_individuals,),1000),  # q value for 8
+
+        jnp.zeros((max_individuals, param_size)), # best solutions for 9
+        jnp.zeros((max_individuals, param_size)),  # best stdev for 9
+        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 9
+        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 9
+        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 9
+        jnp.full((max_individuals,),1000),  # q value for 9
+
     )
 
 
 def initialize_normative_ks(param_size: int, pop_size: int = 64):
     return (
-        jnp.ones(40),  # rolling_best_fitness_adv
-        jnp.ones(40),  # rolling_best_fitness_mi
-        jnp.ones(40),  # rolling_avg_fitness_adv
-        jnp.ones(40),  # rolling_avg_fitness_mi
-        jnp.ones(40),  # rolling_rng_adv
-        jnp.ones(40),  # rolling_rng_mi
-        jnp.ones(40),  # rolling_best_tchebyschev_scores
-        jnp.ones(40),  # rolling_avg_tchebyscheff_scores
+        jnp.ones(60),  # rolling_best_fitness_adv
+        jnp.ones(60),  # rolling_best_fitness_mi
+        jnp.ones(60),  # rolling_avg_fitness_adv
+        jnp.ones(60),  # rolling_avg_fitness_mi
+        jnp.ones(60),  # rolling_rng_adv
+        jnp.ones(60),  # rolling_rng_mi
+        jnp.ones(60),  # rolling_best_tchebyschev_scores
+        jnp.ones(60),  # rolling_avg_tchebyscheff_scores
         jnp.array([0.0]),  # best_fitness_adv
         jnp.array([0.0]),  # best_fitness_mi
         jnp.array([0.0]),  # best_fitness_slope_adv
@@ -94,204 +158,793 @@ def initialize_normative_ks(param_size: int, pop_size: int = 64):
 
     )
 
-
 @jax.jit
-def update_knowledge_sources(
-    belief_space, best_individual, pop_stats, num_iterations=200, max_individuals=100
+def update_domain_ks(
+    belief_space, best_solution, stdev, best_scaled_noise, best_fitness_adv, best_fitness_mi, best_fitness_tchebycheff, disc_logit
 ):
+    domain_ks = belief_space[1]
 
-    best_center, best_stdev, best_fitness_value = best_individual
+    best_solutions, stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, best_fitnesses_tchebycheff, entropies = domain_ks
 
-    #domain_activations = belief_space[1][3]
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
 
-    #domain_activations.insert(0, activations)
+    stdev = stdev.reshape(1, stdev.shape[0])
+    updated_stdevs = jnp.concatenate([stdevs, stdev], axis=0)
 
-    #domain_activations.pop()
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, best_scaled_noise], axis=0)
 
-    #avg_activations = average_activations(domain_activations)
+    updated_best_fitness_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, best_fitness_adv.flatten()], axis=0
+    )
+
+    updated_best_fitness_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, best_fitness_mi.flatten()], axis=0
+    )
+
+    updated_best_fitness_tchebycheff = jnp.concatenate(
+        [best_fitnesses_tchebycheff, best_fitness_tchebycheff.flatten()], axis=0
+    )
+
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)]) 
+
+    #entropy = entropy.reshape(1, -1)
+
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
+    )
+
+    objectives = jnp.stack([abs(updated_best_fitness_adversarial), abs(updated_best_fitness_mutual_info), abs(updated_entropy) ], axis=1)
+
+    ranks = non_dominated_sort_lax(objectives)
+
+    # Select the top 20 non-dominated solutions
+    num_selected = 20
+
+    order = jnp.lexsort((-updated_best_fitness_adversarial, ranks))
+
+    # select indices based on order
+    selected_indices = order[:num_selected]
+    #selected_indices = jnp.argsort(ranks)[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+
+    selected_stdevs = updated_stdevs[selected_indices]
+
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]    
+    selected_best_fitness_adversarial = updated_best_fitness_adversarial[selected_indices]
+
+    selected_best_fitness_mutual_info = updated_best_fitness_mutual_info[selected_indices]
+
+    selected_best_fitness_tchebycheff = updated_best_fitness_tchebycheff[selected_indices]
+
+    selected_entropy = updated_entropy[selected_indices]
 
     updated_domain_ks = (
-        best_center,
-        best_stdev,
-        best_fitness_value,
-        #domain_activations,
-        #avg_activations,
+        selected_best_solutions,
+        selected_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitness_adversarial,
+        selected_best_fitness_mutual_info,
+        selected_best_fitness_tchebycheff,
+        selected_entropy,
     )
 
     updated_belief_space_domain = (
         belief_space[:1] + (updated_domain_ks,) + belief_space[2:]
     )
+    return updated_belief_space_domain
 
-    sit_center, sit_stdev, sit_fitness_value = updated_belief_space_domain[2]
+@jax.jit
+def update_situational_ks(
+    belief_space, solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, tchebyscheff_score, disc_logit
+):
+    situational_ks = belief_space[2]
 
-    best_center_reshaped = best_center.reshape(-1, 1)
+    best_solution, best_stdev, best_scaled_noise, best_fitness_adversarial, best_fitness_mutual_info, best_fitness_tchebycheff, entropies = situational_ks
 
-    sit_updated_center = jnp.concatenate([best_center_reshaped, sit_center], axis=1)[
-        :, :max_individuals
-    ]
-    # print('updated center shape : ', updated_center.shape)
-    sit_updated_stdev = jnp.concatenate([best_stdev[:, None], sit_stdev], axis=1)[
-        :, :max_individuals
-    ]
+    updated_best_solution = jnp.concatenate([best_solution, solution], axis=0)
+    
+    stdev = stdev.reshape(1, stdev.shape[0])
 
-    sit_updated_fitness_value = jnp.concatenate(
-        [best_fitness_value, sit_fitness_value], axis=0
-    )[:max_individuals]
+    updated_best_stdev = jnp.concatenate([best_stdev, stdev], axis=0)
+    updated_best_scaled_noise = jnp.concatenate([best_scaled_noise, scaled_noise], axis=0)
+    
+    updated_best_fitness_adversarial = jnp.concatenate(
+        [best_fitness_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitness_mutual_info = jnp.concatenate(
+        [best_fitness_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+    updated_best_fitness_tchebycheff = jnp.concatenate(
+        [best_fitness_tchebycheff, tchebyscheff_score.flatten()], axis=0
+    )
 
-    # Construct the updated situational knowledge source
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
+    )
+
+    objectives = jnp.stack(
+        [abs(updated_best_fitness_adversarial), abs(updated_best_fitness_mutual_info), abs(updated_best_fitness_tchebycheff), updated_entropy ]
+    , axis=1)
+
+    ranks = non_dominated_sort_lax(objectives)
+
+    # Select the top solution
+
+    num_selected = 1
+
+    order = jnp.lexsort((-updated_best_fitness_adversarial, ranks))
+
+    selected_indices = order[:num_selected]
+    #selected_indices = jnp.argsort(ranks)[:num_selected]
+
+    selected_best_solution = updated_best_solution[selected_indices]
+    selected_best_stdev = updated_best_stdev[selected_indices]
+    selected_best_scaled_noise = updated_best_scaled_noise[selected_indices]
+    selected_best_fitness_adversarial = updated_best_fitness_adversarial[selected_indices]
+    selected_best_fitness_mutual_info = updated_best_fitness_mutual_info[selected_indices]
+    selected_best_fitness_tchebycheff = updated_best_fitness_tchebycheff[selected_indices]
+    selected_disc_logits = updated_entropy[selected_indices]
     updated_situational_ks = (
-        sit_updated_center,
-        sit_updated_stdev,
-        sit_updated_fitness_value,
+        selected_best_solution,
+        selected_best_stdev,
+        selected_best_scaled_noise,
+        selected_best_fitness_adversarial,
+        selected_best_fitness_mutual_info,
+        selected_best_fitness_tchebycheff,
+        selected_disc_logits,
     )
-
-    # Reconstruct the belief space with the updated situational KS
     updated_belief_space_situational = (
-        updated_belief_space_domain[:2]
-        + (updated_situational_ks,)
-        + updated_belief_space_domain[3:]
+        belief_space[:2] + (updated_situational_ks,) + belief_space[3:]
+    )
+    return updated_belief_space_situational
+
+@jax.jit
+def update_history_ks(
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, tchebyscheff_score, disc_logit
+):
+    history_ks = belief_space[3]
+
+    best_solutions, best_stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, best_fitnesses_tchebycheff, entropies = history_ks
+
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    
+    stdev = stdev.reshape(1, stdev.shape[0])
+
+    updated_best_stdevs = jnp.concatenate([best_stdevs, stdev], axis=0)
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, scaled_noise], axis=0)
+    
+    updated_best_fitnesses_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitnesses_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+    updated_best_fitnesses_tchebycheff = jnp.concatenate(
+        [best_fitnesses_tchebycheff, tchebyscheff_score.flatten()], axis=0
     )
 
-    hist_center, hist_stdev, hist_fitness_value = updated_belief_space_domain[3]
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
 
-    hist_updated_center = jnp.concatenate([best_center_reshaped, hist_center], axis=1)[
-        :, :num_iterations
-    ]
-    hist_updated_stdev = jnp.concatenate([best_stdev[:, None], hist_stdev], axis=1)[
-        :, :num_iterations
-    ]
+    #entropy = entropy.reshape(-1, 1)
+    
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
+    )
 
-    hist_updated_fitness_value = jnp.concatenate(
-        [best_fitness_value, hist_fitness_value], axis=0
-    )[:num_iterations]
+    objectives = jnp.stack(
+        [abs(updated_best_fitnesses_adversarial), abs(updated_best_fitnesses_mutual_info), updated_entropy]
+    , axis=1)
+    
+    ranks = non_dominated_sort_lax(objectives)
 
-    # Construct the updated situational knowledge source
+    # Select the top 40 non-dominated solutions
+    num_selected = 40
+
+    order = jnp.lexsort((-updated_best_fitnesses_adversarial, ranks))
+    selected_indices = order[:num_selected]
+    #selected_indices = jnp.argsort(ranks)[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+    selected_best_stdevs = updated_best_stdevs[selected_indices]
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]
+    selected_best_fitnesses_adversarial = updated_best_fitnesses_adversarial[selected_indices]
+    selected_best_fitnesses_mutual_info = updated_best_fitnesses_mutual_info[selected_indices]
+    selected_best_fitnesses_tchebycheff = updated_best_fitnesses_tchebycheff[selected_indices]
+    selected_disc_logits = updated_entropy[selected_indices]
+
     updated_history_ks = (
-        hist_updated_center,
-        hist_updated_stdev,
-        hist_updated_fitness_value,
+        selected_best_solutions,
+        selected_best_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitnesses_adversarial,
+        selected_best_fitnesses_mutual_info,
+        selected_best_fitnesses_tchebycheff,
+        selected_disc_logits,
     )
 
     updated_belief_space_history = (
-        updated_belief_space_situational[:3]
-        + (updated_history_ks,)
-        + updated_belief_space_situational[4:]
+        belief_space[:3] + (updated_history_ks,) + belief_space[4:]
     )
 
     return updated_belief_space_history
 
-
-def add_ind_topographic_ks(
-    belief_space, grad_center, grad_stdev, best_score, max_individuals=100
+@jax.jit
+def update_topographic_ks_idx_zero(
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
 ):
     topographic_ks = belief_space[4]
 
-    center, stdev, fitness = topographic_ks[:3]
+    best_solutions, best_stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, entropies = topographic_ks[0:6]
 
-    grad_center = grad_center.reshape(-1, 1)
-    grad_stdev = grad_stdev.reshape(-1, 1)
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    stdev = stdev.reshape(1, stdev.shape[0])
+    updated_best_stdevs = jnp.concatenate([best_stdevs, stdev], axis=0)
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, scaled_noise], axis=0)
+    updated_best_fitnesses_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitnesses_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+   
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
 
-    updated_center = jnp.concatenate([grad_center, center], axis=1)[:, :max_individuals]
-
-    updated_stdev = jnp.concatenate([grad_stdev, stdev], axis=1)[:, :max_individuals]
-
-    updated_fitness = jnp.concatenate([best_score, fitness], axis=0)[:max_individuals]
-
-    updated_topographic_ks = (
-        updated_center,
-        updated_stdev,
-        updated_fitness,
-        topographic_ks[3],
-        topographic_ks[4],
-        topographic_ks[5],
-        topographic_ks[6],
-        topographic_ks[7],
-        topographic_ks[8],
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
     )
 
-    centroids_center, assignments_center = kmeans(updated_center.T)
-    centroids_stdev, assignments_stdev = kmeans(updated_stdev.T)
+    objectives = jnp.stack([abs(updated_best_fitnesses_adversarial), abs(updated_best_fitnesses_mutual_info), updated_entropy], axis=1)
 
-    inv_fitness = inverse_fitness_values(updated_fitness)
+    ranks = non_dominated_sort_lax(objectives)
 
-    cluster_weights_center = compute_cluster_weights(assignments_center, inv_fitness)
+    order = jnp.lexsort((-updated_best_fitnesses_adversarial, ranks))
 
-    cluster_weights_stdev = compute_cluster_weights(assignments_stdev, inv_fitness)
+    num_selected = max_individuals
 
-    final_topographic_ks = (
-        updated_topographic_ks[0],
-        updated_topographic_ks[1],
-        updated_topographic_ks[2],
-        centroids_center,
-        centroids_stdev,
-        assignments_center,
-        assignments_stdev,
-        cluster_weights_center,
-        cluster_weights_stdev,
+    selected_indices = order[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+    selected_best_stdevs = updated_best_stdevs[selected_indices]
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]
+    selected_best_fitnesses_adversarial = updated_best_fitnesses_adversarial[selected_indices]
+    selected_best_fitnesses_mutual_info = updated_best_fitnesses_mutual_info[selected_indices]
+    selected_entropy = updated_entropy[selected_indices]
+
+    updated_topographic_ks_digit = (
+        selected_best_solutions,
+        selected_best_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitnesses_adversarial,
+        selected_best_fitnesses_mutual_info,
+        selected_entropy,
     )
-
+    
+  
+    updated_topographic_ks_zero = updated_topographic_ks_digit + topographic_ks[6:60]
+    
     updated_belief_space_topographic = (
-        belief_space[:4] + (final_topographic_ks,) + belief_space[5:]
+        belief_space[:4] + (updated_topographic_ks_zero,) + belief_space[5:] 
     )
-
+    
     return updated_belief_space_topographic
 
-
-def update_topographic_ks(
-    belief_space, grad_center, grad_stdev, best_score, max_individuals=100
+@jax.jit
+def update_topographic_ks_idx_one(
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
 ):
     topographic_ks = belief_space[4]
 
-    center, stdev, fitness = topographic_ks[:3]
+    best_solutions, best_stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, entropies = topographic_ks[6:12]
 
-    grad_center = grad_center.reshape(-1, 1)
-    grad_stdev = grad_stdev.reshape(-1, 1)
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    stdev = stdev.reshape(1, stdev.shape[0])
+    updated_best_stdevs = jnp.concatenate([best_stdevs, stdev], axis=0)
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, scaled_noise], axis=0)
+    updated_best_fitnesses_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitnesses_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+   
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
 
-    updated_center = jnp.concatenate([grad_center, center], axis=1)[:, :max_individuals]
-
-    updated_stdev = jnp.concatenate([grad_stdev, stdev], axis=1)[:, :max_individuals]
-
-    updated_fitness = jnp.concatenate([best_score, fitness], axis=0)[:max_individuals]
-
-    updated_topographic_ks = (
-        updated_center,
-        updated_stdev,
-        updated_fitness,
-        topographic_ks[3],
-        topographic_ks[4],
-        topographic_ks[5],
-        topographic_ks[6],
-        topographic_ks[7],
-        topographic_ks[8],
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
     )
 
-    centroids_center, assignments_center = kmeans(updated_center.T)
-    centroids_stdev, assignments_stdev = kmeans(updated_stdev.T)
+    objectives = jnp.stack([abs(updated_best_fitnesses_adversarial), abs(updated_best_fitnesses_mutual_info), updated_entropy], axis=1)
 
-    inv_fitness = inverse_fitness_values(updated_fitness)
+    ranks = non_dominated_sort_lax(objectives)
 
-    cluster_weights_center = compute_cluster_weights(assignments_center, inv_fitness)
+    order = jnp.lexsort((-updated_best_fitnesses_adversarial, ranks))
 
-    cluster_weights_stdev = compute_cluster_weights(assignments_stdev, inv_fitness)
+    num_selected = max_individuals
 
-    final_topographic_ks = (
-        updated_topographic_ks[0],
-        updated_topographic_ks[1],
-        updated_topographic_ks[2],
-        centroids_center,
-        centroids_stdev,
-        assignments_center,
-        assignments_stdev,
-        cluster_weights_center,
-        cluster_weights_stdev,
+    selected_indices = order[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+    selected_best_stdevs = updated_best_stdevs[selected_indices]
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]
+    selected_best_fitnesses_adversarial = updated_best_fitnesses_adversarial[selected_indices]
+    selected_best_fitnesses_mutual_info = updated_best_fitnesses_mutual_info[selected_indices]
+    selected_entropy = updated_entropy[selected_indices]
+
+    updated_topographic_ks_digit_one = (
+        selected_best_solutions,
+        selected_best_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitnesses_adversarial,
+        selected_best_fitnesses_mutual_info,
+        selected_entropy,
     )
-
+   
+    updated_topographic_ks_one = topographic_ks[:6] + updated_topographic_ks_digit_one + topographic_ks[12:60]
+    
     updated_belief_space_topographic = (
-        belief_space[:4] + (final_topographic_ks,) + belief_space[5:]
+        belief_space[:4] + (updated_topographic_ks_one,) + belief_space[5:]
     )
-
     return updated_belief_space_topographic
 
+@jax.jit
+def update_topographic_ks_idx_two(
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+):
+    topographic_ks = belief_space[4]
+
+    best_solutions, best_stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, entropies = topographic_ks[12:18]
+
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    stdev = stdev.reshape(1, stdev.shape[0])
+    updated_best_stdevs = jnp.concatenate([best_stdevs, stdev], axis=0)
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, scaled_noise], axis=0)
+    updated_best_fitnesses_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitnesses_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+   
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
+    )
+
+    objectives = jnp.stack([abs(updated_best_fitnesses_adversarial), abs(updated_best_fitnesses_mutual_info), updated_entropy], axis=1)
+
+    ranks = non_dominated_sort_lax(objectives)
+
+    order = jnp.lexsort((-updated_best_fitnesses_adversarial, ranks))
+
+    num_selected = max_individuals
+
+    selected_indices = order[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+    selected_best_stdevs = updated_best_stdevs[selected_indices]
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]
+    selected_best_fitnesses_adversarial = updated_best_fitnesses_adversarial[selected_indices]
+    selected_best_fitnesses_mutual_info = updated_best_fitnesses_mutual_info[selected_indices]
+    selected_entropy = updated_entropy[selected_indices]
+
+    updated_topographic_ks_digit_two = (
+        selected_best_solutions,
+        selected_best_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitnesses_adversarial,
+        selected_best_fitnesses_mutual_info,
+        selected_entropy,
+    )
+    
+    updated_topographic_ks_two = topographic_ks[:12] + updated_topographic_ks_digit_two + topographic_ks[18:60] 
+
+    updated_belief_space_topographic = (
+        belief_space[:4] + (updated_topographic_ks_two,) + belief_space[5:]
+    )
+    return updated_belief_space_topographic
+
+@jax.jit
+def update_topographic_ks_idx_three(
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+):
+    topographic_ks = belief_space[4]
+
+    best_solutions, best_stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, entropies = topographic_ks[18:24]
+
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    stdev = stdev.reshape(1, stdev.shape[0])
+    updated_best_stdevs = jnp.concatenate([best_stdevs, stdev], axis=0)
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, scaled_noise], axis=0)
+    updated_best_fitnesses_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitnesses_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+   
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
+    )
+
+    objectives = jnp.stack([abs(updated_best_fitnesses_adversarial), abs(updated_best_fitnesses_mutual_info), updated_entropy], axis=1)
+
+    ranks = non_dominated_sort_lax(objectives)
+
+    order = jnp.lexsort((-updated_best_fitnesses_adversarial, ranks))
+
+    num_selected = max_individuals
+
+    selected_indices = order[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+    selected_best_stdevs = updated_best_stdevs[selected_indices]
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]
+    selected_best_fitnesses_adversarial = updated_best_fitnesses_adversarial[selected_indices]
+    selected_best_fitnesses_mutual_info = updated_best_fitnesses_mutual_info[selected_indices]
+    selected_entropy = updated_entropy[selected_indices]
+
+    updated_topographic_ks_digit_three = (
+        selected_best_solutions,
+        selected_best_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitnesses_adversarial,
+        selected_best_fitnesses_mutual_info,
+        selected_entropy,
+    )
+  
+    updated_topographic_ks_three = topographic_ks[:18] + updated_topographic_ks_digit_three + topographic_ks[24:60]
+    updated_belief_space_topographic = (
+        belief_space[:4] + (updated_topographic_ks_three,) + belief_space[5:]
+    )
+    return updated_belief_space_topographic
+
+@jax.jit
+def update_topographic_ks_idx_four(
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+):
+    topographic_ks = belief_space[4]
+
+    best_solutions, best_stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, entropies = topographic_ks[24:30]
+
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    stdev = stdev.reshape(1, stdev.shape[0])
+    updated_best_stdevs = jnp.concatenate([best_stdevs, stdev], axis=0)
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, scaled_noise], axis=0)
+    updated_best_fitnesses_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitnesses_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+   
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
+    )
+
+    objectives = jnp.stack([abs(updated_best_fitnesses_adversarial), abs(updated_best_fitnesses_mutual_info), updated_entropy], axis=1)
+
+    ranks = non_dominated_sort_lax(objectives)
+
+    order = jnp.lexsort((-updated_best_fitnesses_adversarial, ranks))
+
+    num_selected = max_individuals
+
+    selected_indices = order[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+    selected_best_stdevs = updated_best_stdevs[selected_indices]
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]
+    selected_best_fitnesses_adversarial = updated_best_fitnesses_adversarial[selected_indices]
+    selected_best_fitnesses_mutual_info = updated_best_fitnesses_mutual_info[selected_indices]
+    selected_entropy = updated_entropy[selected_indices]
+
+    updated_topographic_ks_digit_four = (
+        selected_best_solutions,
+        selected_best_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitnesses_adversarial,
+        selected_best_fitnesses_mutual_info,
+        selected_entropy,
+    )
+   
+    updated_topographic_ks_four = topographic_ks[:24] + updated_topographic_ks_digit_four + topographic_ks[30:60]
+    updated_belief_space_topographic = (
+        belief_space[:4] + (updated_topographic_ks_four,) + belief_space[5:]
+    )
+    return updated_belief_space_topographic
+
+@jax.jit
+def update_topographic_ks_idx_five(
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+):
+    topographic_ks = belief_space[4]
+
+    best_solutions, best_stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, entropies = topographic_ks[30:36]
+
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    stdev = stdev.reshape(1, stdev.shape[0])
+    updated_best_stdevs = jnp.concatenate([best_stdevs, stdev], axis=0)
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, scaled_noise], axis=0)
+    updated_best_fitnesses_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitnesses_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+   
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
+    )
+
+    objectives = jnp.stack([abs(updated_best_fitnesses_adversarial), abs(updated_best_fitnesses_mutual_info), updated_entropy], axis=1)
+
+    ranks = non_dominated_sort_lax(objectives)
+
+    order = jnp.lexsort((-updated_best_fitnesses_adversarial, ranks))
+
+    num_selected = max_individuals
+
+    selected_indices = order[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+    selected_best_stdevs = updated_best_stdevs[selected_indices]
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]
+    selected_best_fitnesses_adversarial = updated_best_fitnesses_adversarial[selected_indices]
+    selected_best_fitnesses_mutual_info = updated_best_fitnesses_mutual_info[selected_indices]
+    selected_entropy = updated_entropy[selected_indices]
+
+    updated_topographic_ks_digit_five = (
+        selected_best_solutions,
+        selected_best_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitnesses_adversarial,
+        selected_best_fitnesses_mutual_info,
+        selected_entropy,
+    )
+   
+    updated_topographic_ks_five = topographic_ks[:30] + updated_topographic_ks_digit_five + topographic_ks[36:60]
+    updated_belief_space_topographic = (
+        belief_space[:4] + (updated_topographic_ks_five,) + belief_space[5:]
+    )
+    return updated_belief_space_topographic
+
+@jax.jit
+def update_topographic_ks_idx_six(
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+):
+    topographic_ks = belief_space[4]
+
+    best_solutions, best_stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, entropies = topographic_ks[36:42]
+
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    stdev = stdev.reshape(1, stdev.shape[0])
+    updated_best_stdevs = jnp.concatenate([best_stdevs, stdev], axis=0)
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, scaled_noise], axis=0)
+    updated_best_fitnesses_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitnesses_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+   
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
+    )
+
+    objectives = jnp.stack([abs(updated_best_fitnesses_adversarial), abs(updated_best_fitnesses_mutual_info), updated_entropy], axis=1)
+
+    ranks = non_dominated_sort_lax(objectives)
+
+    order = jnp.lexsort((-updated_best_fitnesses_adversarial, ranks))
+
+    num_selected = max_individuals
+
+    selected_indices = order[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+    selected_best_stdevs = updated_best_stdevs[selected_indices]
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]
+    selected_best_fitnesses_adversarial = updated_best_fitnesses_adversarial[selected_indices]
+    selected_best_fitnesses_mutual_info = updated_best_fitnesses_mutual_info[selected_indices]
+    selected_entropy = updated_entropy[selected_indices]
+
+    updated_topographic_ks_digit_six = (
+        selected_best_solutions,
+        selected_best_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitnesses_adversarial,
+        selected_best_fitnesses_mutual_info,
+        selected_entropy,
+    )
+   
+    updated_topographic_ks_six = topographic_ks[:36] + updated_topographic_ks_digit_six + topographic_ks[42:60]
+    updated_belief_space_topographic = (
+        belief_space[:4] + (updated_topographic_ks_six,) + belief_space[5:]
+    )
+    return updated_belief_space_topographic
+
+@jax.jit
+def update_topographic_ks_idx_seven(
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+):
+    topographic_ks = belief_space[4]
+
+    best_solutions, best_stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, entropies = topographic_ks[42:48]
+
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    stdev = stdev.reshape(1, stdev.shape[0])
+    updated_best_stdevs = jnp.concatenate([best_stdevs, stdev], axis=0)
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, scaled_noise], axis=0)
+    updated_best_fitnesses_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitnesses_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+   
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
+    )
+
+    objectives = jnp.stack([abs(updated_best_fitnesses_adversarial), abs(updated_best_fitnesses_mutual_info), updated_entropy], axis=1)
+
+    ranks = non_dominated_sort_lax(objectives)
+
+    order = jnp.lexsort((-updated_best_fitnesses_adversarial, ranks))
+
+    num_selected = max_individuals
+
+    selected_indices = order[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+    selected_best_stdevs = updated_best_stdevs[selected_indices]
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]
+    selected_best_fitnesses_adversarial = updated_best_fitnesses_adversarial[selected_indices]
+    selected_best_fitnesses_mutual_info = updated_best_fitnesses_mutual_info[selected_indices]
+    selected_entropy = updated_entropy[selected_indices]
+
+    updated_topographic_ks_digit_seven = (
+        selected_best_solutions,
+        selected_best_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitnesses_adversarial,
+        selected_best_fitnesses_mutual_info,
+        selected_entropy,
+    )
+   
+    updated_topographic_ks_seven = topographic_ks[:42] + updated_topographic_ks_digit_seven + topographic_ks[48:60]
+    updated_belief_space_topographic = (
+        belief_space[:4] + (updated_topographic_ks_seven,) + belief_space[5:]
+    )
+    return updated_belief_space_topographic
+
+@jax.jit
+def update_topographic_ks_idx_eight(
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+):
+    topographic_ks = belief_space[4]
+
+    best_solutions, best_stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, entropies = topographic_ks[48:54]
+
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    stdev = stdev.reshape(1, stdev.shape[0])
+    updated_best_stdevs = jnp.concatenate([best_stdevs, stdev], axis=0)
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, scaled_noise], axis=0)
+    updated_best_fitnesses_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitnesses_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+   
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
+    )
+
+    objectives = jnp.stack([abs(updated_best_fitnesses_adversarial), abs(updated_best_fitnesses_mutual_info), updated_entropy], axis=1)
+
+    ranks = non_dominated_sort_lax(objectives)
+
+    order = jnp.lexsort((-updated_best_fitnesses_adversarial, ranks))
+
+    num_selected = max_individuals
+
+    selected_indices = order[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+    selected_best_stdevs = updated_best_stdevs[selected_indices]
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]
+    selected_best_fitnesses_adversarial = updated_best_fitnesses_adversarial[selected_indices]
+    selected_best_fitnesses_mutual_info = updated_best_fitnesses_mutual_info[selected_indices]
+    selected_entropy = updated_entropy[selected_indices]
+
+    updated_topographic_ks_digit_eight = (
+        selected_best_solutions,
+        selected_best_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitnesses_adversarial,
+        selected_best_fitnesses_mutual_info,
+        selected_entropy,
+    )
+   
+    updated_topographic_ks_eight = topographic_ks[:48] + updated_topographic_ks_digit_eight + topographic_ks[54:60]
+    updated_belief_space_topographic = (
+        belief_space[:4] + (updated_topographic_ks_eight,) + belief_space[5:]
+    )
+    return updated_belief_space_topographic
+
+@jax.jit
+def update_topographic_ks_idx_nine(
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+):
+    topographic_ks = belief_space[4]
+
+    best_solutions, best_stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, entropies = topographic_ks[54:60]
+
+    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    stdev = stdev.reshape(1, stdev.shape[0])
+    updated_best_stdevs = jnp.concatenate([best_stdevs, stdev], axis=0)
+    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, scaled_noise], axis=0)
+    updated_best_fitnesses_adversarial = jnp.concatenate(
+        [best_fitnesses_adversarial, fitness_value_adv.flatten()], axis=0
+    )
+    updated_best_fitnesses_mutual_info = jnp.concatenate(
+        [best_fitnesses_mutual_info, fitness_value_mi.flatten()], axis=0
+    )
+   
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+
+    updated_entropy = jnp.concatenate(
+        [entropies, entropy], axis=0
+    )
+
+    objectives = jnp.stack([abs(updated_best_fitnesses_adversarial), abs(updated_best_fitnesses_mutual_info), updated_entropy], axis=1)
+
+    ranks = non_dominated_sort_lax(objectives)
+
+    order = jnp.lexsort((-updated_best_fitnesses_adversarial, ranks))
+
+    num_selected = max_individuals
+
+    selected_indices = order[:num_selected]
+
+    selected_best_solutions = updated_best_solutions[selected_indices]
+    selected_best_stdevs = updated_best_stdevs[selected_indices]
+    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]
+    selected_best_fitnesses_adversarial = updated_best_fitnesses_adversarial[selected_indices]
+    selected_best_fitnesses_mutual_info = updated_best_fitnesses_mutual_info[selected_indices]
+    selected_entropy = updated_entropy[selected_indices]
+
+    updated_topographic_ks_digit_nine = (
+        selected_best_solutions,
+        selected_best_stdevs,
+        selected_best_scaled_noises,
+        selected_best_fitnesses_adversarial,
+        selected_best_fitnesses_mutual_info,
+        selected_entropy,
+    )
+   
+    updated_topographic_ks_nine = topographic_ks[:54] + updated_topographic_ks_digit_nine
+    updated_belief_space_topographic = (
+        belief_space[:4] + (updated_topographic_ks_nine,) + belief_space[5:]
+    )
+    return updated_belief_space_topographic
 
 @jax.jit
 def update_normative_ks(
@@ -403,23 +1056,6 @@ def update_normative_ks(
         normative_ks[12],
         normative_ks[13],
     )
-    #updated_normative_ks = (
-    #    updated_rolling_avg_fitness,
-    #    updated_rolling_best_fitness,
-    #    updated_rolling_norm_entropy,
-    #    avg_fitness_slope,
-    #    best_fitness_slope,
-    #    norm_entropy_slope,
-    #    stagnation_slope,
-    #    updated_rolling_best_fitness_variance,
-    #    best_fitness_variance_ratio,
-    #    pop_stats[0],
-    #    pop_stats[1],
-    #    pop_stats[2],
-    #    pop_stats[3],
-    #    pop_stats[4],
-    #    pop_stats[5],
-    #)
 
     updated_belief_space_normative = (
         belief_space[:5] + (updated_normative_ks,)
@@ -607,168 +1243,3 @@ def get_stdev_guidance(belief_space, t, stdev):
         ]
         ), axis=0
     ))
-
-# class DomainKS:
-#    def __init__(self):
-#        self.individual = None
-#        self.assigned_indexes = None
-#        self.individual_count = 0
-#
-#    def __repr__(self):
-#        if self.individual is None:
-#            return "DomainKS(individual=None)"
-#        else:
-#            return f"DomainKS(individual={self.individual})"
-#
-#    def accept(self, individual: Individual):
-#        self.individual = individual
-#        self.individual_count = 1
-#
-#    def update(self):
-#        pass
-#
-#    def get_center_guidance(self) -> Optional[jnp.ndarray]:
-#        if self.individual is not None:
-#            #print("center guidance : ", self.individual.center)
-#            return self.individual.center
-#        return None
-#
-#    def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
-#        if self.individual is not None:
-#            return self.individual.stdev
-#        return None
-#
-#    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
-#        if self.individual is not None and index == 0:
-#            # Adjust the noise for the first index if an individual is available
-#            scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individual.noise_magnitude)
-#        return scaled_noises
-#
-# class SituationalKS:
-#    def __init__(self, max_individuals: int = 100):
-#        self.max_individuals = max_individuals
-#        self.individuals: List[Individual] = []
-#        self.assigned_indexes = None
-#        self.individual_count = 0
-#
-#    def __repr__(self):
-#        individual_str = "\n".join([str(individual) for individual in self.individuals])
-#        return f"SituationalKS(max_individuals={self.max_individuals}, individuals=[\n{individual_str}\n])"
-#
-#    def accept(self, individual: Individual):
-#        self.individuals.append(individual)
-#        #self.individual_count += 1
-#        self.individual_count = min(len(self.individuals), self.max_individuals)
-#        #print("individual count in situational KS : ", self.individual_count)
-#
-#    def update(self):
-#        self.individuals.sort(key=lambda x: x.fitness_score)
-#        self.individuals = self.individuals[:self.max_individuals]
-#
-#    def get_center_guidance(self) -> Optional[jnp.ndarray]:
-#        if self.individuals:
-#            centers = jnp.array([ind.center for ind in self.individuals])
-#            weights = jnp.array([1.0 - jnp.abs(ind.fitness_score) for ind in self.individuals])
-#            weights /= jnp.sum(weights)  # Normalize the weights
-#            return jnp.average(centers, weights=weights, axis=0)
-#        return None
-#
-#    def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
-#        if self.individuals:
-#            stdevs = jnp.array([ind.stdev for ind in self.individuals])
-#            weights = jnp.array([1.0 - jnp.abs(ind.fitness_score) for ind in self.individuals])
-#            weights /= jnp.sum(weights)  # Normalize the weights
-#            return jnp.average(stdevs, weights=weights, axis=0)
-#        return None
-#
-#    #def get_center_guidance(self) -> Optional[jnp.ndarray]:
-#    #    if self.individuals:
-#    #        centers = jnp.array([ind.center for ind in self.individuals])
-#    #        weights = jnp.array([jnp.absolute(ind.fitness_score) for ind in self.individuals])
-#    #        #print("average center : ", jnp.average(centers, weights=weights, axis=0))
-#    #        return jnp.average(centers, weights=weights, axis=0)
-#    #    return None
-#
-#    #def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
-#    #    if self.individuals:
-#    #        stdevs = jnp.array([ind.stdev for ind in self.individuals])
-#    #        weights = jnp.array([jnp.absolute(ind.fitness_score) for ind in self.individuals])
-#    #        return jnp.average(stdevs, weights=weights, axis=0)
-#    #    return None
-#
-#    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
-#        #if index < len(self.individuals):
-#            # Adjust the noise for the assigned index if an individual is available
-#        scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individuals[index_counter].noise_magnitude)
-#        return scaled_noises
-#
-# class HistoryKS:
-#    def __init__(self, decay_factor: float = 0.8):
-#        self.individuals: List[Individual] = []
-#        self.decay_factor = decay_factor
-#        self.assigned_indexes = None
-#        self.individual_count = 0
-#
-#    def __repr__(self):
-#        individual_str = "\n".join([str(individual) for individual in self.individuals])
-#        return f"HistoryKS(decay_factor={self.decay_factor}, individuals=[\n{individual_str}\n])"
-#
-#    def accept(self, individual: Individual):
-#        self.individuals.append(individual)
-#        self.individual_count = len(self.individuals)
-#        #self.individual_count += 1
-#        #print("individual count in history KS : ", self.individual_count)
-#
-#    def update(self):
-#        pass
-#
-#    def get_center_guidance(self) -> Optional[jnp.ndarray]:
-#        if self.individuals:
-#            centers = jnp.array([ind.center for ind in self.individuals])
-#            #weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
-#            #weights /= jnp.sum(weights)  # Normalize the weights
-#            weights = jnp.power(self.decay_factor, jnp.arange(len(self.individuals)))
-#            return jnp.average(centers, weights=weights, axis=0)
-#        return None
-#
-#    def get_stdev_guidance(self) -> Optional[jnp.ndarray]:
-#        if self.individuals:
-#            stdevs = jnp.array([ind.stdev for ind in self.individuals])
-#            #weights = jnp.array([1.0 - ind.fitness_score for ind in self.individuals])
-#            #weights /= jnp.sum(weights)  # Normalize the weights
-#            weights = jnp.power(self.decay_factor, jnp.arange(len(self.individuals)))
-#            return jnp.average(stdevs, weights=weights, axis=0)
-#        return None
-#
-#    def adjust_noise(self, scaled_noises: jnp.ndarray, index: int, index_counter: int) -> jnp.ndarray:
-#        #if index < len(self.individuals):
-#            # Adjust the noise for the assigned index if an individual is available
-#        scaled_noises = scaled_noises.at[index].set(scaled_noises[index] * self.individuals[index_counter].noise_magnitude)
-#        return scaled_noises
-#
-# class TopographicKS:
-#    def __init__(self, num_clusters: int = 5):
-#        self.center = None
-#        self.stdev = None
-#        self.num_clusters = num_clusters
-#
-#    def accept(self, individual: Dict):
-#        # Implement the acceptance criteria and update logic for TopographicKS
-#        pass
-#
-#    def update(self):
-#        # Implement the update logic for TopographicKS (e.g., clustering)
-#        pass
-#
-# class NormativeKS:
-#    def __init__(self):
-#        self.center = None
-#        self.stdev = None
-#
-#    def accept(self, individual: Dict):
-#        # Implement the acceptance criteria and update logic for NormativeKS
-#        pass
-#
-#    def update(self):
-#        # Implement the update logic for NormativeKS (e.g., updating statistics)
-#        pass

@@ -59,8 +59,8 @@ def bce_logits(logit, label):
     return jnp.mean(batch_bce)
 
 def loss_mutual_information(code_cat, q_cat):
-    cat_loss = jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
-    mi_loss = cat_loss
+    cat_loss = -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
+    mi_loss = -cat_loss
     return mi_loss
 
 class MNIST(VectorizedTask):
@@ -152,11 +152,13 @@ class MNIST(VectorizedTask):
 
             #loss_mi = loss_q_disc + loss_q_cont
 
+            reward_fake = -fake_loss
+
+            reward_real = -real_loss
+
             reward_mi = loss_q_disc
 
-            reward = -loss
-
-            return state, reward, reward_mi, jnp.ones(())
+            return state, reward_real, reward_fake, reward_mi, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
 

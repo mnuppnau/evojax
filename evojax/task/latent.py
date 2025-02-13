@@ -44,8 +44,8 @@ def sample_batch(key: jnp.ndarray,
             jnp.take(cat_codes, indices=ix, axis=0))
 
 def loss_mutual_information(code_cat, q_cat):
-    cat_loss = jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
-    mi_loss = cat_loss
+    cat_loss = -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
+    mi_loss = -cat_loss
     return mi_loss
 
 def bce_logits(logit, label):
@@ -168,7 +168,6 @@ class Latent_Points(VectorizedTask):
            
             #jax.debug.print('q shape : {} ', q.shape)
             q_cat = jax.nn.log_softmax(q, axis=-1)
-            #jax.debug.print('q cat shape : {} ', q_cat.shape)
             # print last 10 features of the latent input batch
             #jax.debug.print('latent input : {} ', state.obs[:,-10:]) 
             #jax.debug.print('cat codes : {} ', state.cat_codes)
@@ -177,13 +176,14 @@ class Latent_Points(VectorizedTask):
             #loss_q_disc = optax.softmax_cross_entropy(state.cat_codes, q_cat).mean()
             #loss_q_cont = jnp.mean(jnp.sum(0.5 * jnp.log(2 * jnp.pi * logvar) + 0.5 * (state.con_codes - mu) ** 2 / logvar, axis=-1))
             
-            
+            #loss_q_disc = -loss_q_disc
             #loss_mi = loss_q_disc + loss_q_cont
 
-            #loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
-            loss_g = optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,), dtype=jnp.int32)).mean()
+            loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
+            #loss_g = optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,), dtype=jnp.int32)).mean()
             ##loss_con = neg_log_likelihood_normal(state.con_codes, mu, logvar)
             
+            #loss_g = -jnp.mean(jnp.log(nn.sigmoid(action)))
             loss_g = -loss_g#*0.1 + loss_q_disc# + loss_q_cont*0.005
             #1jax.debug.print('loss g shape in latent: {} ', loss_g.shape)
             #jax.debug.print('loss mi gen : {} ', loss_mi)

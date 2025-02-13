@@ -17,6 +17,8 @@ from .base import QualityDiversityMethod
 from .cma_wrapper import CMA
 from .pgpe import PGPE
 from .pgpe_ca import PGPE as PGPE_CA
+from .pgpe_disc import PGPE_DISC
+from .pgpe_q import PGPE_Q
 from .ars import ARS
 from .simple_ga import SimpleGA
 from .open_es import OpenES
@@ -34,6 +36,8 @@ Strategies = {
     "CMA": CMA,
     "PGPE": PGPE,
     "PGPE_CA": PGPE_CA,
+    "PGPE_DISC": PGPE_DISC,
+    "PGPE_Q": PGPE_Q,
     "SimpleGA": SimpleGA,
     "ARS": ARS,
     "OpenES": OpenES,
@@ -54,6 +58,8 @@ __all__ = [
     "CMA",
     "PGPE",
     "PGPE_CA",
+    "PGPE_DISC",
+    "PGPE_Q",
     "ARS",
     "SimpleGA",
     "OpenES",

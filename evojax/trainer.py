@@ -196,14 +196,15 @@ class Trainer(object):
                 pop_stats = None
 
                 disc_reset_keys = None
-                scores_disc, scores_mi, bds_disc, self.batch_stats_gen, self.batch_stats_disc, _, _, disc_reset_keys_cat_code = self.sim_mgr_disc.eval_params(
+                scores_real, scores_fake, scores_mi, bds_disc, self.batch_stats_gen, self.batch_stats_disc, _, _, disc_reset_keys_cat_code = self.sim_mgr_disc.eval_params(
                     params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys, generator=False, test=False
                 )
 
+                #jax.debug.print('scores mi : {}', scores_mi)
                 if isinstance(self.solver_disc, QualityDiversityMethod):
                     self.solver_disc.observe_bd(bds_disc)
                
-                self.solver_disc.tell(fitness=scores_disc)
+                self.solver_disc.tell(fitness_real=scores_real, fitness_fake=scores_fake)
                 self.solver_q.tell(fitness=scores_mi)
 
                 params_disc = self.solver_disc.ask()
@@ -211,10 +212,11 @@ class Trainer(object):
 
                 pop_stats = gather_pop_stats(belief_space)
 
-                scores_gen_adv, scores_gen_mi, bds_gen, self.batch_stats_gen, self.batch_stats_disc, _, pop_stats_updated, _ = self.sim_mgr_gen.eval_params(
+                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, self.batch_stats_gen, self.batch_stats_disc, _, pop_stats_updated, _ = self.sim_mgr_gen.eval_params(
                 params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys_cat_code, generator=True, test=False
                 )
 
+                #self.solver_q.tell(fitness=scores_gen_mi)
                 #if np.array(scores_disc).max() < -0.002:
                 #    self.solver_disc.tell(fitness=scores_disc)
 
@@ -222,7 +224,7 @@ class Trainer(object):
                 if isinstance(self.solver_gen, QualityDiversityMethod):
                     self.solver_gen.observe_bd(bds_gen)
                 
-                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_bin=scores_gen_mi, fitness_mi=scores_gen_mi, fitness_con=scores_gen_mi, pop_stats=pop_stats_updated)
+                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_mi, disc_logits=disc_logits)
 
                 #self.fake_imgs = jnp.squeeze(self.fake_imgs, axis=0)
 
@@ -245,7 +247,7 @@ class Trainer(object):
                         'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
                             i, scores_gen_adv.size, scores_gen_adv.max(), scores_gen_adv.mean(),
                             scores_gen_adv.min(), scores_gen_adv.std()))
-                    scores_disc = np.array(scores_disc)
+                    scores_disc = np.array(scores_real+scores_fake)
                     #self._logger.info('Discriminator:')
                     self._logger.info(
                         'Iter={0}, size={1}, max={2:.4f}, '
@@ -269,7 +271,7 @@ class Trainer(object):
                     best_params_q = self.solver_q.best_params
                     #jax.debug.print('batch stats gen shape : {} ', self.batch_stats_gen.shape)
 
-                    test_scores, _, _, _, _, fake_imgs, _, _ = self.sim_mgr_gen.eval_params(
+                    test_scores, _, _, _, _, _, fake_imgs, _, _ = self.sim_mgr_gen.eval_params(
                         params_gen=best_params_gen, params_disc=best_params_disc, params_q=best_params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, test=True, pop_stats=pop_stats_updated, disc_reset_keys_cat_code=disc_reset_keys_cat_code
                     )
                     test_scores = np.array(test_scores)
