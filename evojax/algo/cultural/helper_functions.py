@@ -112,9 +112,9 @@ def calculate_entropy_sampling(key, population, num_samples=800):
 
 
 @jit
-def calculate_slopes(avg_fitness_window, best_fitness_window, norm_entropy_window):
-    avg_fitness_slope = calculate_slope(avg_fitness_window)
+def calculate_slopes(best_fitness_window, best_fitness_window_mi, norm_entropy_window):
     best_fitness_slope = calculate_slope(best_fitness_window)
+    best_fitness_slope_mi = calculate_slope(best_fitness_window_mi)
     norm_entropy_slope = calculate_slope(norm_entropy_window)
     
     # Normalize the slope values
@@ -125,10 +125,10 @@ def calculate_slopes(avg_fitness_window, best_fitness_window, norm_entropy_windo
     #best_fitness_slope = normalized_slopes[1]
     #norm_entropy_slope = normalized_slopes[2]
 
-    #stagnation_slope = calculate_stagnation_slope(best_fitness_slope)
-    #stagnation_slope = -stagnation_slope
-    stagnation_slope = calculate_slope(best_fitness_window)
-    return avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope
+    stagnation_slope = calculate_stagnation_slope(best_fitness_slope)
+    stagnation_slope = -stagnation_slope
+    #stagnation_slope = calculate_slope(best_fitness_window)
+    return best_fitness_slope, best_fitness_slope_mi, norm_entropy_slope, stagnation_slope
 
 @jit
 def scale_arrays(arrays, ref_index=2):
@@ -175,11 +175,11 @@ def calculate_stagnation_slope(slope, flatness_threshold=0.000000078, max_scale=
     return scale
 
 @jit
-def update_ks_weights(avg_fitness_slope, best_fitness_slope, norm_entropy_slope, stagnation_slope, best_fitness_variance_ratio):
+def update_ks_weights(best_fitness_slope, best_fitness_slope_mi, norm_entropy_slope, stagnation_slope, best_fitness_variance_ratio):
     domain_weight = best_fitness_slope
-    situational_weight = avg_fitness_slope
-    history_weight = norm_entropy_slope
-    topographic_weight = stagnation_slope
+    situational_weight = best_fitness_slope
+    history_weight = best_fitness_slope_mi
+    topographic_weight = norm_entropy_slope
 
     total_weight = jnp.abs(domain_weight) + jnp.abs(situational_weight) + jnp.abs(history_weight) + jnp.abs(topographic_weight)
     domain_weight /= total_weight
