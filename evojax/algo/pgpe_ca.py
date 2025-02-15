@@ -180,6 +180,29 @@ def ask_func(
     ).reshape(-1, solution_size)
     return next_key, scaled_noises, solutions
 
+# create an ask_func that takes in two sets of parameters and concatenates the two solutions
+@partial(jax.jit, static_argnums=(3, 4, 7))
+def ask_func_concat(
+    key: jnp.ndarray,
+    stdev: jnp.ndarray,
+    center: jnp.ndarray,
+    num_directions: int,
+    solution_size: int,
+    stdev_ca: jnp.ndarray,
+    center_ca: jnp.ndarray,
+    num_directions_ca: int,
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """A function that samples a population of parameters from Gaussian."""
+
+    next_key, key = random.split(key)
+    scaled_noises = jnp.vstack([
+        random.normal(key, [num_directions - num_directions_ca, solution_size]) * stdev, 
+        random.normal(key, [num_directions_ca, solution_size]) * stdev_ca
+    ])
+    solutions = jnp.hstack(
+        [center + scaled_noises, center - scaled_noises]
+    ).reshape(-1, solution_size)
+    return next_key, scaled_noises, solutions
 
 class PGPE(NEAlgorithm):
     """Policy Gradient with Parameter-based Exploration (PGPE) algorithm.
@@ -285,6 +308,7 @@ class PGPE(NEAlgorithm):
         self._opt_update = jax.jit(opt_update)
         self._get_params = jax.jit(get_params)
 
+        self._arr = jnp.arange(10)
         self._key = random.PRNGKey(seed=seed)
         self._key, self._subkey = random.split(self._key)
         self._solutions = None
@@ -294,20 +318,44 @@ class PGPE(NEAlgorithm):
             population_size=self.pop_size, param_size=abs(param_size), key=self._key)
 
     def ask(self) -> jnp.ndarray:
-        #if self._t > 94000:
-        #    center, stdev = get_updated_params(
-        #        self.belief_space, self._center, self._stdev, self._t
-        #    )
-        #else:
-        center, stdev = self._center, self._stdev
+        if self._t > 400:
+            center_ca, stdev_ca, min_index = get_updated_params(
+                self.belief_space, self._center, self._stdev, self._t
+            )
+            if min_index == 0:
+                stdev_ca = stdev_ca * 0.2
+            elif min_index == 1:
+                stdev_ca = stdev_ca * 0.1
+                num_directions_ca = 24
+            elif min_index == 2:
+                stdev_ca = stdev_ca * 0.2
+                num_directions_ca = 12
+            elif min_index == 3:
+                stdev_ca = stdev_ca * 0.2
+                num_directions_ca = 6
+        else:
+            center, stdev = self._center, self._stdev
 
-        self._key, self._scaled_noises, self._solutions = ask_func(
-            self._key,
-            stdev,
-            center,
-            self._num_directions,
-            self._center.size,
-        )
+        
+        if self._t > 400:
+            self._key, self._scaled_noises, self._solutions = ask_func_concat(
+                self._key,
+                stdev,
+                center,
+                self._num_directions,
+                self._center.size,
+                stdev_ca,
+                center_ca,
+                num_directions_ca // 2
+            )
+        else:
+            self._key, self._scaled_noises, self._solutions = ask_func(
+                self._key,
+                stdev,
+                center,
+                self._num_directions,
+                self._center.size,
+            )
 
         return self._solutions, self.belief_space
 
@@ -440,6 +488,10 @@ class PGPE(NEAlgorithm):
 
         max_softmax_logits_idx = jnp.argmax(abs(softmax_avg))
 
+        #self._arr = jnp.concatenate(([max_softmax_logits_idx], self._arr[self._arr != max_softmax_logits_idx]))
+       
+        #oldest_idx = self._arr[-1]
+
         if max_softmax_logits_idx == 0:
             self.belief_space = update_topographic_ks_idx_zero(
                 self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
@@ -491,9 +543,9 @@ class PGPE(NEAlgorithm):
             best_adv=best_adv,
             best_mi=best_mi,
             rng_adv=rng_adv,
-            rng_mi=rng_mi,
+            digit=max_softmax_logits_idx,
             best_tchebycheff_scores=best_tchebycheff_scores,
-            avg_tchebycheff_scores=avg_tchebycheff_scores,
+            softmax_logits=softmax_logits,
         )
 
         #ranks = jnp.log10(ranks + 2)

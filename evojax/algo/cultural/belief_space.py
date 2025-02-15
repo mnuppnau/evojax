@@ -35,14 +35,14 @@ def get_updated_params(belief_space, center, stdev, t):
     combined_guidance_center = combine_center_guidance(
         belief_space, t, center
     )
-    combined_guidance_stdev = combine_stdev_guidance(
+    combined_guidance_stdev, min_index = combine_stdev_guidance(
         belief_space, t, stdev
     )
 
     new_center = combined_guidance_center
     new_stdev = combined_guidance_stdev
 
-    return new_center, new_stdev
+    return new_center, new_stdev, min_index
 
 
 def combine_center_guidance(belief_space, t, center):
