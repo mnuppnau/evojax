@@ -114,7 +114,7 @@ class Latent_Points(VectorizedTask):
 
                 #jax.debug.print('structured codes : {}', structured_codes)
                 #c = jnp.ones((30,)) + 2
-                c = jnp.tile(jnp.arange(10),26)
+                c = jnp.tile(jnp.arange(10),52)
                 # remove the last 4 elements to make it 256
                 c = c[:self.batch_size]
                 batch_cat_one_hot = jax.nn.one_hot(c, 10)

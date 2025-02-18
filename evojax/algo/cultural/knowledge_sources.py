@@ -14,8 +14,14 @@ from evojax.algo.cultural.helper_functions import (
     non_dominated_sort_lax,
     scale_arrays,
     calculate_slopes,
+    calculate_slope,
     update_ks_weights,
+    situational_score,
+    historical_score,
+    topographic_score,
+    domain_score,
 )
+
 
 def initialize_domain_ks(param_size: int):
     return (
@@ -60,7 +66,7 @@ def initialize_history_ks(
 
 
 def initialize_topographic_ks(
-    param_size: int, max_individuals: int = 6
+    param_size: int, max_individuals: int = 2
 ):
     return (
         jnp.zeros((max_individuals, param_size)),  # best solutions for 0
@@ -138,24 +144,31 @@ def initialize_topographic_ks(
 
 def initialize_normative_ks(param_size: int, pop_size: int = 64):
     return (
-        jnp.ones(60),  # rolling_best_fitness_adv
-        jnp.ones(60),  # rolling_best_fitness_mi
-        jnp.ones(60),  # rolling_avg_fitness_adv
-        jnp.ones(60),  # rolling_avg_fitness_mi
-        jnp.ones(60),  # rolling_rng_adv
+        jnp.ones(5),  # rolling_best_fitness_adv_short
+        jnp.ones(5),  # rolling_best_fitness_mi_short
+        jnp.ones(5),  # rolling_avg_fitness_adv_short
+        jnp.ones(5),  # rolling_avg_fitness_mi_short
+        jnp.ones(5),  # rolling_rng_adv_short
         jnp.ones(60),  # rolling_digits
-        jnp.ones(60),  # rolling_best_tchebyschev_scores
-        jnp.ones(60),  # rolling_entropy
+        jnp.ones(5),  # rolling_best_tchebyschev_scores_short
+        jnp.ones(5),  # rolling_entropy_short
         jnp.array([0.0]),  # best_fitness_adv
         jnp.array([0.0]),  # best_fitness_mi
         jnp.array([0.0]),  # best_fitness_slope_adv
         jnp.array([0.0]),  # best_fitness_slope_mi
         jnp.array([0.0]),  # norm_entropy_slope
         jnp.array([0.0]),  # best_fitness_var_ratio
-        #jnp.array([0.0]),  # norm_entropy_slope
-        #jnp.array([0.0]),  # stagnation_slope
-        #jnp.ones(60),  # rolling_best_fitness_variance
-        #jnp.array([0.0]),  # best_fitness_variance_ratio
+        jnp.array([0.0]),  # missing_digit
+        jnp.zeros((1, param_size)),  # topographic best solution
+        jnp.zeros((1, param_size)),  # topographic best stdev
+        jnp.ones(40), # rolling_best_fitness_slope_adv_med
+        jnp.ones(40), # rolling_best_fitness_slope_mi_med
+        jnp.ones(40), # rolling_entropy_med
+        jnp.ones(100), # rolling_entropy_long
+        jnp.array([0.0]),  # best_fitness_slope_adv_med
+        jnp.array([0.0]),  # best_fitness_slope_mi_med
+        jnp.array([0.0]),  # norm_entropy_slope_med
+        jnp.array([0.0]),  # norm_entropy_slope_long
 
     )
 
@@ -374,7 +387,7 @@ def update_history_ks(
 
 @jax.jit
 def update_topographic_ks_idx_zero(
-    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=2
 ):
     topographic_ks = belief_space[4]
 
@@ -434,7 +447,7 @@ def update_topographic_ks_idx_zero(
 
 @jax.jit
 def update_topographic_ks_idx_one(
-    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=2
 ):
     topographic_ks = belief_space[4]
 
@@ -492,7 +505,7 @@ def update_topographic_ks_idx_one(
 
 @jax.jit
 def update_topographic_ks_idx_two(
-    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=2
 ):
     topographic_ks = belief_space[4]
 
@@ -550,7 +563,7 @@ def update_topographic_ks_idx_two(
 
 @jax.jit
 def update_topographic_ks_idx_three(
-    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=2
 ):
     topographic_ks = belief_space[4]
 
@@ -607,7 +620,7 @@ def update_topographic_ks_idx_three(
 
 @jax.jit
 def update_topographic_ks_idx_four(
-    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=2
 ):
     topographic_ks = belief_space[4]
 
@@ -664,7 +677,7 @@ def update_topographic_ks_idx_four(
 
 @jax.jit
 def update_topographic_ks_idx_five(
-    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=2
 ):
     topographic_ks = belief_space[4]
 
@@ -721,7 +734,7 @@ def update_topographic_ks_idx_five(
 
 @jax.jit
 def update_topographic_ks_idx_six(
-    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=2
 ):
     topographic_ks = belief_space[4]
 
@@ -778,7 +791,7 @@ def update_topographic_ks_idx_six(
 
 @jax.jit
 def update_topographic_ks_idx_seven(
-    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=2
 ):
     topographic_ks = belief_space[4]
 
@@ -835,7 +848,7 @@ def update_topographic_ks_idx_seven(
 
 @jax.jit
 def update_topographic_ks_idx_eight(
-    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=2
 ):
     topographic_ks = belief_space[4]
 
@@ -892,7 +905,7 @@ def update_topographic_ks_idx_eight(
 
 @jax.jit
 def update_topographic_ks_idx_nine(
-    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=6
+    belief_space, best_solution, stdev, scaled_noise, fitness_value_adv, fitness_value_mi, disc_logit, max_individuals=2
 ):
     topographic_ks = belief_space[4]
 
@@ -949,7 +962,7 @@ def update_topographic_ks_idx_nine(
 
 @jax.jit
 def update_normative_ks(
-    belief_space, best_fitness, best_fitness_mi, avg_fitness, avg_fitness_mi, best_adv, best_mi, rng_adv, digit, best_tchebycheff_scores, softmax_logits 
+    belief_space, best_fitness, best_fitness_mi, avg_fitness, avg_fitness_mi, best_adv, best_mi, rng_adv, digit, best_tchebycheff_scores, softmax_logits, missing_digit, topographic_center, topographic_stdev
 ):
     normative_ks = belief_space[5]
 
@@ -965,11 +978,11 @@ def update_normative_ks(
     #one_dim_norm_entropy = jnp.array([norm_entropy])
     
     updated_rolling_best_fitness = jnp.concatenate(
-        [normative_ks[0], -one_dim_best_fitness], axis=0
+        [normative_ks[0], one_dim_best_fitness], axis=0
     )[1:]
   
     updated_rolling_best_fitness_mi = jnp.concatenate(
-        [normative_ks[1], -one_dim_best_fitness_mi], axis=0
+        [normative_ks[1], one_dim_best_fitness_mi], axis=0
     )[1:]
     
     updated_rolling_avg_fitness = jnp.concatenate(
@@ -996,7 +1009,21 @@ def update_normative_ks(
         [normative_ks[7], entropy], axis=0
     )[1:]
     
+    updated_rolling_best_fitness_med = jnp.concatenate(
+        [normative_ks[17], one_dim_best_fitness], axis=0
+    )[1:]
 
+    updated_rolling_best_fitness_mi_med = jnp.concatenate(
+        [normative_ks[18], one_dim_best_fitness_mi], axis=0
+    )[1:]
+
+    updated_rolling_entropy_med = jnp.concatenate(
+        [normative_ks[19], entropy], axis=0
+    )[1:]
+
+    updated_rolling_entropy_long = jnp.concatenate(
+        [normative_ks[20], entropy], axis=0
+    )[1:]
 
     #updated_rolling_norm_entropy = jnp.concatenate(
     #    [normative_ks[2], one_dim_norm_entropy], axis=0
@@ -1024,7 +1051,7 @@ def update_normative_ks(
         [normative_ks[7], one_dim_best_fitness_variance], axis=0
     )[1:]
 
-    top_20_variances = jax.lax.top_k(updated_rolling_best_fitness_variance, 20)[0]
+    top_20_variances = jax.lax.top_k(updated_rolling_best_fitness_variance, 5)[0]
 
     average_rolling_best_fitness_variance = jnp.mean(top_20_variances)
 
@@ -1032,13 +1059,22 @@ def update_normative_ks(
         scaled_rolling_best_fitness_variance / average_rolling_best_fitness_variance
     )
 
-    best_fitness_slope, best_fitness_slope_mi, entropy_slope, stagnation_slope = (
-        calculate_slopes(
-            best_fitness_window=scaled_rolling_best_fitness,
-            best_fitness_window_mi=scaled_rolling_best_fitness_mi,
-            norm_entropy_window=scaled_rolling_entropy,
-        )
-    )
+    #best_fitness_slope, best_fitness_slope_mi, entropy_slope, stagnation_slope = (
+    #    calculate_slopes(
+    #        best_fitness_window=scaled_rolling_best_fitness,
+    #        best_fitness_window_mi=scaled_rolling_best_fitness_mi,
+    #        norm_entropy_window=scaled_rolling_entropy,
+    #    )
+    #)
+
+    best_fitness_adv_short_slope = calculate_slope(updated_rolling_best_fitness)
+    best_fitness_mi_short_slope = calculate_slope(updated_rolling_best_fitness_mi)
+    entropy_slope_short = calculate_slope(updated_rolling_entropy)
+
+    best_fitness_adv_med_slope = calculate_slope(updated_rolling_best_fitness_med)
+    best_fitness_mi_med_slope = calculate_slope(updated_rolling_best_fitness_mi_med)
+    entropy_slope_med = calculate_slope(updated_rolling_entropy_med)
+    entropy_slope_long = calculate_slope(updated_rolling_entropy_long)
 
     #ks_weights = update_ks_weights(
     #    best_fitness_slope,
@@ -1059,10 +1095,21 @@ def update_normative_ks(
         updated_rolling_entropy,
         best_adv,
         best_mi,
-        best_fitness_slope,
-        best_fitness_slope_mi,
-        entropy_slope,
+        best_fitness_adv_short_slope,
+        best_fitness_mi_short_slope,
+        entropy_slope_short,
         best_fitness_variance_ratio,
+        missing_digit,
+        topographic_center,
+        topographic_stdev,
+        updated_rolling_best_fitness_med,
+        updated_rolling_best_fitness_mi_med,
+        updated_rolling_entropy_med,
+        updated_rolling_entropy_long,
+        best_fitness_adv_med_slope,
+        best_fitness_mi_med_slope,
+        entropy_slope_med,
+        entropy_slope_long,
     )
 
     updated_belief_space_normative = (
@@ -1071,7 +1118,7 @@ def update_normative_ks(
 
     return updated_belief_space_normative#, ks_weights
 
-
+@jax.jit
 def get_center_guidance(belief_space, t, center):
     domain_ks = belief_space[1]
     situational_ks = belief_space[2]
@@ -1080,22 +1127,36 @@ def get_center_guidance(belief_space, t, center):
     normative_ks = belief_space[5]
 
     best_fitness_variance_ratio = normative_ks[13]
-    best_fitness_slope = normative_ks[10]
-    best_fitness_slope_mi = normative_ks[11]
-    norm_entropy_slope = normative_ks[12]
+    best_fitness_adv_short_slope = normative_ks[10]
+    best_fitness_mi_short_slope = normative_ks[11]
+    entropy_short_slope = normative_ks[12]
     stagnation_slope = normative_ks[10]
 
-    ks_weights = update_ks_weights(
-        best_fitness_slope,
-        best_fitness_slope_mi,
-        norm_entropy_slope,
-        stagnation_slope,
-        best_fitness_variance_ratio,
-    )
+    best_fitness_adv_med_slope = normative_ks[21]
+    best_fitness_mi_med_slope = normative_ks[22]
+    entropy_med_slope = normative_ks[23]
+    entropy_long_slope = normative_ks[24]
 
-    min_index = jnp.argmin(ks_weights)
+    sit_score = situational_score(best_fitness_adv_short_slope, best_fitness_mi_short_slope)
+    hist_score = historical_score(entropy_long_slope, best_fitness_adv_short_slope)
+    topo_score = topographic_score(entropy_long_slope, best_fitness_adv_med_slope)
+    dom_score = domain_score(best_fitness_adv_med_slope, best_fitness_mi_med_slope, entropy_long_slope)
+
+    ks_weights = jnp.array([dom_score, sit_score, hist_score, topo_score])
+
+    #jax.debug.print('ks weights {} : ', ks_weights)
+    #ks_weights = update_ks_weights(
+    #    best_fitness_slope,
+    #    best_fitness_slope_mi,
+    #    norm_entropy_slope,
+    #    stagnation_slope,
+    #    best_fitness_variance_ratio,
+    #)
+
+    min_index = jnp.argmax(ks_weights)
     result = jnp.zeros_like(ks_weights, dtype=jnp.int32)
 
+     
     ks_weights = result.at[min_index].set(1)
 
     domain_ks_center = domain_ks[0][0]
@@ -1105,18 +1166,15 @@ def get_center_guidance(belief_space, t, center):
     
     history_ks_center = history_ks[0][history_max_entropy_idx]
 
-    normative_ks_rolling_digits = normative_ks[5]
+    #normative_ks_rolling_digits = normative_ks[5]
     
     # find all unique digits in normative_ks_rolling_digits and order them based on their first occurrence
-    unique_digits = jnp.unique(normative_ks_rolling_digits)
+    #unique_digits = jnp.unique(normative_ks_rolling_digits)
 
     # find the first digit, 0-9, missing from the unique_digits without for loop
-    missing_digits = jnp.setdiff1d(jnp.arange(10), unique_digits)
-    first_missing_digit = missing_digits[0]
+    #missing_digits = jnp.setdiff1d(jnp.arange(10), unique_digits)
 
-    topographic_ks_center_idx = topographic_ks[((first_missing_digit+1)*6-6)][0]
-   
-    topographic_ks_center = topographic_ks[topographic_ks_center_idx][0]
+    topographic_ks_center = normative_ks[15]
     #domain_ks_center_weighted = domain_ks_center * ks_weights[0]
     domain_ks_center_weighted = domain_ks_center * 0
     situational_row_averages_weighted = situational_ks_center * ks_weights[1]
@@ -1137,7 +1195,7 @@ def get_center_guidance(belief_space, t, center):
         )
     )
 
-
+@jax.jit
 def get_stdev_guidance(belief_space, t, stdev):
    
     domain_ks = belief_space[1]
@@ -1147,20 +1205,33 @@ def get_stdev_guidance(belief_space, t, stdev):
     normative_ks = belief_space[5]
 
     best_fitness_variance_ratio = normative_ks[13]
-    best_fitness_slope = normative_ks[10]
-    best_fitness_slope_mi = normative_ks[11]
-    norm_entropy_slope = normative_ks[12]
+    best_fitness_adv_short_slope = normative_ks[10]
+    best_fitness_mi_short_slope = normative_ks[11]
+    entropy_short_slope = normative_ks[12]
     stagnation_slope = normative_ks[10]
+ 
+    best_fitness_adv_med_slope = normative_ks[21]
+    best_fitness_mi_med_slope = normative_ks[22]
+    entropy_med_slope = normative_ks[23]
+    entropy_long_slope = normative_ks[24]
 
-    ks_weights = update_ks_weights(
-        best_fitness_slope,
-        best_fitness_slope_mi,
-        norm_entropy_slope,
-        stagnation_slope,
-        best_fitness_variance_ratio,
-    )
+    sit_score = situational_score(best_fitness_adv_short_slope, best_fitness_mi_short_slope)
+    hist_score = historical_score(entropy_long_slope, best_fitness_adv_short_slope)
+    topo_score = topographic_score(entropy_long_slope, best_fitness_adv_med_slope)
+    dom_score = domain_score(best_fitness_adv_med_slope, best_fitness_mi_med_slope, entropy_long_slope)
 
-    min_index = jnp.argmin(ks_weights)
+    ks_weights = jnp.array([dom_score, sit_score, hist_score, topo_score])
+
+
+    #ks_weights = update_ks_weights(
+    #    best_fitness_slope,
+    #    best_fitness_slope_mi,
+    #    norm_entropy_slope,
+    #    stagnation_slope,
+    #    best_fitness_variance_ratio,
+    #)
+
+    min_index = jnp.argmax(ks_weights)
     result = jnp.zeros_like(ks_weights, dtype=jnp.int32)
 
     ks_weights = result.at[min_index].set(1)
@@ -1175,12 +1246,12 @@ def get_stdev_guidance(belief_space, t, stdev):
 
     normative_ks_rolling_digits = normative_ks[5]
 
-    unique_digits = jnp.unique(normative_ks_rolling_digits)
+    #unique_digits = jnp.unique(normative_ks_rolling_digits)
 
-    missing_digits = jnp.setdiff1d(jnp.arange(10), unique_digits)
-    first_missing_digit = missing_digits[0]
+    #missing_digits = jnp.setdiff1d(jnp.arange(10), unique_digits)
+    #first_missing_digit = missing_digits[0]
 
-    topographic_ks_stdev = topographic_ks[((first_missing_digit+1)*6-5)][0]
+    topographic_ks_stdev = normative_ks[16] 
 
     domain_ks_stdev_weighted = domain_ks_stdev * 0
     situational_row_averages_weighted = situational_ks_stdev * ks_weights[1]

@@ -160,8 +160,9 @@ def update_stdev(
     allowed_delta = jnp.abs(stdev) * max_change
     min_allowed = stdev - allowed_delta
     max_allowed = stdev + allowed_delta
-    return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
-
+    new_stdev = jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
+    
+    return jnp.clip(new_stdev, 1e-8, 1e1)
 
 @partial(jax.jit, static_argnums=(3, 4))
 def ask_func(
@@ -318,26 +319,39 @@ class PGPE(NEAlgorithm):
             population_size=self.pop_size, param_size=abs(param_size), key=self._key)
 
     def ask(self) -> jnp.ndarray:
-        if self._t > 400:
+        if self._t > 60000:
             center_ca, stdev_ca, min_index = get_updated_params(
                 self.belief_space, self._center, self._stdev, self._t
             )
+            #jax.debug.print('max center ca value {} : ', jnp.max(center_ca))
+            #jax.debug.print('min center ca value {} : ', jnp.min(center_ca))
+            #jax.debug.print('max stddev ca value {} : ', jnp.max(stdev_ca))
+            #jax.debug.print('min stddev ca value {} : ', jnp.min(stdev_ca))
+            #jax.debug.print('min index {} : ', min_index)
+            #jax.debug.print('max center value {} : ', jnp.max(self._center))
+            #jax.debug.print('min center value {} : ', jnp.min(self._center))
+            #jax.debug.print('max stddev value {} : ', jnp.max(self._stdev))
+            #jax.debug.print('min stddev value {} : ', jnp.min(self._stdev))
             if min_index == 0:
                 stdev_ca = stdev_ca * 0.2
+                num_directions_ca = 2
             elif min_index == 1:
                 stdev_ca = stdev_ca * 0.1
-                num_directions_ca = 24
+                num_directions_ca = 2
             elif min_index == 2:
                 stdev_ca = stdev_ca * 0.2
-                num_directions_ca = 12
+                num_directions_ca = 2
             elif min_index == 3:
-                stdev_ca = stdev_ca * 0.2
-                num_directions_ca = 6
+                stdev_ca = stdev_ca * 0.3
+                num_directions_ca = 2
+            center, stdev = self._center, self._stdev
         else:
             center, stdev = self._center, self._stdev
 
         
-        if self._t > 400:
+        if self._t > 60000:
+            # clip stdev_ca to be between 1e-4 and 1e1
+            stdev_ca = jnp.clip(stdev_ca, 1e-4, 1e1)
             self._key, self._scaled_noises, self._solutions = ask_func_concat(
                 self._key,
                 stdev,
@@ -377,7 +391,7 @@ class PGPE(NEAlgorithm):
 
         #cdist = compute_crowding_distance(objectives, ranks)
 
-        order = jnp.lexsort((-fitness_adv.flatten(), ranks))
+        order = jnp.lexsort((-fitness_mi.flatten(), ranks))
         
         top_index = order[:1]
 
@@ -430,15 +444,11 @@ class PGPE(NEAlgorithm):
         if total_var < 1e-8:
            lambda_adv = 0.5
            lambda_mi = 0.5
-        elif self._t < 60:
-           lambda_adv = 0.2
-           lambda_mi = 0.8
         else:
-           lambda_adv = adv_window_var / total_var
-           lambda_mi = mi_window_var / total_var
-       
+            lambda_adv = adv_window_var / total_var
+            lambda_mi = mi_window_var / total_var
         # Clip to reasonable range
-        lambda_adv = np.clip(lambda_adv, 0.2, 0.8)
+        #lambda_adv = np.clip(lambda_adv, 0.1, 0.9)
         lambda_mi = 1 - lambda_adv
         
         tchebycheff_scores = lambda_adv * norm_fitness_adv + lambda_mi * norm_fitness_mi
@@ -472,16 +482,29 @@ class PGPE(NEAlgorithm):
             softmax_logits,
         )
 
-        self.belief_space = update_history_ks(
-            self.belief_space, 
-            top_solution, 
-            self._stdev, 
-            top_scaled_noise, 
-            top_fitness_adv, 
-            top_fitness_mi, 
-            top_tchebycheff, 
-            softmax_logits, 
-        )
+        if self._t > 400 and self._t % 10 == 0:
+            self.belief_space = update_history_ks(
+                self.belief_space, 
+                top_solution, 
+                self._stdev, 
+                top_scaled_noise, 
+                top_fitness_adv, 
+                top_fitness_mi, 
+                top_tchebycheff, 
+                softmax_logits, 
+            )
+        elif self._t <= 400:
+            self.belief_space = update_history_ks(
+                self.belief_space, 
+                top_solution, 
+                self._stdev, 
+                top_scaled_noise, 
+                top_fitness_adv, 
+                top_fitness_mi, 
+                top_tchebycheff, 
+                softmax_logits, 
+            )
+
 
         # top_disc_logit is shape (1,128,10), take the average over the 10 logits and return shape (10,)
         softmax_avg = jnp.mean(softmax_logits, axis=1).squeeze()
@@ -492,6 +515,7 @@ class PGPE(NEAlgorithm):
        
         #oldest_idx = self._arr[-1]
 
+        #jax.debug.print('max softmax idx {} : ', max_softmax_logits_idx)
         if max_softmax_logits_idx == 0:
             self.belief_space = update_topographic_ks_idx_zero(
                 self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
@@ -533,7 +557,20 @@ class PGPE(NEAlgorithm):
                 self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
             )
 
+        rolling_digits = self.belief_space[5][5]
+        unique_digits = jnp.unique(rolling_digits)
 
+        missing_digits = jnp.setdiff1d(jnp.arange(10), unique_digits)
+        
+        if len(missing_digits) > 0:
+            first_missing_digit = missing_digits[0]
+        else:
+            first_missing_digit = 1
+
+        topographic_center_idx = (first_missing_digit+1)*6-6
+        topographic_center = self.belief_space[4][topographic_center_idx][0]
+        topographic_stdev = self.belief_space[4][topographic_center_idx+1][0]
+        
         self.belief_space = update_normative_ks(
             self.belief_space,
             best_fitness=best_fitness_adv,
@@ -546,22 +583,31 @@ class PGPE(NEAlgorithm):
             digit=max_softmax_logits_idx,
             best_tchebycheff_scores=best_tchebycheff_scores,
             softmax_logits=softmax_logits,
+            missing_digit=first_missing_digit,
+            topographic_center=topographic_center,
+            topographic_stdev=topographic_stdev,
         )
 
         #ranks = jnp.log10(ranks + 2)
 
         # multiply each value in tchhebycheff_scores (axis 0, which is shape (128,1)) by the value in the same index in ranks (which is a scalar) 
-        if self._t < 60:
-            fitness_scores = -ranks
-        else:
-            fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
-        #closeness = compute_closeness(objectives)
+        #if self._t < 60:
+        fitness_scores = -jnp.argsort(order+1)
+        #else:
+            #fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
+            #closeness = compute_closeness(objectives)
 
-        #fitness_scores = compute_fitness(closeness, ranks)
-
+            #fitness_scores = compute_fitness(closeness, ranks)
+        #if self._t < 200:
+        #    fitness_scores = fitness_adv.flatten()
+        #elif self._t >= 200 and self._t % 2 == 0:
+        #    fitness_scores = fitness_mi.flatten()
+        #else:
+        #    fitness_scores = fitness_adv.flatten()
+        #fitness_scores = fitness_mi
         #jax.debug.print('weights : {} ', weights)
         #weights = -weights
-        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores, False)
+        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
 
         grad_center, grad_stdev = compute_reinforce_update(
                 fitness_scores=fitness_scores,

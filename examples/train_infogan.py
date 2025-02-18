@@ -36,11 +36,11 @@ def parse_args():
     parser.add_argument(
         '--pop-size-gen', type=int, default=128, help='NE population size.')
     parser.add_argument(
-        '--pop-size', type=int, default=128, help='NE population size.')
+        '--pop-size', type=int, default=256, help='NE population size.')
     parser.add_argument(
-        '--batch-size', type=int, default=64, help='Batch size for training.')
+        '--batch-size', type=int, default=128, help='Batch size for training.')
     parser.add_argument(
-        '--max-iter', type=int, default=170000, help='Max training iterations.')
+        '--max-iter', type=int, default=70000, help='Max training iterations.')
     parser.add_argument(
         '--test-interval', type=int, default=1000, help='Test interval.')
     parser.add_argument(
@@ -54,7 +54,7 @@ def parse_args():
     parser.add_argument(
         '--init-std-gen', type=float, default=0.039, help='Initial std.')
     parser.add_argument(
-        '--center-lr-disc', type=float, default=0.0034, help='Center learning rate.')
+        '--center-lr-disc', type=float, default=0.004, help='Center learning rate.')
     parser.add_argument(
         '--std-lr-disc', type=float, default=0.089, help='Std learning rate.')
     parser.add_argument(
@@ -124,9 +124,9 @@ def main(config):
         param_size=policy_disc.num_params_q,
         init_params=flat_params_q,
         optimizer='adam',
-        center_learning_rate=config.center_lr_disc,
-        stdev_learning_rate=config.std_lr_disc,
-        init_stdev=config.init_std_disc,
+        center_learning_rate=config.center_lr_gen,
+        stdev_learning_rate=config.std_lr_gen,
+        init_stdev=config.init_std_gen,
         logger=logger,
         seed=config.seed + 2,
     )

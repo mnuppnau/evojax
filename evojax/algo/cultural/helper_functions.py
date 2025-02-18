@@ -188,7 +188,88 @@ def update_ks_weights(best_fitness_slope, best_fitness_slope_mi, norm_entropy_sl
     topographic_weight /= total_weight
     topographic_weight = topographic_weight * best_fitness_variance_ratio 
 
+    domain_weight = 99
+    #topographic_weight = 99
     #history_weight = history_weight * 0.9
 
     return jnp.array([domain_weight, situational_weight, history_weight, topographic_weight])
 
+@jit
+def situational_score(adv_slope_short, mi_slope_short):
+    """
+    We want a high situational score if both adversarial and MI slopes
+    are negative (indicating improvement).
+    """
+    # Suppose adv_slope_short ranges ~[-2, +2], likewise for mi_slope_short.
+    # A negative slope -> improvement.
+
+    # Convert slope to a "signal" in [0, 1], where negative slope => near 1
+    # and positive slope => near 0.
+    # We'll do a simple exponential transform:
+    adv_signal = jnp.exp(-jnp.clip(adv_slope_short, -2.0, 2.0))
+    mi_signal  = jnp.exp(-jnp.clip(mi_slope_short, -2.0, 2.0))
+
+    # If slope is -2, exp(-(-2)) = exp(2) ~ 7.39 => strong improvement
+    # If slope is  2, exp(-(2))  = exp(-2) ~ 0.135 => poor improvement
+
+    # Combine them:
+    raw_score = (adv_signal + mi_signal) / 2.0
+
+    # Now raw_score could range roughly from ~0.135 to ~7.39. 
+    # You might clamp or scale that further:
+    scaled_score = jnp.clip(raw_score, 0.0, 5.0) 
+    return scaled_score
+#def situational_score(adv_slope_short, mi_slope_short):
+#    # We want negative slopes to yield higher scores.
+#    # For example, transform slopes into a [0,1] range by taking e^-slope if slope>0 or something similar.
+#    # Alternatively, just clamp negative slopes to a positive range. Simplest approach:
+#    
+#    # Convert negative slope to a positive number (no improvement => 0).
+#    adv_signal = -jnp.clip(adv_slope_short, -1.0, 1.0)
+#    mi_signal  = -jnp.clip(mi_slope_short, -1.0, 1.0)
+#    
+#    # If both slopes are negative, the sum is high => exploit
+#    raw_score = (adv_signal + mi_signal) / 2.0  # average them
+#    # Ensure it's in [0,1]
+#    return jnp.clip(raw_score, 0.0, 1.0)
+
+@jit
+def historical_score(entropy_long, adv_slope_short):
+    # We want to reintroduce diversity when entropy is *low* 
+    # and when there's no short-term improvement (adversarial slope >= 0).
+    
+    # "Low" entropy => high 'need' for historical injection
+    # Let's define a function that flips the entropy scale into [0,1].
+    # Suppose we assume typical entropy is around 2 to 3 for 10-class. 
+    # We can clamp or scale it:
+    inv_entropy = jnp.clip(3.0 - entropy_long, 0.0, 3.0) / 3.0  
+    # This yields 1.0 if entropy_long is 0.0, and near 0.0 if entropy_long is ~3.0
+    
+    # Also, if short-term adv slope >= 0 => no improvement => want reintroduction
+    no_improvement = jnp.clip(adv_slope_short, 0.0, 1.0)  # slope>0 => positive => no improvement
+    # Combine them (could average, multiply, etc.):
+    raw_score = inv_entropy * (1.0 + no_improvement)
+    # Normalize or clip
+    return jnp.clip(raw_score, 0.0, 2.0)
+
+@jit
+def topographic_score(entropy_long, adv_slope_med):
+    # Maybe you want topographic exploration if entropy_long is starting to slip but not fully collapsed,
+    # or if adv_slope_med is near 0 => no big improvement.
+    
+    mid_entropy_drop = jnp.clip(2.5 - entropy_long, 0.0, 2.5) / 2.5  # partial "need" for exploring codes
+    slow_improvement = jnp.clip(-adv_slope_med, 0.0, 1.0)  # if adv_slope_med>0 => no improvement => 0 here
+    
+    raw_score = mid_entropy_drop + slow_improvement
+    return jnp.clip(raw_score, 0.0, 2.0)
+
+@jit
+def domain_score(adv_slope_med, mi_slope_med, entropy_long):
+    # Example: moderate negative slopes => stable improvement => Domain KS can refine
+    moderate_adv = jnp.clip(-adv_slope_med, 0.0, 1.0)  
+    moderate_mi  = jnp.clip(-mi_slope_med, 0.0, 1.0)
+    # If entropy_long is also moderate (e.g., ~2), that might be "good enough" => domain
+    normal_entropy = jnp.exp(-jnp.abs(2.0 - entropy_long))  # peak around 2.0
+    
+    raw_score = (moderate_adv + moderate_mi) + normal_entropy + 0.897#/2.0 + normal_entropy
+    return jnp.clip(raw_score, 0.0, 2.0)
