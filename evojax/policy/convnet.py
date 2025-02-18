@@ -78,7 +78,7 @@ def load_model(state, path):
 class Generator(nn.Module):
     """ Generator CNN for MNIST """
 
-    features: int = 64
+    features: int = 32
     training: bool = True
 
     @nn.compact
@@ -174,7 +174,8 @@ class QNetwork(nn.Module):
         #x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
         #x = nn.leaky_relu(x, 0.2)
 
-        q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+        #q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+        q = nn.Conv(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x) 
         q = nn.leaky_relu(q, 0.2)
        
         disc_logits = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)

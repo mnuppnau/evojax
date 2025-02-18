@@ -386,11 +386,12 @@ class PGPE_DISC(NEAlgorithm):
         fitness_fake_avg = jnp.mean(fitness_fake)
 
         w_real = fitness_real_avg / (fitness_real_avg + fitness_fake_avg)
+        w_real = jnp.clip(w_real, 0.3, 0.7)
         w_fake = 1 - w_real
 
         fitness_scores = w_real * fitness_real + w_fake * fitness_fake
         
-        fitness_scores = process_scores(fitness_scores, False)
+        fitness_scores = process_scores(fitness_scores, True)
 
         grad_center, grad_stdev = compute_reinforce_update(
             fitness_scores=fitness_scores,

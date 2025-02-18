@@ -375,7 +375,7 @@ class SimManager(object):
                     step_once_gen_fn, max_steps):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
-            disc_logits = jnp.zeros((64,64,10))
+            disc_logits = jnp.zeros((128,128,10))
             loss_g = jnp.zeros(self._pop_size//2)
             #fake_imgs = jnp.zeros((64,128,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
@@ -501,7 +501,7 @@ class SimManager(object):
             #accumulated_rewards_bin = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
             #accumulated_rewards_con = jnp.zeros(params_gen.shape[0])
-            fake_imgs = jnp.zeros((64,64,28, 28, 1))
+            fake_imgs = jnp.zeros((128,128,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, params_q, obs_params,
               accumulated_rewards_adv, accumulated_rewards_mi, fake_imgs, valid_masks),
@@ -713,7 +713,7 @@ class SimManager(object):
         #jax.debug.print('reset keys 2 shape : {}', reset_keys2.shape)
         # Reset the tasks and the policy.
         if generator:
-            #reset_keys_cat_code = disc_reset_keys_cat_code
+            reset_keys_cat_code = disc_reset_keys_cat_code
             task_state = task_reset_func(reset_keys_latent, reset_keys_cat_code, reset_keys_con_code)
         else:
             task_state = task_reset_func(reset_keys_mnist, reset_keys_latent, reset_keys_cat_code, reset_keys_con_code)
@@ -907,9 +907,13 @@ class SimManager(object):
             scores1 = scores_real
             scores2 = scores_fake
             scores3 = scores_mi
-        else:
+        elif generator and not test:
             scores1 = scores_adv
             scores2 = scores_mi
             scores3 = disc_logits
+        else:
+            scores1 = scores_adv
+            scores2 = scores_mi
+            scores3 = None
         #self._key = new_key
         return scores1, scores2, scores3, self._bd_summarize_fn(final_states), batch_stats_gen_updated, batch_stats_disc_updated, fake_imgs, pop_stats, reset_keys_cat_code
