@@ -38,6 +38,7 @@ class State(TaskState):
     #fake_imgs: jnp.ndarray
     batch_stats_gen: any = None
     batch_stats_disc: any = None
+    batch_stats_q: any = None
 
 def sample_batch(key: jnp.ndarray,
                  data: jnp.ndarray,
@@ -69,6 +70,7 @@ class MNIST(VectorizedTask):
     def __init__(self,
                  batch_stats_gen: dict = None,
                  batch_stats_disc: dict = None,
+                 batch_stats_q: dict = None,
                  batch_size: int = 1024,
                  test: bool = False):
 
@@ -79,7 +81,8 @@ class MNIST(VectorizedTask):
         self.batch_size = batch_size
         self.batch_stats_gen = batch_stats_gen 
         self.batch_stats_disc = batch_stats_disc
-
+        self.batch_stats_q = batch_stats_q
+        
         #self.fake_imgs = None
         #self.cat_codes = None
         # Delayed importing of torchvision
@@ -93,19 +96,6 @@ class MNIST(VectorizedTask):
 
         dataset = datasets.MNIST('./data', train=not test, download=True)
 
-        #if not test:
-        #    data_full = dataset.data.numpy()
-        #    labels_full = dataset.targets.numpy()
-            
-            # Calculate indices for 10% of the dataset
-        #    indices = np.random.choice(len(data_full), int(len(data_full) * 0.02), replace=False)
-            
-            # Extract the data and labels for the subset
-        #    data_subset = data_full[indices] / 255.  # Normalize the data
-        #    data = np.expand_dims(data_subset, axis=-1)  # Add channel dimension
-        #    labels = labels_full[indices]
-
-        #else:
         data = np.expand_dims(dataset.data.numpy() / 255., axis=-1)
         labels = dataset.targets.numpy()
 
@@ -116,17 +106,18 @@ class MNIST(VectorizedTask):
                 batch_data, batch_labels = sample_batch(
                     key, data, labels, self.batch_size)
                 batch_latent = random.normal(noise_key, (self.batch_size, 64))
-                batch_cat = random.randint(cat_key, (self.batch_size,), 0, 10)
+                #batch_cat = random.randint(cat_key, (self.batch_size,), 0, 10)
                 
-                #batch_con = random.uniform(con_key, (batch_size, 2), minval=-1., maxval=1.)
+                #batch_cat_one_hot = jax.nn.one_hot(batch_cat, 10)
 
-                #batch_latent_concat = jnp.concatenate([batch_latent, jax.nn.one_hot(batch_cat, 10)], axis=-1)
-
-                batch_cat_one_hot = jax.nn.one_hot(batch_cat, 10)
+                c = jnp.tile(jnp.arange(10),13)
+                # remove the last 4 elements to make it 256
+                c = c[:self.batch_size]
+                batch_cat_one_hot = jax.nn.one_hot(c, 10)
 
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=-1)
             
-            return State(obs=batch_data, latent=batch_latent_concat, cat_codes=batch_cat_one_hot, labels=batch_labels, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc)
+            return State(obs=batch_data, latent=batch_latent_concat, cat_codes=batch_cat_one_hot, labels=batch_labels, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q)
 
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
@@ -135,22 +126,9 @@ class MNIST(VectorizedTask):
             q_cat = nn.log_softmax(q, axis=-1)
             # cross entropy loss for Discrete Codes
             loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
-            #loss_q_disc = optax.softmax_cross_entropy(state.cat_codes, q_cat).mean()
-            # Gaussian log likelihood loss for Continuous Codes
-            #loss_q_cont = -jnp.mean(jnp.sum(0.5 * jnp.log(2 * jnp.pi * var) + 0.5 * (state.con_codes - mu) ** 2 / var, axis=-1))
-
-            #real_loss = bce_logits(real_preds, jnp.ones((batch_size,1), dtype=jnp.float32))
-            #fake_loss = bce_logits(action, jnp.zeros((batch_size,1), dtype=jnp.float32))
            
             real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones((batch_size,1), dtype=jnp.float32)).mean()
             fake_loss = optax.sigmoid_binary_cross_entropy(action, jnp.zeros((batch_size,1), dtype=jnp.float32)).mean()
-            # add weight to loss mi
-            #loss_mi = 1.4 * loss_mi
-            #jax.debug.print('loss mi disc : {}', loss_mi)
-            loss = (real_loss + fake_loss) #/ 2 + loss_q_disc
-            #loss = real_loss + fake_loss
-
-            #loss_mi = loss_q_disc + loss_q_cont
 
             reward_fake = -fake_loss
 

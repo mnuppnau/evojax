@@ -51,22 +51,16 @@ from evojax.util import create_logger
 #
 #    return key1, reset_keys1, reset_keys2
 
-@partial(jax.jit, static_argnums=(3, 4, 5, 6))
-def get_task_reset_keys(key1: jnp.ndarray,
-                        key2: jnp.ndarray,
-                        key3: jnp.ndarray,
+@partial(jax.jit, static_argnums=(1,2,3,4))
+def get_task_reset_keys(key: jnp.ndarray,
                         pop_size: int,
                         n_tests: int,
                         n_repeats: int,
                         ma_training: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    
     # Split the first key
-    key1, subkey1 = random.split(key=key1)
+    key, subkey1, subkey2, subkey3 = random.split(key,4)
     
-    # Split both keys under "if testing" condition
-    key2, subkey2 = random.split(key=key2)
-    
-    key3, subkey3 = random.split(key=key3)
-
     reset_keys1 = random.split(subkey1, n_repeats)
     reset_keys1 = jnp.tile(reset_keys1, (pop_size, 1))
 
@@ -76,25 +70,17 @@ def get_task_reset_keys(key1: jnp.ndarray,
     reset_keys3 = random.split(subkey3, n_repeats)
     reset_keys3 = jnp.tile(reset_keys3, (pop_size, 1))
 
-    return key1, key2, key3, reset_keys1, reset_keys2, reset_keys3
+    return key, reset_keys1, reset_keys2, reset_keys3
 
-@partial(jax.jit, static_argnums=(4, 5, 6, 7))
-def get_task_reset_keys_disc(key1: jnp.ndarray,
-                        key2: jnp.ndarray,
-                        key3: jnp.ndarray,
-                        key4: jnp.ndarray,
+@partial(jax.jit, static_argnums=(1, 2, 3, 4))
+def get_task_reset_keys_disc(key: jnp.ndarray,
                         pop_size: int,
                         n_tests: int,
                         n_repeats: int,
                         ma_training: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
     # Split the first key
-    key1, subkey1 = random.split(key=key1)
+    key, subkey1, subkey2, subkey3, subkey4 = random.split(key,5)
     
-    # Split both keys under "if testing" condition
-    key2, subkey2 = random.split(key=key2)
-    key3, subkey3 = random.split(key=key3)
-    key4, subkey4 = random.split(key=key4)
-
     reset_keys1 = random.split(subkey1, n_repeats)
     reset_keys1 = jnp.tile(reset_keys1, (pop_size, 1))
 
@@ -107,8 +93,7 @@ def get_task_reset_keys_disc(key1: jnp.ndarray,
     reset_keys4 = random.split(subkey4, n_repeats)
     reset_keys4 = jnp.tile(reset_keys4, (pop_size, 1))
 
-    return key1, key2, key3, reset_keys1, reset_keys2, reset_keys3, reset_keys4
-
+    return key, reset_keys1, reset_keys2, reset_keys3, reset_keys4
 
 #@partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
 #def get_task_reset_keys(key: jnp.ndarray,
@@ -263,7 +248,7 @@ class SimManager(object):
             task_state = task_state.replace(obs=normed_obs)
             #jax.debug.print('task state batch stats gen shape : {}', task_state.batch_stats_gen.shape)
             #jax.debug.print('params gen shape in step_once_gen : {}', params_gen.shape)
-            fake_imgs, actions, disc_logits, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
+            fake_imgs, actions, disc_logits, batch_stats_gen, batch_stats_disc, batch_stats_q, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, params_q, policy_state)
             #act1, act2, act3 = activations
             #jax.debug.print('activations 1 shape : {}', act1.shape)
@@ -276,7 +261,8 @@ class SimManager(object):
             #flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
             task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
             task_state = task_state.replace(batch_stats_disc=batch_stats_disc)
-            
+            task_state = task_state.replace(batch_stats_q=batch_stats_q) 
+
             if task.multi_agent_training:
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape(
@@ -375,7 +361,7 @@ class SimManager(object):
                     step_once_gen_fn, max_steps):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
-            disc_logits = jnp.zeros((128,128,10))
+            disc_logits = jnp.zeros((200,128,10))
             loss_g = jnp.zeros(self._pop_size//2)
             #fake_imgs = jnp.zeros((64,128,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
@@ -398,11 +384,12 @@ class SimManager(object):
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
             #task_state = task_state.replace(fake_imgs=jnp.squeeze(task_state.fake_imgs, axis=0))
-            real_preds, actions, disc_logits, batch_stats_disc, batch_stats_gen, policy_state = policy_net.get_actions(
+            real_preds, actions, disc_logits, batch_stats_disc, batch_stats_gen, batch_stats_q, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, params_q, policy_state)
             task_state = task_state.replace(batch_stats_disc=batch_stats_disc)
             task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
-            
+            task_state = task_state.replace(batch_stats_q=batch_stats_q) 
+
             if task.multi_agent_training:
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape(
@@ -457,7 +444,7 @@ class SimManager(object):
             task_state = task_state.replace(obs=normed_obs)
             #jax.debug.print('task state batch stats gen shape : {}', task_state.batch_stats_gen.shape)
             #jax.debug.print('params gen shape in step_once_gen : {}', params_gen.shape)
-            fake_imgs, actions, disc_logits, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
+            fake_imgs, actions, disc_logits, batch_stats_gen, batch_stats_disc, batch_stats_q, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, params_q, policy_state)
             #leaves_batch_stats_gen = jax.tree_util.tree_flatten(batch_stats_gen[0])
             #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
@@ -465,7 +452,8 @@ class SimManager(object):
             #flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
             task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
             task_state = task_state.replace(batch_stats_disc=batch_stats_disc)
-            
+            task_state = task_state.replace(batch_stats_q=batch_stats_q) 
+
             if task.multi_agent_training:
                 task_state = task_state.replace(
                     obs=task_state.obs.reshape(
@@ -501,7 +489,7 @@ class SimManager(object):
             #accumulated_rewards_bin = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
             #accumulated_rewards_con = jnp.zeros(params_gen.shape[0])
-            fake_imgs = jnp.zeros((128,128,28, 28, 1))
+            fake_imgs = jnp.zeros((200,128,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, params_q, obs_params,
               accumulated_rewards_adv, accumulated_rewards_mi, fake_imgs, valid_masks),
@@ -564,6 +552,7 @@ class SimManager(object):
                     params_q: jnp.ndarray,
                     batch_stats_gen: dict,
                     batch_stats_disc: dict,
+                    batch_stats_q: dict,
                     pop_stats: jnp.ndarray,
                     disc_reset_keys_cat_code: jnp.ndarray,
                     generator: bool,
@@ -579,7 +568,7 @@ class SimManager(object):
         if self._use_for_loop:
             return self._for_loop_eval(params_gen, params_disc, params_q, batch_stats_gen, batch_stats_disc, generator, test)
         else:
-            return self._scan_loop_eval(params_gen, params_disc, params_q, batch_stats_gen, batch_stats_disc, pop_stats, disc_reset_keys_cat_code, generator, test)
+            return self._scan_loop_eval(params_gen, params_disc, params_q, batch_stats_gen, batch_stats_disc, batch_stats_q, pop_stats, disc_reset_keys_cat_code, generator, test)
 
     def _for_loop_eval(self,
                        params: jnp.ndarray,
@@ -636,6 +625,7 @@ class SimManager(object):
                         params_q: jnp.ndarray,
                         batch_stats_gen: dict,
                         batch_stats_disc: dict,
+                        batch_stats_q: dict,
                         pop_stats: jnp.ndarray,
                         disc_reset_keys_cat_code: jnp.ndarray,
                         generator: bool,
@@ -644,10 +634,22 @@ class SimManager(object):
         policy_reset_func = self._policy_reset_fn
 
         # check if first dimension of batch_stats_gen and batch_stats_disc is equal to pop_size
-        if batch_stats_gen.shape[0] != self._pop_size and not test:
+        if batch_stats_gen.shape[0] != self._pop_size and len(batch_stats_gen.shape) == 2: #and not test:
             # add pop size as first dimension to batch_stats_gen and batch_stats_disc
             batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
+        
+        if batch_stats_disc.shape[0] != self._pop_size and len(batch_stats_disc.shape) == 2: #and not test:
             batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
+        
+        if batch_stats_q.shape[0] != self._pop_size and len(batch_stats_q.shape) == 2: #and not test:
+            batch_stats_q = jnp.repeat(batch_stats_q[None, :], self._pop_size, axis=0)
+
+        if len(batch_stats_gen.shape) == 1:
+            batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
+        if len(batch_stats_disc.shape) == 1:
+            batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
+        if len(batch_stats_q.shape) == 1:
+            batch_stats_q = jnp.repeat(batch_stats_q[None, :], self._pop_size, axis=0)
 
         if params_gen is not None and params_gen.shape[0] != self._pop_size:
             params_gen = jnp.repeat(params_gen[None, :], self._pop_size, axis=0)
@@ -656,6 +658,11 @@ class SimManager(object):
 
         self.batch_stats_gen = batch_stats_gen
         self.batch_stats_disc = batch_stats_disc
+        self.batch_stats_q = batch_stats_q
+
+        #jax.debug.print('batch_stats_gen shape : {}', batch_stats_gen.shape)
+        #jax.debug.print('batch_stats_disc shape : {}', batch_stats_disc.shape)
+        #jax.debug.print('batch_stats_q shape : {}', batch_stats_q.shape)
 
         #if params_gen is not None:
             #jax.debug.print('params gen shape before dup : {}', params_gen.shape)
@@ -700,25 +707,35 @@ class SimManager(object):
         params_q = duplicate_params(params_q, n_repeats, self._ma_training)
 
         #split the reset keys, one for noise vect and one for cat codes
-        self._key, key, noise_keys, cat_keys, con_keys = random.split(self._key, 5)
+        #self._key, key, noise_keys, cat_keys, con_keys = random.split(self._key, 5)
 
         if generator:
-            noise_keys, cat_keys, con_keys, reset_keys_latent, reset_keys_cat_code, reset_keys_con_code = get_task_reset_keys(
-                noise_keys, cat_keys, con_keys, self._pop_size, self._n_evaluations, n_repeats, self._ma_training)
+            self._key, reset_keys_latent, reset_keys_cat_code, reset_keys_con_code = get_task_reset_keys(
+                self._key, self._pop_size, self._n_evaluations, n_repeats, self._ma_training)
         else:
-            key, noise_keys, cat_keys, reset_keys_mnist, reset_keys_latent, reset_keys_cat_code, reset_keys_con_code = get_task_reset_keys_disc(
-                key, noise_keys, cat_keys, con_keys, self._pop_size, self._n_evaluations, n_repeats,self._ma_training)
+            self._key, reset_keys_mnist, reset_keys_latent, reset_keys_cat_code, reset_keys_con_code = get_task_reset_keys_disc(
+                self._key, self._pop_size, self._n_evaluations, n_repeats,self._ma_training)
 
         #jax.debug.print('reset keys 1 shape : {}', reset_keys1.shape)
         #jax.debug.print('reset keys 2 shape : {}', reset_keys2.shape)
         # Reset the tasks and the policy.
         if generator:
-            reset_keys_cat_code = disc_reset_keys_cat_code
+            #reset_keys_cat_code = disc_reset_keys_cat_code
             task_state = task_reset_func(reset_keys_latent, reset_keys_cat_code, reset_keys_con_code)
+            #cat_codes = task_state.cat_codes
+            # Count the index values equal to one across the batch of 64 vectors
+            #count_of_ones = jnp.sum(cat_codes, axis=1)  # Shape will be (512, 10)
+            
+            # Check if the counts are equal across all 512 individuals
+            #are_counts_equal = jnp.all(jnp.all(count_of_ones == count_of_ones[0], axis=1))
+            
+            #jax.debug.print("Counts of ones : {}", count_of_ones[0])
+            #jax.debug.print("Are counts equal across all individuals? : {}", are_counts_equal)
+
+
         else:
             task_state = task_reset_func(reset_keys_mnist, reset_keys_latent, reset_keys_cat_code, reset_keys_con_code)
-
-        #if testing:
+                    #if testing:
             # obs is shape (128, 512, 74), let's look at the first individual and first image and last ten features
             #jax.debug.print('task state obs : {}', task_state.obs[0, 0:100, -10:])
             #jax.debug.print('task state obs : {}', task_state.obs)
@@ -748,9 +765,13 @@ class SimManager(object):
         #    task_state = task_state.replace(var_con=var_con)
 
         task_state = task_state.replace(batch_stats_gen=self.batch_stats_gen)
-
         task_state = task_state.replace(batch_stats_disc=self.batch_stats_disc)
+        task_state = task_state.replace(batch_stats_q=self.batch_stats_q)
 
+        #if not generator:
+        #    digit_counts = {digit: jnp.sum(task_state.labels[0]== digit) for digit in range(10)}
+        #    jax.debug.print('digit counts : {}', digit_counts)
+        
         policy_state = policy_reset_func(task_state)
         
         if self._num_device > 1: #and not test:
@@ -764,6 +785,7 @@ class SimManager(object):
             params_q = split_params_for_pmap(params_q)
             policy_state = split_states_for_pmap(policy_state)
             batch_stats_disc = split_params_for_pmap(batch_stats_disc)
+            batch_stats_q = split_params_for_pmap(batch_stats_q)
 
         #jax.debug.print('obs params : {}', self.obs_params)
         # Do the rollouts.
@@ -820,6 +842,7 @@ class SimManager(object):
 
         batch_stats_gen_updated = final_states.batch_stats_gen
         batch_stats_disc_updated = final_states.batch_stats_disc
+        batch_stats_q_updated = final_states.batch_stats_q
 
         #noise_keys, cat_keys = random.split(self._key, 2)
 
@@ -916,4 +939,4 @@ class SimManager(object):
             scores2 = scores_mi
             scores3 = None
         #self._key = new_key
-        return scores1, scores2, scores3, self._bd_summarize_fn(final_states), batch_stats_gen_updated, batch_stats_disc_updated, fake_imgs, pop_stats, reset_keys_cat_code
+        return scores1, scores2, scores3, self._bd_summarize_fn(final_states), batch_stats_gen_updated, batch_stats_disc_updated, batch_stats_q_updated, fake_imgs, pop_stats, reset_keys_cat_code

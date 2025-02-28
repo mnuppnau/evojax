@@ -296,6 +296,10 @@ class PGPE_DISC(NEAlgorithm):
         self._solutions = None
         self._scaled_noises = None
 
+    def get_top_idx(self) -> jnp.ndarray:
+        """Get the index of the best solution."""
+        return self._top_idx
+
     def ask(self) -> jnp.ndarray:
         
         center, stdev = self._center, self._stdev
@@ -314,12 +318,15 @@ class PGPE_DISC(NEAlgorithm):
     def tell(self, fitness_real: Union[np.ndarray, jnp.ndarray], fitness_fake: Union[np.ndarray, jnp.ndarray]) -> None:
         #fitness_scores = process_scores(fitness, self._solution_ranking)
 
-        #fitness_real_one = fitness_real[:, None]
-        #fitness_fake_one = fitness_fake[:, None]
+        fitness_real_one = fitness_real[:, None]
+        fitness_fake_one = fitness_fake[:, None]
 
-        #objectives = jnp.hstack([abs(fitness_real_one), abs(fitness_fake_one)])
-        #ranks = non_dominated_sort_lax(objectives)
+        objectives = jnp.hstack([abs(fitness_real_one), abs(fitness_fake_one)])
+        ranks = non_dominated_sort_lax(objectives)
 
+        order = jnp.lexsort((-fitness_real_one.flatten(), ranks))
+        top_idx = order[:1]
+        self._top_idx = top_idx
         #best_fitness_real = jnp.max(fitness_real)
         #best_fitness_fake = jnp.max(fitness_fake)
 
