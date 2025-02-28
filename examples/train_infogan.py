@@ -107,37 +107,37 @@ def main(config):
         belief_space=belief_space,
     )
 
-    solver_disc = PGPE_DISC(
-        pop_size=config.pop_size,
-        param_size=policy_disc.num_params,
-        init_params=flat_params_disc,
-        optimizer='adam',
-        center_learning_rate=config.center_lr_disc,
-        stdev_learning_rate=config.std_lr_disc,
-        init_stdev=config.init_std_disc,
-        logger=logger,
-        seed=config.seed + 1,
-    )
+    #solver_disc = PGPE_DISC(
+    #    pop_size=config.pop_size,
+    #    param_size=policy_disc.num_params,
+    #    init_params=flat_params_disc,
+    #    optimizer='adam',
+    #    center_learning_rate=config.center_lr_disc,
+    #    stdev_learning_rate=config.std_lr_disc,
+    #    init_stdev=config.init_std_disc,
+    #    logger=logger,
+    #    seed=config.seed + 1,
+    #)
 
-    solver_q = PGPE_Q(
-        pop_size=config.pop_size,
-        param_size=policy_disc.num_params_q,
-        init_params=flat_params_q,
-        optimizer='adam',
-        center_learning_rate=config.center_lr_disc,
-        stdev_learning_rate=config.std_lr_disc,
-        init_stdev=config.init_std_disc,
-        logger=logger,
-        seed=config.seed + 2,
-    )
+    #solver_q = PGPE_Q(
+    #    pop_size=config.pop_size,
+    #    param_size=policy_disc.num_params_q,
+    #    init_params=flat_params_q,
+    #    optimizer='adam',
+    #    center_learning_rate=config.center_lr_disc,
+    #    stdev_learning_rate=config.std_lr_disc,
+    #    init_stdev=config.init_std_disc,
+    #    logger=logger,
+    #    seed=config.seed + 2,
+    #)
     
     # Train.
     trainer = Trainer(
         policy_gen=policy_gen,
         policy_disc=policy_disc,
         solver_gen=solver_gen,
-        solver_disc=solver_disc,
-        solver_q=solver_q,
+        #solver_disc=solver_disc,
+        #solver_q=solver_q,
         train_task_gen=train_task_latent,
         test_task_gen=test_task_latent,
         train_task_disc=train_task_mnist,
@@ -150,6 +150,7 @@ def main(config):
         n_repeats=1,
         n_evaluations=1,
         seed=config.seed,
+        batch_size=config.batch_size,
         log_dir=log_dir,
         logger=logger,
     )
