@@ -90,6 +90,7 @@ class Trainer(object):
 
         self.batch_stats_gen = policy_gen.flat_batch_stats_gen
         self.batch_stats_disc = policy_disc.flat_batch_stats_disc
+        self.batch_stats_q = policy_disc.flat_batch_stats_q
 
         self.fake_imgs = None
         self.cat_codes = None
@@ -195,28 +196,89 @@ class Trainer(object):
 
                 pop_stats = None
 
+                #jax.debug.print('batch stats gen shape : {} ', self.batch_stats_gen.shape)
+                #jax.debug.print('batch stats disc shape : {} ', self.batch_stats_disc.shape)
+                #jax.debug.print('batch stats q shape : {} ', self.batch_stats_q.shape)
                 disc_reset_keys = None
-                scores_real, scores_fake, scores_mi, bds_disc, self.batch_stats_gen, self.batch_stats_disc, _, _, disc_reset_keys_cat_code = self.sim_mgr_disc.eval_params(
-                    params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys, generator=False, test=False
+                #scores_real, scores_fake, scores_mi, bds_disc, self.batch_stats_gen, self.batch_stats_disc, self.batch_stats_q, _, _, disc_reset_keys_cat_code = self.sim_mgr_disc.eval_params(
+                #    params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys, generator=False, test=False
+                #)
+
+                ##jax.debug.print('scores mi : {}', scores_mi)
+                #if isinstance(self.solver_disc, QualityDiversityMethod):
+                #    self.solver_disc.observe_bd(bds_disc)
+               
+                #self.solver_disc.tell(fitness_real=scores_real, fitness_fake=scores_fake)
+                #self.solver_q.tell(fitness=scores_mi)
+
+                #top_disc_idx = self.solver_disc.get_top_idx()
+                ## select top disc idx batch norm stats with a shape of (pop_size, num_features)
+                #self.batch_stats_disc = self.batch_stats_disc[top_disc_idx, :].flatten()
+
+                ## find top q idx by calculating the max scores_mi
+                #top_q_idx = jnp.argmax(scores_mi)
+                #self.batch_stats_q = self.batch_stats_q[top_q_idx, :]
+
+                #top_gen_idx = jnp.argmax(scores_mi)
+                #self.batch_stats_gen = self.batch_stats_gen[top_gen_idx, :].flatten()
+
+                #params_disc = self.solver_disc.ask()
+                #params_q = self.solver_q.ask()
+
+                scores_real, scores_fake, scores_mi, bds_disc, _, self.batch_stats_disc, self.batch_stats_q, _, _, disc_reset_keys_cat_code = self.sim_mgr_disc.eval_params(
+                    params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys, generator=False, test=False
                 )
 
-                #jax.debug.print('scores mi : {}', scores_mi)
+                ##jax.debug.print('scores mi : {}', scores_mi)
                 if isinstance(self.solver_disc, QualityDiversityMethod):
                     self.solver_disc.observe_bd(bds_disc)
                
                 self.solver_disc.tell(fitness_real=scores_real, fitness_fake=scores_fake)
                 self.solver_q.tell(fitness=scores_mi)
 
+                top_disc_idx = self.solver_disc.get_top_idx()
+                ## select top disc idx batch norm stats with a shape of (pop_size, num_features)
+                self.batch_stats_disc = self.batch_stats_disc[top_disc_idx].flatten()
+                ## find top q idx by calculating the max scores_mi
+                top_q_idx = jnp.argmax(scores_mi)
+                self.batch_stats_q = self.batch_stats_q[top_q_idx]
+
+                #top_gen_idx = jnp.argmax(scores_mi)
+                #self.batch_stats_gen = self.batch_stats_gen[top_gen_idx].flatten()
+
                 params_disc = self.solver_disc.ask()
                 params_q = self.solver_q.ask()
+                
 
                 pop_stats = gather_pop_stats(belief_space)
 
-                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, self.batch_stats_gen, self.batch_stats_disc, _, pop_stats_updated, _ = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys_cat_code, generator=True, test=False
+                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, self.batch_stats_gen, _, _, _, pop_stats_updated, _ = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys_cat_code, generator=True, test=False
                 )
 
-                #self.solver_q.tell(fitness=scores_gen_mi)
+                if isinstance(self.solver_gen, QualityDiversityMethod):
+                    self.solver_gen.observe_bd(bds_gen)
+                
+                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_mi, disc_logits=disc_logits, adv=True)
+
+                #top_gen_idx = self.solver_gen.get_top_idx()
+                top_gen_idx = jnp.argmax(scores_gen_adv)
+                # select top gen idx batch norm stats with a shape of (pop_size, num_features)
+                self.batch_stats_gen = self.batch_stats_gen[top_gen_idx].flatten()
+                
+                #top_disc_idx = jnp.argmax(scores_mi)
+                #self.batch_stats_disc = self.batch_stats_disc[top_disc_idx].flatten()
+
+                #top_q_idx = jnp.argmax(scores_mi)
+                #self.batch_stats_q = self.batch_stats_q[top_q_idx]
+
+                params_gen, belief_space = self.solver_gen.ask()
+
+                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, self.batch_stats_gen, _, _, _, pop_stats_updated, _ = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys_cat_code, generator=True, test=False
+                )
+
+                #self.solver_q.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_mi, disc_logits=disc_logits)
                 #if np.array(scores_disc).max() < -0.002:
                 #    self.solver_disc.tell(fitness=scores_disc)
 
@@ -224,7 +286,40 @@ class Trainer(object):
                 if isinstance(self.solver_gen, QualityDiversityMethod):
                     self.solver_gen.observe_bd(bds_gen)
                 
-                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_mi, disc_logits=disc_logits)
+                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_mi, disc_logits=disc_logits, adv=True)
+
+                #top_gen_idx = self.solver_gen.get_top_idx()
+                top_gen_idx = jnp.argmax(scores_gen_adv)
+                # select top gen idx batch norm stats with a shape of (pop_size, num_features)
+                self.batch_stats_gen = self.batch_stats_gen[top_gen_idx].flatten()
+                
+                #top_disc_idx = jnp.argmax(scores_mi)
+                #self.batch_stats_disc = self.batch_stats_disc[top_disc_idx].flatten()
+
+                #top_q_idx = jnp.argmax(scores_mi)
+                #self.batch_stats_q = self.batch_stats_q[top_q_idx]
+
+                params_gen, belief_space = self.solver_gen.ask()
+
+                #scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, self.batch_stats_gen, _, _, _, pop_stats_updated, _ = self.sim_mgr_gen.eval_params(
+                #params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys_cat_code, generator=True, test=False
+                #)
+
+                #self.solver_q.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_mi, disc_logits=disc_logits)
+                #if np.array(scores_disc).max() < -0.002:
+                #    self.solver_disc.tell(fitness=scores_disc)
+
+                #self.solver_q.tell(fitness=scores_mi)
+                #if isinstance(self.solver_gen, QualityDiversityMethod):
+                #    self.solver_gen.observe_bd(bds_gen)
+                
+                #self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_mi, disc_logits=disc_logits, adv=True)
+
+                #top_gen_idx = self.solver_gen.get_top_idx()
+                #top_gen_idx = jnp.argmax(scores_gen_adv)
+                # select top gen idx batch norm stats with a shape of (pop_size, num_features)
+                #self.batch_stats_gen = self.batch_stats_gen[top_gen_idx].flatten()
+                
 
                 #self.fake_imgs = jnp.squeeze(self.fake_imgs, axis=0)
 
@@ -271,8 +366,8 @@ class Trainer(object):
                     best_params_q = self.solver_q.best_params
                     #jax.debug.print('batch stats gen shape : {} ', self.batch_stats_gen.shape)
 
-                    test_scores, _, _, _, _, _, fake_imgs, _, _ = self.sim_mgr_gen.eval_params(
-                        params_gen=best_params_gen, params_disc=best_params_disc, params_q=best_params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, generator=True, test=True, pop_stats=pop_stats_updated, disc_reset_keys_cat_code=disc_reset_keys_cat_code
+                    test_scores, _, _, _, _, _, _, fake_imgs, _, _ = self.sim_mgr_gen.eval_params(
+                        params_gen=best_params_gen, params_disc=best_params_disc, params_q=best_params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q, generator=True, test=True, pop_stats=pop_stats_updated, disc_reset_keys_cat_code=disc_reset_keys_cat_code
                     )
                     test_scores = np.array(test_scores)
                     self._logger.info(
