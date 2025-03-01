@@ -24,6 +24,22 @@ import jax.numpy as jnp
 from jax import tree_util
 from flax.core import FrozenDict
 
+def get_single_params_format_fn(init_params: FrozenDict) -> Callable:
+    """Return a function that formats a single flat parameter vector into the model parameter tree."""
+    flat, tree = tree_util.tree_flatten(init_params)
+    shapes = [p.shape for p in flat]
+    sizes = [np.prod(s) for s in shapes]
+    cum_sizes = np.cumsum(sizes)
+    
+    def params_format_fn(params: jnp.ndarray) -> FrozenDict:
+        # Split the 1D parameter vector at the right indices.
+        splits = jnp.split(params, cum_sizes[:-1])
+        # Reshape each split to match the corresponding original shape.
+        params_reshaped = [split.reshape(shape) for split, shape in zip(splits, shapes)]
+        return tree_util.tree_unflatten(tree, params_reshaped)
+    
+    return params_format_fn
+
 
 def get_params_format_fn(init_params: FrozenDict) -> Tuple[int, Callable]:
     """Return a function that formats the parameters into a correct format."""

@@ -19,7 +19,9 @@ from typing import Optional, Callable
 import jax
 import jax.numpy as jnp
 import numpy as np
+import optax
 
+from functools import partial
 from evojax.task.base import VectorizedTask
 from evojax.policy import PolicyNetwork
 from evojax.algo import NEAlgorithm
@@ -34,6 +36,10 @@ from jax.nn.initializers import normal as normal_init
 from jax.nn.initializers import he_normal
 from flax import linen as nn
 from torchvision import datasets
+
+# import Tuple
+from typing import Tuple
+
 
 class Generator(nn.Module):
     """ Generator CNN for MNIST """
@@ -75,25 +81,82 @@ class Discriminator(nn.Module):
         # Discriminator output
         d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
         d = d.reshape((d.shape[0], -1))
-   
-        return d, x#, disc_logits, mu.squeeze(), jnp.exp(var)
 
-class QNetwork(nn.Module):
-    features: int = 64
-    training: bool = True
-
-    q_cat: int = 10
-
-    @nn.compact
-    def __call__(self, x):
-        q = nn.Conv(self.features, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(x) 
+        # Q Network
+        q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
         q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
         q = nn.leaky_relu(q, 0.1)
-       
-        disc_logits = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=he_normal())(q)
-        disc_logits = disc_logits.reshape((disc_logits.shape[0], -1)) 
 
-        return disc_logits
+        q = nn.Conv(10, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
+        q = q.reshape((q.shape[0], -1))
+
+        return d,q#, disc_logits, mu.squeeze(), jnp.exp(var)
+
+@partial(jax.jit, static_argnames=['solver'])
+def train_step_disc(params_d, batch_stats_d, data, fake_imgs, fake_cat_input, opt_disc, solver):
+        def bce_logits(logit, label):
+                  """
+                  Implements the BCE with logits loss, as described:
+                  https://github.com/pytorch/pytorch/issues/751
+                  """
+                  neg_abs = -jnp.abs(logit)
+                  batch_bce = jnp.maximum(logit, 0) - logit * label + jnp.log(1 + jnp.exp(neg_abs))
+                  return jnp.mean(batch_bce)
+
+        def loss_mutual_information(code_cat, q_cat):
+                  cat_loss = -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
+                  mi_loss = cat_loss
+                  return mi_loss
+            
+            
+        def loss_discriminator(params_d, vars_d_batch_stats):
+                
+                  (real_preds, _), vars_d = Discriminator().apply(
+                      {'params': params_d, 'batch_stats': vars_d_batch_stats},
+                      data, mutable=['batch_stats']
+                  )
+                  (fake_preds, q), vars_d = Discriminator().apply(
+                      {'params': params_d, 'batch_stats': vars_d['batch_stats']},
+                      fake_imgs, mutable=['batch_stats']
+                  )
+                
+                  # Calculate Mutual Information loss
+                  q_cat = nn.log_softmax(q, axis=-1)
+                  loss_mi = loss_mutual_information(fake_cat_input, q_cat)
+                
+                  # real_preds reshape array of shape (64, 0) (size 0) to (64,)
+                  real_loss = bce_logits(real_preds, jnp.ones((64,), dtype=jnp.int32))
+                  fake_loss = bce_logits(fake_preds, jnp.zeros((64,), dtype=jnp.int32))
+                
+                  loss = (real_loss + fake_loss) / 2 + loss_mi
+                
+                  return loss, (vars_d)
+
+        grad_fn_disc = jax.value_and_grad(loss_discriminator, has_aux=True)
+        (loss, (vars_d)), grads = grad_fn_disc(params_d, batch_stats_d)
+        # apply gradients
+        updates, new_opt_state = solver.update(grads, opt_disc)
+        params_d = optax.apply_updates(params_d, updates)
+        # update batch stats
+        batch_stats_d = vars_d['batch_stats']
+        return params_d, batch_stats_d, new_opt_state
+
+#class QNetwork(nn.Module):
+#    features: int = 64
+#    training: bool = True
+#
+#    q_cat: int = 10
+#
+#    @nn.compact
+#    def __call__(self, x):
+#        q = nn.Conv(self.features, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(x) 
+#        q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
+#        q = nn.leaky_relu(q, 0.1)
+#       
+#        disc_logits = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=he_normal())(q)
+#        disc_logits = disc_logits.reshape((disc_logits.shape[0], -1)) 
+#
+#        return disc_logits
 
 def sample_latent(key, shape_noise, shape_cat):
   noise_key, cat_key = jax.random.split(key, 2)
@@ -102,8 +165,13 @@ def sample_latent(key, shape_noise, shape_cat):
   noise = jax.random.normal(noise_key, shape_noise)
 
   # Sample categorical latent code
-  code_cat = jax.random.randint(cat_key, shape_cat, 0, 10)
-  code_cat = jax.nn.one_hot(code_cat, 10)
+  #code_cat = jax.random.randint(cat_key, shape_cat, 0, 10)
+  #code_cat = jax.nn.one_hot(code_cat, 10)
+
+  c = jnp.tile(jnp.arange(10), 52)
+  c = c[:64]
+
+  code_cat = jax.nn.one_hot(c, 10)
 
   latent = jnp.concatenate([noise, code_cat], axis=-1)
 
@@ -113,7 +181,7 @@ def sample_batch(key: jnp.ndarray,
                  data: jnp.ndarray,
                  labels: jnp.ndarray,
                  batch_size: int) -> Tuple:
-    ix = random.choice(
+    ix = jax.random.choice(
         key=key, a=data.shape[0], shape=(batch_size,), replace=False)
     return (jnp.take(data, indices=ix, axis=0),
             jnp.take(labels, indices=ix, axis=0))
@@ -186,6 +254,8 @@ class Trainer(object):
         self.fake_imgs = None
         self.cat_codes = None
 
+        self.policy_gen = policy_gen
+
         self._key = jax.random.PRNGKey(44)
 
         self._log_interval = log_interval
@@ -202,8 +272,8 @@ class Trainer(object):
         )
 
         self.solver_gen = solver_gen
-        self.solver_disc = solver_disc
-        self.solver_q = solver_q
+        #self.solver_disc = solver_disc
+        #self.solver_q = solver_q
 
         self.sim_mgr_gen = SimManager(
             n_repeats=n_repeats,
@@ -219,9 +289,17 @@ class Trainer(object):
             logger=self._logger,
         )
 
+        self._key, subkey = jax.random.split(self._key)
+        
         dataset = datasets.MNIST('./data', train=True, download=True)
-        data = np.expand_dims(dataset.data.numpy() / 255.0, axis=-1)
-        labels = dataset.targets.numpy()
+        self.data = np.expand_dims(dataset.data.numpy() / 255.0, axis=-1)
+        self.labels = dataset.targets.numpy()
+
+        # initialize the discriminator
+        variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
+        self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
+
+        self.solver_disc = optax.adam(learning_rate=0.0002, b1=0.5, b2=0.999)
 
         #self.sim_mgr_disc = SimManager(
         #    n_repeats=n_repeats,
@@ -274,46 +352,83 @@ class Trainer(object):
                                      scores.min(), scores.std()))
             return scores.mean()
         else:
+            solver_disc = self.solver_disc
+            opt_disc = solver_disc.init(self.params_disc)
+
+
             self._logger.info(
                 'Start to train for {} iterations.'.format(self._max_iter))
 
             if params_gen is not None and params_disc is not None and params_q is not None:
                 # Continue training from the breakpoint.
                 self.solver_gen.best_params = params_gen
-                self.solver_disc.best_params = params_disc
-                self.solver_q.best_params = params_q
 
             best_score_gen, best_score_disc, best_score_q = -float('Inf'), -float('Inf'), -float('Inf')
 
+            params_disc = self.params_disc
+            
             for i in range(self._max_iter):
+                params_gen, belief_space = self.solver_gen.ask()
+
                 # Sample latent codes.
                 self._key, subkey = jax.random.split(self._key)
-                shape_noise = (self.batch_size, 64)
-                shape_cat = (self.batch_size,)
-                latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
+                shape_noise = (self.mini_batch_size, 64)
+                shape_cat = (self.mini_batch_size,)
+                #latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
+
+                best_params_gen = self.solver_gen.best_params
+                #best_params_gen = jnp.expand_dims(best_params_gen, axis=0)
+                params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
               
+                #if self.batch_stats_gen.shape[0] != 400 and len(self.batch_stats_gen.shape) == 2: #and not test:
+                #    # add pop size as first dimension to batch_stats_gen and batch_stats_disc
+                #    batch_stats_gen = jnp.repeat(self.batch_stats_gen[None, :], 400, axis=0)
+        
+                # add dimension to self.batch_stats_gen of shape (896,) to (1, 896)
+                if len(self.batch_stats_gen.shape) == 1:
+                    batch_stats_gen = jnp.expand_dims(self.batch_stats_gen, axis=0)
+                
+                batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
+                #jax.debug.print('batch stats gen: {} ', batch_stats_gen)
+                #else:
+                #    batch_stats_gen = self.batch_stats_gen
 
                 for mini_batch in range(self.num_mini_batches):
-                    real_imgs, real_labels = sample_batch(self._key, self.data, self.labels, self.mini_batch_size)
+                    # Sample batch of data.
 
-                    (fake_imgs), vars_g = Generator().apply({'params': params_gen, 'batch_stats': self.batch_stats_gen},latent, mutable=['batch_stats'])
+                    self._key, subkey_latent, subkey_mnist = jax.random.split(self._key, 3)
                     
-                    (real_preds, _), vars_d = Discriminator().apply({'params': params_disc, 'batch_stats': self.batch_stats_disc}, real_imgs, mutable=['batch_stats'])
-                    (fake_preds, q), vars_d = Discriminator().apply({'params': params_disc, 'batch_stats': self.batch_stats_disc}, fake_imgs, mutable=['batch_stats'])
-                
-                    (disc_logits, _), vars_q = QNetwork().apply({'params': params_q, 'batch_stats': self.batch_stats_q}, q, mutable=['batch_stats'])
 
-                    real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones((self.mini_batch_size, 1), dtype=jnp.float32)).mean()
-                    fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros((self.mini_batch_size, 1), dtype=jnp.float32)).mean()
+                    data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
+                    #data = np.expand_dims(data / 255.0, axis=-1)
 
-                    loss_disc = real_loss + fake_loss
+                    latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
+                    
+                    (fake_images), _ = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+
+                    #jax.debug.print('params disc shape: {} ', params_disc.shape)
+                    #jax.debug.print('batch stats disc shape: {} ', self.batch_stats_disc.shape)
+                    # Train the discriminator.
+                    params_disc, self.batch_stats_disc, opt_disc = train_step_disc(
+                        params_disc,
+                        self.batch_stats_disc,
+                        data,
+                        fake_images,
+                        cat_codes,
+                        opt_disc,
+                        solver_disc,
+                    )
+                   
+                leaves_params, _ = jax.tree_flatten(params_disc) 
+                flat_params_disc = jnp.concatenate([p.flatten() for p in leaves_params])
+
+                leaves_batch_stats_disc, _ = jax.tree_flatten(self.batch_stats_disc)
+                flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
+
+                disc_reset_keys_cat_code = None
                 # Generator step.
-                params_gen, belief_space = self.solver_gen.ask()
-                
-                
-
-                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, self.batch_stats_gen, _, _, _, pop_stats_updated, _ = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=params_disc, params_q=params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q, pop_stats=pop_stats, disc_reset_keys_cat_code=disc_reset_keys_cat_code, generator=True, test=False
+                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, self.batch_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
                 )
 
                 if isinstance(self.solver_gen, QualityDiversityMethod):
@@ -336,14 +451,14 @@ class Trainer(object):
                         'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
                             i, scores_gen_adv.size, scores_gen_adv.max(), scores_gen_adv.mean(),
                             scores_gen_adv.min(), scores_gen_adv.std()))
-                    scores_disc = np.array(scores_real+scores_fake)
+                    #scores_disc = np.array(scores_real+scores_fake)
                     #self._logger.info('Discriminator:')
-                    self._logger.info(
-                        'Iter={0}, size={1}, max={2:.4f}, '
-                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
-                            i, scores_disc.size, scores_disc.max(), scores_disc.mean(),
-                            scores_disc.min(), scores_disc.std()))
-                    scores_mi = np.array(scores_mi)
+                    #self._logger.info(
+                    #    'Iter={0}, size={1}, max={2:.4f}, '
+                    #    'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                    #        i, scores_disc.size, scores_disc.max(), scores_disc.mean(),
+                    #        scores_disc.min(), scores_disc.std()))
+                    scores_mi = np.array(scores_gen_mi)
                     #self._logger.info('Mutual Information:')
                     self._logger.info(
                         'Iter={0}, size={1}, max={2:.4f}, '
@@ -356,13 +471,12 @@ class Trainer(object):
 
                 if i > 0 and i % self._test_interval == 0:
                     best_params_gen = self.solver_gen.best_params
-                    best_params_disc = self.solver_disc.best_params
-                    best_params_q = self.solver_q.best_params
+                    #best_params_disc = self.solver_disc.best_params
+                    #best_params_q = self.solver_q.best_params
                     #jax.debug.print('batch stats gen shape : {} ', self.batch_stats_gen.shape)
 
-                    test_scores, _, _, _, _, _, _, fake_imgs, _, _ = self.sim_mgr_gen.eval_params(
-                        params_gen=best_params_gen, params_disc=best_params_disc, params_q=best_params_q, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q, generator=True, test=True, pop_stats=pop_stats_updated, disc_reset_keys_cat_code=disc_reset_keys_cat_code
-                    )
+                    test_scores, _, _, _, _, _, fake_imgs = self.sim_mgr_gen.eval_params(
+                        params_gen=best_params_gen, params_disc=flat_params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, generator=True, test=True)
                     test_scores = np.array(test_scores)
                     self._logger.info(
                         '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '

@@ -477,7 +477,7 @@ class PGPE(NEAlgorithm):
         lambda_mi = 1 - lambda_adv
         
         #tchebycheff_scores = w_adv * fitness_adv.flatten() + (w_mi*40) * fitness_mi.flatten() 
-        tchebycheff_scores = lambda_adv * norm_fitness_adv.flatten() + lambda_mi * norm_fitness_mi.flatten() 
+        tchebycheff_scores = w_adv * norm_fitness_adv.flatten() + w_mi * norm_fitness_mi.flatten() 
         top_tchebycheff = tchebycheff_scores[top_index]
 
         best_tchebycheff_scores = jnp.max(tchebycheff_scores)
@@ -628,8 +628,9 @@ class PGPE(NEAlgorithm):
         #    fitness_scores = fitness_adv.flatten()
         #elif self._t >= 200 and self._t % 2 == 0:
         if adv:
-            fitness_scores = fitness_adv.flatten()
+            #fitness_scores = fitness_adv.flatten()
             #fitness_scores = -jnp.argsort(order+1)
+            fitness_scores = tchebycheff_scores
         else:
             fitness_scores = fitness_mi.flatten()
         #fitness_scores = fitness_mi
