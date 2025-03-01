@@ -29,7 +29,7 @@ from evojax.policy.base import PolicyNetwork
 from evojax.policy.base import PolicyState
 from evojax.task.base import TaskState
 from evojax.util import create_logger
-from evojax.util import get_params_format_fn
+from evojax.util import get_params_format_fn, get_single_params_format_fn
 
 
 class CNN(nn.Module):
@@ -135,7 +135,7 @@ class Discriminator(nn.Module):
     features: int = 64
     training: bool = True
 
-    #q_cat: int = 10
+    q_cat: int = 10
 
     @nn.compact
     def __call__(self, x):
@@ -156,19 +156,19 @@ class Discriminator(nn.Module):
         #d = d.reshape((d.shape[0], -1))
         #d = nn.sigmoid(d)
         # Q outpiut
-        #q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-        #q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
-        #q = nn.leaky_relu(q, 0.2)
+        q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+        q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
+        q = nn.leaky_relu(q, 0.2)
         
 
-        #disc_logits = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
-        #disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
+        disc_logits = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
+        disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
                
         #mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
         #log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
         #var = jnp.squeeze(log_var)
     
-        return d, x#, disc_logits, mu.squeeze(), jnp.exp(var)
+        return d, disc_logits#, disc_logits, mu.squeeze(), jnp.exp(var)
 
 class QNetwork(nn.Module):
     features: int = 64
@@ -236,13 +236,18 @@ class GenPolicy(PolicyNetwork):
 
         #jax.debug.print('latent shape before init : {} ', latent.shape)
 
-        variables_gen = self.model_gen.init(key_gen, jnp.ones([64,74], jnp.float32))
+        variables_gen = self.model_gen.init(key_gen, jnp.ones([128,74], jnp.float32))
 
         self.init_params_gen, self.init_batch_stats_gen = variables_gen['params'], variables_gen['batch_stats']
 
+        #jax.debug.print('batch stats gen shape : {}', self.init_batch_stats_gen.shape)
         self.latent_dim = 64
   
         self.num_params, format_params_gen_fn = get_params_format_fn(self.init_params_gen)
+        
+        format_single_params_gen_fn = get_single_params_format_fn(self.init_params_gen)
+        self._format_single_params_gen_fn = format_single_params_gen_fn
+        
         self._logger.info(
             'GenPolicy.num_params = {}'.format(self.num_params))
         self._format_params_gen_fn = jax.vmap(format_params_gen_fn)
@@ -260,13 +265,13 @@ class GenPolicy(PolicyNetwork):
 
         self.flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
 
-        def forward_fn_gen(params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, params_q, vars_q_batch_stats, latent_input):
+        def forward_fn_gen(params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, latent_input):
           
             (fake_data), vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
        
             (preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
-            (disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
+            #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
 
             leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
             flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
@@ -274,10 +279,10 @@ class GenPolicy(PolicyNetwork):
             leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(vars_d['batch_stats'])
             flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
-            leaves_batch_stats_q, _ = jax.tree_util.tree_flatten(vars_q['batch_stats'])
-            flat_batch_stats_q = jnp.concatenate([p.flatten() for p in leaves_batch_stats_q])
+            #leaves_batch_stats_q, _ = jax.tree_util.tree_flatten(vars_q['batch_stats'])
+            #flat_batch_stats_q = jnp.concatenate([p.flatten() for p in leaves_batch_stats_q])
             
-            return fake_data, flat_batch_stats_gen, preds, disc_logits, flat_batch_stats_disc, flat_batch_stats_q
+            return fake_data, flat_batch_stats_gen, preds, q, flat_batch_stats_disc
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -303,22 +308,22 @@ class GenPolicy(PolicyNetwork):
                     t_states: TaskState,
                     params_gen: jnp.ndarray,
                     params_disc: jnp.ndarray,
-                    params_q: jnp.ndarray,
+                    #params_q: jnp.ndarray,
                     p_states: PolicyState) -> Tuple[jnp.ndarray, PolicyState]:
         
         params_gen = self._format_params_gen_fn(params_gen)
         params_disc = self._format_params_disc_fn(params_disc)
-        params_q = self._format_params_q_fn(params_q)
+        #params_q = self._format_params_q_fn(params_q)
 
         batch_stats_gen = self._format_batch_stats_gen_fn(t_states.batch_stats_gen)
         batch_stats_disc = self._format_batch_stats_disc_fn(t_states.batch_stats_disc)
-        batch_stats_q = self._format_batch_stats_q_fn(t_states.batch_stats_q) 
+        #batch_stats_q = self._format_batch_stats_q_fn(t_states.batch_stats_q) 
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, batch_stats_g, preds, disc_logits, batch_stats_d, batch_stats_q = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, params_q, batch_stats_q, t_states.obs)
+        fake_data, batch_stats_g, preds, disc_logits, batch_stats_d = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
         
-        return fake_data, preds, disc_logits, batch_stats_g, batch_stats_d, batch_stats_q, p_states
+        return fake_data, preds, disc_logits, batch_stats_g, batch_stats_d, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
