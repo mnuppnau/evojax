@@ -125,15 +125,19 @@ def train_step_disc(params_d, batch_stats_d, data, fake_imgs, fake_cat_input, op
                   loss_mi = loss_mutual_information(fake_cat_input, q_cat)
                 
                   # real_preds reshape array of shape (64, 0) (size 0) to (64,)
-                  real_loss = bce_logits(real_preds, jnp.ones((64,), dtype=jnp.int32))
-                  fake_loss = bce_logits(fake_preds, jnp.zeros((64,), dtype=jnp.int32))
-                
-                  loss = (real_loss + fake_loss) / 2 + loss_mi
+                  real_loss = bce_logits(real_preds, jnp.ones((32,), dtype=jnp.int32))
+                  fake_loss = bce_logits(fake_preds, jnp.zeros((32,), dtype=jnp.int32))
+               
+                  #jax.debug.print('real loss: {} ', real_loss)
+                  #jax.debug.print('fake loss: {} ', fake_loss)
+
+                  loss = (real_loss + fake_loss) + loss_mi* 0.1
                 
                   return loss, (vars_d)
 
         grad_fn_disc = jax.value_and_grad(loss_discriminator, has_aux=True)
         (loss, (vars_d)), grads = grad_fn_disc(params_d, batch_stats_d)
+        
         # apply gradients
         updates, new_opt_state = solver.update(grads, opt_disc)
         params_d = optax.apply_updates(params_d, updates)
@@ -169,7 +173,7 @@ def sample_latent(key, shape_noise, shape_cat):
   #code_cat = jax.nn.one_hot(code_cat, 10)
 
   c = jnp.tile(jnp.arange(10), 52)
-  c = c[:64]
+  c = c[:32]
 
   code_cat = jax.nn.one_hot(c, 10)
 
@@ -248,8 +252,8 @@ class Trainer(object):
         self.batch_stats_q = policy_disc.flat_batch_stats_q
 
         self.batch_size = batch_size
-        self.mini_batch_size = 64
-        self.num_mini_batches = 10
+        self.mini_batch_size = 32
+        self.num_mini_batches = 6
         
         self.fake_imgs = None
         self.cat_codes = None
@@ -376,9 +380,9 @@ class Trainer(object):
                 shape_cat = (self.mini_batch_size,)
                 #latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
 
-                best_params_gen = self.solver_gen.best_params
+                #best_params_gen = self.solver_gen.best_params
                 #best_params_gen = jnp.expand_dims(best_params_gen, axis=0)
-                params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
+                #params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
               
                 #if self.batch_stats_gen.shape[0] != 400 and len(self.batch_stats_gen.shape) == 2: #and not test:
                 #    # add pop size as first dimension to batch_stats_gen and batch_stats_disc
@@ -403,9 +407,17 @@ class Trainer(object):
                     #data = np.expand_dims(data / 255.0, axis=-1)
 
                     latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
-                    
-                    (fake_images), _ = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                  
+                    #if i > 600:
+                    #    params_gen = self.solver_gen.ask_ca()
+                    #    params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
+                    #else:
+                    best_params_gen = self.solver_gen.best_params
+                    params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
 
+                    (fake_images), vars_g = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+
+                    batch_stats_gen = vars_g['batch_stats']
                     #jax.debug.print('params disc shape: {} ', params_disc.shape)
                     #jax.debug.print('batch stats disc shape: {} ', self.batch_stats_disc.shape)
                     # Train the discriminator.
@@ -425,8 +437,25 @@ class Trainer(object):
                 leaves_batch_stats_disc, _ = jax.tree_flatten(self.batch_stats_disc)
                 flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
+                #params_gen, belief_space = self.solver_gen.ask()
                 disc_reset_keys_cat_code = None
                 # Generator step.
+                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, self.batch_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
+                )
+
+                if isinstance(self.solver_gen, QualityDiversityMethod):
+                    self.solver_gen.observe_bd(bds_gen)
+                
+                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_mi, disc_logits=disc_logits, adv=False)
+
+                #top_gen_idx = self.solver_gen.get_top_idx()
+                top_gen_idx = jnp.argmax(scores_gen_mi)
+                # select top gen idx batch norm stats with a shape of (pop_size, num_features)
+                self.batch_stats_gen = self.batch_stats_gen[top_gen_idx].flatten()
+                
+                params_gen, belief_space = self.solver_gen.ask()
+                
                 scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, self.batch_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
                 params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
                 )
@@ -441,8 +470,7 @@ class Trainer(object):
                 # select top gen idx batch norm stats with a shape of (pop_size, num_features)
                 self.batch_stats_gen = self.batch_stats_gen[top_gen_idx].flatten()
                 
-                params_gen, belief_space = self.solver_gen.ask()
-                
+
                 if i > 0 and i % self._log_interval == 0:
                     scores_gen_adv = np.array(scores_gen_adv)
                     self._logger.info('Generator:')
