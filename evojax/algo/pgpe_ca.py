@@ -322,58 +322,66 @@ class PGPE(NEAlgorithm):
         """Get the index of the top solution."""
         return self._top_idx
 
+    def ask_ca(self) -> jnp.ndarray:
+        center_ca, stdev_ca, min_index = get_updated_params(
+            self.belief_space, self._center, self._stdev, self._t
+        )
+        #jax.debug.print('center ca shape {} : ', center_ca.shape)
+        #jax.debug.print('min index {} : ', min_index)
+        return center_ca.flatten()
+
     def ask(self) -> jnp.ndarray:
-        if self._t > 100000:
-            center_ca, stdev_ca, min_index = get_updated_params(
-                self.belief_space, self._center, self._stdev, self._t
-            )
-            #jax.debug.print('max center ca value {} : ', jnp.max(center_ca))
-            #jax.debug.print('min center ca value {} : ', jnp.min(center_ca))
-            #jax.debug.print('max stddev ca value {} : ', jnp.max(stdev_ca))
-            #jax.debug.print('min stddev ca value {} : ', jnp.min(stdev_ca))
-            #jax.debug.print('min index {} : ', min_index)
-            #jax.debug.print('max center value {} : ', jnp.max(self._center))
-            #jax.debug.print('min center value {} : ', jnp.min(self._center))
-            #jax.debug.print('max stddev value {} : ', jnp.max(self._stdev))
-            #jax.debug.print('min stddev value {} : ', jnp.min(self._stdev))
-            if min_index == 0:
-                stdev_ca = stdev_ca * 0.2
-                num_directions_ca = 16
-            elif min_index == 1:
-                stdev_ca = stdev_ca * 0.1
-                num_directions_ca = 16
-            elif min_index == 2:
-                stdev_ca = stdev_ca * 0.2
-                num_directions_ca = 16
-            elif min_index == 3:
-                stdev_ca = stdev_ca * 0.3
-                num_directions_ca = 16
-            center, stdev = self._center, self._stdev
-        else:
-            center, stdev = self._center, self._stdev
+        #if self._t > 100000:
+        #    center_ca, stdev_ca, min_index = get_updated_params(
+        #        self.belief_space, self._center, self._stdev, self._t
+        #    )
+        #    #jax.debug.print('max center ca value {} : ', jnp.max(center_ca))
+        #    #jax.debug.print('min center ca value {} : ', jnp.min(center_ca))
+        #    #jax.debug.print('max stddev ca value {} : ', jnp.max(stdev_ca))
+        #    #jax.debug.print('min stddev ca value {} : ', jnp.min(stdev_ca))
+        #    #jax.debug.print('min index {} : ', min_index)
+        #    #jax.debug.print('max center value {} : ', jnp.max(self._center))
+        #    #jax.debug.print('min center value {} : ', jnp.min(self._center))
+        #    #jax.debug.print('max stddev value {} : ', jnp.max(self._stdev))
+        #    #jax.debug.print('min stddev value {} : ', jnp.min(self._stdev))
+        #    if min_index == 0:
+        #        stdev_ca = stdev_ca * 0.2
+        #        num_directions_ca = 16
+        #    elif min_index == 1:
+        #        stdev_ca = stdev_ca * 0.1
+        #        num_directions_ca = 16
+        #    elif min_index == 2:
+        #        stdev_ca = stdev_ca * 0.2
+        #        num_directions_ca = 16
+        #    elif min_index == 3:
+        #        stdev_ca = stdev_ca * 0.3
+        #        num_directions_ca = 16
+        #    center, stdev = self._center, self._stdev
+        #else:
+        center, stdev = self._center, self._stdev
 
         
-        if self._t > 100000:
-            # clip stdev_ca to be between 1e-4 and 1e1
-            stdev_ca = jnp.clip(stdev_ca, 1e-4, 1e1)
-            self._key, self._scaled_noises, self._solutions = ask_func_concat(
-                self._key,
-                stdev,
-                center,
-                self._num_directions,
-                self._center.size,
-                stdev_ca,
-                center_ca,
-                num_directions_ca // 2
-            )
-        else:
-            self._key, self._scaled_noises, self._solutions = ask_func(
-                self._key,
-                stdev,
-                center,
-                self._num_directions,
-                self._center.size,
-            )
+        #if self._t > 100000:
+        #    # clip stdev_ca to be between 1e-4 and 1e1
+        #    stdev_ca = jnp.clip(stdev_ca, 1e-4, 1e1)
+        #    self._key, self._scaled_noises, self._solutions = ask_func_concat(
+        #        self._key,
+        #        stdev,
+        #        center,
+        #        self._num_directions,
+        #        self._center.size,
+        #        stdev_ca,
+        #        center_ca,
+        #        num_directions_ca // 2
+        #    )
+        #else:
+        self._key, self._scaled_noises, self._solutions = ask_func(
+            self._key,
+            stdev,
+            center,
+            self._num_directions,
+            self._center.size,
+        )
 
         return self._solutions, self.belief_space
 
@@ -632,7 +640,8 @@ class PGPE(NEAlgorithm):
             #fitness_scores = -jnp.argsort(order+1)
             fitness_scores = tchebycheff_scores
         else:
-            fitness_scores = fitness_mi.flatten()
+            #fitness_scores = fitness_mi.flatten()
+            fitness_scores = -jnp.argsort(order+1)
         #fitness_scores = fitness_mi
         #jax.debug.print('weights : {} ', weights)
         #weights = -weights
