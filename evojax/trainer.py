@@ -314,7 +314,7 @@ class Trainer(object):
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.solver_disc = optax.adam(learning_rate=0.0002, b1=0.5, b2=0.999)
+        #self.solver_disc = optax.adam(learning_rate=0.0002, b1=0.5, b2=0.999)
 
         #self.sim_mgr_disc = SimManager(
         #    n_repeats=n_repeats,
@@ -332,19 +332,88 @@ class Trainer(object):
 
     def run(self, demo_mode: bool = False) -> float:
 
-        def gather_pop_stats(belief_space):
-
-            mean_mi = belief_space[5][9]
-            mean_g = belief_space[5][9]
-            mean_cond = belief_space[5][9]
-
-            var_mi = belief_space[5][9]
-            var_g = belief_space[5][9]
-            var_cond = belief_space[5][9]
+        def bce_logits(logit, label):
+            """
+            Implements the BCE with logits loss, as described:
+            https://github.com/pytorch/pytorch/issues/751
+            """
+            neg_abs = -jnp.abs(logit)
+            batch_bce = jnp.maximum(logit, 0) - logit * label + jnp.log(1 + jnp.exp(neg_abs))
+            return jnp.mean(batch_bce)
         
-            return jnp.array([mean_mi, mean_g, mean_cond, var_mi, var_g, var_cond])
+        def loss_mutual_information(code_cat, q_cat):
+                   cat_loss = -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
+                   mi_loss = cat_loss
+                   return mi_loss
+             
+             
+        def loss_discriminator(params_g, batch_stats_g, params_d, vars_d_batch_stats, data, fake_cat_input, latent):
+                 
+                   (fake_imgs, vars_g) = Generator().apply(
+                       {'params': params_g, 'batch_stats': batch_stats_g},
+                       latent, mutable=['batch_stats']
+                   )
+                   (real_preds, _), vars_d = Discriminator().apply(
+                       {'params': params_d, 'batch_stats': vars_d_batch_stats},
+                       data, mutable=['batch_stats']
+                   )
+                   (fake_preds, q), vars_d = Discriminator().apply(
+                       {'params': params_d, 'batch_stats': vars_d['batch_stats']},
+                       fake_imgs, mutable=['batch_stats']
+                   )
+                 
+                   # Calculate Mutual Information loss
+                   q_cat = nn.log_softmax(q, axis=-1)
+                   loss_mi = loss_mutual_information(fake_cat_input, q_cat)
+                 
+                   # real_preds reshape array of shape (64, 0) (size 0) to (64,)
+                   real_loss = bce_logits(real_preds, jnp.ones((32,), dtype=jnp.int32))
+                   fake_loss = bce_logits(fake_preds, jnp.zeros((32,), dtype=jnp.int32))
+                
+                   loss = (real_loss + fake_loss) + loss_mi* 0.1
+                 
+                   return loss, (vars_d, vars_g)
+        
+        def fit(params_g, batch_stats_g, params_d, batch_stats_d, data, latent, fake_cat_input, opt_disc):
+            #solver_disc = optax.adam(learning_rate=0.0002, b1=0.5, b2=0.999)
+            
+            @jax.jit
+            def train_step_disc(params_g, batch_stats_g, params_d, batch_stats_d, data, latent, fake_cat_input, opt_disc):
 
-        """Start the training / test process."""
+                grad_fn_disc = jax.value_and_grad(loss_discriminator, has_aux=True)
+                (loss, (vars_d,vars_g)), grads = grad_fn_disc(params_g, batch_stats_g, params_d, batch_stats_d, data, fake_cat_input, latent)
+                
+                # apply gradients
+                updates, new_opt_state = solver_disc.update(grads, opt_disc)
+                params_d = optax.apply_updates(params_d, updates)
+                batch_stats_g = vars_g['batch_stats']
+                # update batch stats
+                batch_stats_d = vars_d['batch_stats']
+                return params_d, batch_stats_d, batch_stats_g, new_opt_state
+
+            for i in range(self.num_mini_batches):
+                # Sample batch of data.
+                #self._key, subkey_latent, subkey_mnist = jax.random.split(self._key, 3)
+                
+                #data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
+                #data = np.expand_dims(data / 255.0, axis=-1)
+
+                #latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
+
+                # Train the discriminator.
+                params_d, batch_stats_d, batch_stats_g, opt_disc = train_step_disc(
+                    params_g,
+                    batch_stats_g,
+                    params_d,
+                    batch_stats_d,
+                    data,
+                    cat_codes,
+                    opt_disc,
+                )
+
+            return params_d, batch_stats_d, opt_disc
+        #opt_disc = solver_disc.init(self.params_disc)
+        opt_disc = optax.adam(learning_rate=0.0002, b1=0.5, b2=0.999) 
 
         if self.model_dir is not None:
             params_gen, self.batch_stats_gen = load_model_gen(model_dir=self.model_dir)
@@ -367,14 +436,10 @@ class Trainer(object):
                                      scores.min(), scores.std()))
             return scores.mean()
         else:
-            solver_disc = self.solver_disc
-            opt_disc = solver_disc.init(self.params_disc)
-
-
             self._logger.info(
                 'Start to train for {} iterations.'.format(self._max_iter))
 
-            if params_gen is not None and params_disc is not None and params_q is not None:
+            if params_gen is not None:
                 # Continue training from the breakpoint.
                 self.solver_gen.best_params = params_gen
 
@@ -389,8 +454,10 @@ class Trainer(object):
                 self._key, subkey = jax.random.split(self._key)
                 shape_noise = (self.mini_batch_size, 64)
                 shape_cat = (self.mini_batch_size,)
-                #latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
+                latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
 
+                # Sample batch of data.
+                data, labels = sample_batch(subkey, self.data, self.labels, self.mini_batch_size)
                 #best_params_gen = self.solver_gen.best_params
                 #best_params_gen = jnp.expand_dims(best_params_gen, axis=0)
                 #params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
@@ -408,45 +475,55 @@ class Trainer(object):
                 #else:
                 #    batch_stats_gen = self.batch_stats_gen
 
-                for mini_batch in range(self.num_mini_batches):
-                    # Sample batch of data.
+                params_disc, self.batch_stats_disc, opt_disc = fit(
+                    params_gen,
+                    batch_stats_gen,
+                    params_disc,
+                    self.batch_stats_disc,
+                    data,
+                    latent,
+                    cat_codes,
+                    opt_disc
+                )
+                #for mini_batch in range(self.num_mini_batches):
+                #    # Sample batch of data.
 
-                    self._key, subkey_latent, subkey_mnist = jax.random.split(self._key, 3)
-                    
+                #    self._key, subkey_latent, subkey_mnist = jax.random.split(self._key, 3)
+                #    
 
-                    data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
-                    #data = np.expand_dims(data / 255.0, axis=-1)
+                #    data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
+                #    #data = np.expand_dims(data / 255.0, axis=-1)
 
-                    latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
-                  
-                    #if i > 600:
-                    #    params_gen = self.solver_gen.ask_ca()
-                    #    params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
-                    #else:
-                    best_params_gen = self.solver_gen.best_params
-                    params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
+                #    latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
+                #  
+                #    #if i > 600:
+                #    #    params_gen = self.solver_gen.ask_ca()
+                #    #    params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
+                #    #else:
+                #    best_params_gen = self.solver_gen.best_params
+                #    params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
 
-                    #(fake_images), vars_g = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
-                    #fake_images, batch_stats_gen = train_step_gen(
-                    #    params_gen_formatted,
-                    #    batch_stats_gen,
-                    #    latent,
-                    #)
+                #    #(fake_images), vars_g = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                #    #fake_images, batch_stats_gen = train_step_gen(
+                #    #    params_gen_formatted,
+                #    #    batch_stats_gen,
+                #    #    latent,
+                #    #)
 
-                    #batch_stats_gen = vars_g['batch_stats']
-                    #jax.debug.print('params disc shape: {} ', params_disc.shape)
-                    #jax.debug.print('batch stats disc shape: {} ', self.batch_stats_disc.shape)
-                    # Train the discriminator.
-                    params_disc, self.batch_stats_disc, opt_disc = train_step_disc(
-                        params_gen_formatted,
-                        batch_stats_gen,
-                        params_disc,
-                        self.batch_stats_disc,
-                        data,
-                        cat_codes,
-                        opt_disc,
-                        solver_disc,
-                    )
+                #    #batch_stats_gen = vars_g['batch_stats']
+                #    #jax.debug.print('params disc shape: {} ', params_disc.shape)
+                #    #jax.debug.print('batch stats disc shape: {} ', self.batch_stats_disc.shape)
+                #    # Train the discriminator.
+                #    params_disc, self.batch_stats_disc, opt_disc = train_step_disc(
+                #        params_gen_formatted,
+                #        batch_stats_gen,
+                #        params_disc,
+                #        self.batch_stats_disc,
+                #        data,
+                #        cat_codes,
+                #        opt_disc,
+                #        solver_disc,
+                #    )
                    
                 leaves_params, _ = jax.tree_flatten(params_disc) 
                 flat_params_disc = jnp.concatenate([p.flatten() for p in leaves_params])

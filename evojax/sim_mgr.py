@@ -367,16 +367,16 @@ class SimManager(object):
             step_once_gen_fn=partial(step_once_gen, task=train_vec_task),
             max_steps=train_vec_task.max_steps)
         
-        self._train_rollout_disc_fn = partial(
-            rollout_disc,
-            step_once_disc_fn=partial(step_once_disc, task=train_vec_task),
-            max_steps=train_vec_task.max_steps)
+        #self._train_rollout_disc_fn = partial(
+        #    rollout_disc,
+        #    step_once_disc_fn=partial(step_once_disc, task=train_vec_task),
+        #    max_steps=train_vec_task.max_steps)
         
         if self._num_device > 1:
             self._train_rollout_gen_fn = jax.jit(jax.pmap(
                 self._train_rollout_gen_fn, in_axes=(0, 0, 0, 0, None, None)))
-            self._train_rollout_disc_fn = jax.jit(jax.pmap(
-                self._train_rollout_disc_fn, in_axes=(0, 0, 0, 0, 0, None)))
+            #self._train_rollout_disc_fn = jax.jit(jax.pmap(
+            #    self._train_rollout_disc_fn, in_axes=(0, 0, 0, 0, 0, None)))
 
 
         # Set up validation functions.
