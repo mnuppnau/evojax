@@ -374,17 +374,17 @@ class Trainer(object):
                  
                    return loss, (vars_d, vars_g)
         
-        def fit(params_g, batch_stats_g, params_d, batch_stats_d, data, latent, fake_cat_input, opt_disc):
-            #solver_disc = optax.adam(learning_rate=0.0002, b1=0.5, b2=0.999)
-            
-            @jax.jit
+        def fit(params_g, batch_stats_g, params_d, batch_stats_d, data, latent, cat_codes, opt_disc):
+            opt_state = opt_disc.init(params_d)
+
+            #@jax.jit
             def train_step_disc(params_g, batch_stats_g, params_d, batch_stats_d, data, latent, fake_cat_input, opt_disc):
 
                 grad_fn_disc = jax.value_and_grad(loss_discriminator, has_aux=True)
                 (loss, (vars_d,vars_g)), grads = grad_fn_disc(params_g, batch_stats_g, params_d, batch_stats_d, data, fake_cat_input, latent)
                 
                 # apply gradients
-                updates, new_opt_state = solver_disc.update(grads, opt_disc)
+                updates, new_opt_state = opt_disc.update(grads, opt_state, params_d)
                 params_d = optax.apply_updates(params_d, updates)
                 batch_stats_g = vars_g['batch_stats']
                 # update batch stats
@@ -407,6 +407,7 @@ class Trainer(object):
                     params_d,
                     batch_stats_d,
                     data,
+                    latent,
                     cat_codes,
                     opt_disc,
                 )
@@ -458,9 +459,10 @@ class Trainer(object):
 
                 # Sample batch of data.
                 data, labels = sample_batch(subkey, self.data, self.labels, self.mini_batch_size)
-                #best_params_gen = self.solver_gen.best_params
+                
+                best_params_gen = self.solver_gen.best_params
                 #best_params_gen = jnp.expand_dims(best_params_gen, axis=0)
-                #params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
+                params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
               
                 #if self.batch_stats_gen.shape[0] != 400 and len(self.batch_stats_gen.shape) == 2: #and not test:
                 #    # add pop size as first dimension to batch_stats_gen and batch_stats_disc
@@ -476,7 +478,7 @@ class Trainer(object):
                 #    batch_stats_gen = self.batch_stats_gen
 
                 params_disc, self.batch_stats_disc, opt_disc = fit(
-                    params_gen,
+                    params_gen_formatted,
                     batch_stats_gen,
                     params_disc,
                     self.batch_stats_disc,
