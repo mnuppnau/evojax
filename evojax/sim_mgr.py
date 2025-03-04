@@ -519,11 +519,10 @@ class SimManager(object):
             self._key, self._pop_size, self._n_evaluations, n_repeats, self._ma_training)
 
         # Reset the tasks and the policy.
-        if generator:
             #reset_keys_cat_code = disc_reset_keys_cat_code
-            task_state = task_reset_func(reset_keys_latent, reset_keys_cat_code, reset_keys_con_code)
+        task_state = task_reset_func(reset_keys_latent, reset_keys_cat_code, reset_keys_con_code)
     
-        task_state = task_state.replace(var_con=var_con)
+        #task_state = task_state.replace(var_con=var_con)
 
         task_state = task_state.replace(batch_stats_gen=self.batch_stats_gen)
         task_state = task_state.replace(batch_stats_disc=self.batch_stats_disc)
@@ -554,12 +553,9 @@ class SimManager(object):
         if test:
             scores_adv, scores_mi, all_obs, masks, final_states, fake_imgs = rollout_func(
                 task_state, policy_state, params_gen, params_disc, self.obs_params)
-        elif generator:
+        else:
             scores_adv, scores_mi, all_obs, masks, final_states, disc_logits, loss_g = rollout_func(
             task_state, policy_state, params_gen, params_disc, self.obs_params, self._i)
-        else: 
-            scores_real, scores_fake, scores_mi, all_obs, masks, final_states = rollout_func(
-                task_state, policy_state, params_gen, params_disc, self.obs_params)
 
         if self._num_device > 1:
             all_obs = reshape_data_from_pmap(all_obs)
@@ -638,14 +634,6 @@ class SimManager(object):
                     #scores_con.ravel().reshape((n_repeats, -1)), axis=0)
                 #scores_bin = jnp.mean(
                 #    scores_bin.ravel().reshape((n_repeats, -1)), axis=0)
-            elif not test and not generator:
-                # In training, they share the same parameters.
-                scores_real = jnp.mean(
-                    scores_real.ravel().reshape((n_repeats, -1)), axis=0)
-                scores_fake = jnp.mean(
-                    scores_fake.ravel().reshape((n_repeats, -1)), axis=0)
-                score_mi = jnp.mean(
-                    scores_mi.ravel().reshape((n_repeats, -1)), axis=0)
             else:
                 # In tests, they share the same parameters.
                 scores_adv = jnp.mean(
@@ -656,10 +644,6 @@ class SimManager(object):
                 #    scores_con.ravel().reshape((n_repeats, -1)), axis=1)
                 #scores_bin = jnp.mean(
                 #    scores_bin.ravel().reshape((n_repeats, -1)), axis=1)
-        elif not test and not generator:
-            scores_real = jnp.mean(scores_real.ravel().reshape((-1, n_repeats)), axis=-1)
-            scores_fake = jnp.mean(scores_fake.ravel().reshape((-1, n_repeats)), axis=-1)
-            scores_mi = jnp.mean(scores_mi.ravel().reshape((-1, n_repeats)), axis=-1)
         else:
             scores_adv = jnp.mean(
                 scores_adv.ravel().reshape((-1, n_repeats)), axis=-1)
@@ -687,11 +671,7 @@ class SimManager(object):
         #elif self._t > 30000:
         #    self._i = 0.4
 
-        if not test and not generator:
-            scores1 = scores_real
-            scores2 = scores_fake
-            scores3 = scores_mi
-        elif generator and not test:
+        if generator and not test:
             scores1 = scores_adv
             scores2 = scores_mi
             scores3 = disc_logits

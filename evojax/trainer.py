@@ -173,7 +173,8 @@ def train_step_disc(params_g, batch_stats_g, params_d, batch_stats_d, data, fake
 #
 #        return disc_logits
 
-def sample_latent(key, shape_noise, shape_cat):
+#@jax.jit
+def sample_latent(key, shape_noise):
   noise_key, cat_key = jax.random.split(key, 2)
   
   # Sample irreducible noise
@@ -192,6 +193,7 @@ def sample_latent(key, shape_noise, shape_cat):
 
   return latent, code_cat
 
+#@jax.jit
 def sample_batch(key: jnp.ndarray,
                  data: jnp.ndarray,
                  labels: jnp.ndarray,
@@ -266,6 +268,9 @@ class Trainer(object):
         self.mini_batch_size = 32
         self.num_mini_batches = 6
         
+        self.shape_noise = (self.mini_batch_size, 64)
+        self.shape_cat = (self.mini_batch_size,)
+
         self.fake_imgs = None
         self.cat_codes = None
 
@@ -374,13 +379,12 @@ class Trainer(object):
                  
                    return loss, (vars_d, vars_g)
         
-        def fit(params_g, batch_stats_g, params_d, batch_stats_d, data, latent, cat_codes, opt_disc):
-            opt_state = opt_disc.init(params_d)
+        def fit(params_g, batch_stats_g, params_d, batch_stats_d, opt_disc, opt_state):
 
-            #@jax.jit
-            def train_step_disc(params_g, batch_stats_g, params_d, batch_stats_d, data, latent, fake_cat_input, opt_disc):
+            @jax.jit
+            def step(params_g, batch_stats_g, params_d, batch_stats_d, data, latent, fake_cat_input, opt_state):
 
-                grad_fn_disc = jax.value_and_grad(loss_discriminator, has_aux=True)
+                grad_fn_disc = jax.value_and_grad(loss_discriminator, argnums=2, has_aux=True)
                 (loss, (vars_d,vars_g)), grads = grad_fn_disc(params_g, batch_stats_g, params_d, batch_stats_d, data, fake_cat_input, latent)
                 
                 # apply gradients
@@ -393,15 +397,16 @@ class Trainer(object):
 
             for i in range(self.num_mini_batches):
                 # Sample batch of data.
-                #self._key, subkey_latent, subkey_mnist = jax.random.split(self._key, 3)
+                self._key, subkey_latent, subkey_mnist = jax.random.split(self._key, 3)
                 
-                #data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
+                data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
                 #data = np.expand_dims(data / 255.0, axis=-1)
 
-                #latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
+
+                latent, cat_codes = sample_latent(subkey_latent, self.shape_noise)
 
                 # Train the discriminator.
-                params_d, batch_stats_d, batch_stats_g, opt_disc = train_step_disc(
+                params_d, batch_stats_d, batch_stats_g, opt_state = step(
                     params_g,
                     batch_stats_g,
                     params_d,
@@ -409,13 +414,15 @@ class Trainer(object):
                     data,
                     latent,
                     cat_codes,
-                    opt_disc,
+                    opt_state,
                 )
 
-            return params_d, batch_stats_d, opt_disc
+            return params_d, batch_stats_d, opt_state
         #opt_disc = solver_disc.init(self.params_disc)
         opt_disc = optax.adam(learning_rate=0.0002, b1=0.5, b2=0.999) 
 
+        opt_state = opt_disc.init(self.params_disc)
+        
         if self.model_dir is not None:
             params_gen, self.batch_stats_gen = load_model_gen(model_dir=self.model_dir)
             params_disc, self.batch_stats_disc = load_model_disc(model_dir=self.model_dir)
@@ -452,13 +459,11 @@ class Trainer(object):
                 params_gen, belief_space = self.solver_gen.ask()
 
                 # Sample latent codes.
-                self._key, subkey = jax.random.split(self._key)
-                shape_noise = (self.mini_batch_size, 64)
-                shape_cat = (self.mini_batch_size,)
-                latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
+                #self._key, subkey = jax.random.split(self._key)
+                #latent, cat_codes = sample_latent(subkey, shape_noise)
 
                 # Sample batch of data.
-                data, labels = sample_batch(subkey, self.data, self.labels, self.mini_batch_size)
+                #data, labels = sample_batch(subkey, self.data, self.labels, self.mini_batch_size)
                 
                 best_params_gen = self.solver_gen.best_params
                 #best_params_gen = jnp.expand_dims(best_params_gen, axis=0)
@@ -477,15 +482,13 @@ class Trainer(object):
                 #else:
                 #    batch_stats_gen = self.batch_stats_gen
 
-                params_disc, self.batch_stats_disc, opt_disc = fit(
+                params_disc, self.batch_stats_disc, opt_state = fit(
                     params_gen_formatted,
                     batch_stats_gen,
                     params_disc,
                     self.batch_stats_disc,
-                    data,
-                    latent,
-                    cat_codes,
-                    opt_disc
+                    opt_disc,
+                    opt_state,
                 )
                 #for mini_batch in range(self.num_mini_batches):
                 #    # Sample batch of data.
