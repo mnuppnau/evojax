@@ -405,7 +405,7 @@ class PGPE(NEAlgorithm):
 
         #cdist = compute_crowding_distance(objectives, ranks)
 
-        order = jnp.lexsort((-fitness_mi.flatten(), ranks))
+        order = jnp.lexsort((-fitness_adv.flatten(), ranks))
         
         top_index = order[:1]
 
@@ -636,9 +636,9 @@ class PGPE(NEAlgorithm):
         #    fitness_scores = fitness_adv.flatten()
         #elif self._t >= 200 and self._t % 2 == 0:
         if adv:
-            #fitness_scores = fitness_adv.flatten()
+            fitness_scores = fitness_adv.flatten()
             #fitness_scores = -jnp.argsort(order+1)
-            fitness_scores = tchebycheff_scores
+        #fitness_scores = tchebycheff_scores
         else:
             #fitness_scores = fitness_mi.flatten()
             fitness_scores = -jnp.argsort(order+1)

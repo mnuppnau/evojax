@@ -92,6 +92,12 @@ class Discriminator(nn.Module):
 
         return d,q#, disc_logits, mu.squeeze(), jnp.exp(var)
 
+@jax.jit
+def train_step_gen(params_g, batch_stats_g, latent):
+    (fake_images), vars_g = Generator().apply({'params': params_g, 'batch_stats': batch_stats_g},latent, mutable=['batch_stats'])
+    batch_stats_g = vars_g['batch_stats']
+    return fake_images, batch_stats_g
+
 @partial(jax.jit, static_argnames=['solver'])
 def train_step_disc(params_d, batch_stats_d, data, fake_imgs, fake_cat_input, opt_disc, solver):
         def bce_logits(logit, label):
@@ -415,9 +421,14 @@ class Trainer(object):
                     best_params_gen = self.solver_gen.best_params
                     params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
 
-                    (fake_images), vars_g = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                    #(fake_images), vars_g = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                    fake_images, batch_stats_gen = train_step_gen(
+                        params_gen_formatted,
+                        batch_stats_gen,
+                        latent,
+                    )
 
-                    batch_stats_gen = vars_g['batch_stats']
+                    #batch_stats_gen = vars_g['batch_stats']
                     #jax.debug.print('params disc shape: {} ', params_disc.shape)
                     #jax.debug.print('batch stats disc shape: {} ', self.batch_stats_disc.shape)
                     # Train the discriminator.
