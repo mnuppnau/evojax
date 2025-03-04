@@ -92,14 +92,14 @@ class Discriminator(nn.Module):
 
         return d,q#, disc_logits, mu.squeeze(), jnp.exp(var)
 
-@jax.jit
-def train_step_gen(params_g, batch_stats_g, latent):
-    (fake_images), vars_g = Generator().apply({'params': params_g, 'batch_stats': batch_stats_g},latent, mutable=['batch_stats'])
-    batch_stats_g = vars_g['batch_stats']
-    return fake_images, batch_stats_g
+#@jax.jit
+#def train_step_gen(params_g, batch_stats_g, latent):
+#    (fake_images), vars_g = Generator().apply({'params': params_g, 'batch_stats': batch_stats_g},latent, mutable=['batch_stats'])
+#    batch_stats_g = vars_g['batch_stats']
+#    return fake_images, batch_stats_g
 
 @partial(jax.jit, static_argnames=['solver'])
-def train_step_disc(params_d, batch_stats_d, data, fake_imgs, fake_cat_input, opt_disc, solver):
+def train_step_disc(params_g, batch_stats_g, params_d, batch_stats_d, data, fake_cat_input, opt_disc, solver):
         def bce_logits(logit, label):
                   """
                   Implements the BCE with logits loss, as described:
@@ -117,6 +117,10 @@ def train_step_disc(params_d, batch_stats_d, data, fake_imgs, fake_cat_input, op
             
         def loss_discriminator(params_d, vars_d_batch_stats):
                 
+                  (fake_imgs, vars_g) = Generator().apply(
+                      {'params': params_g, 'batch_stats': batch_stats_g},
+                      latent, mutable=['batch_stats']
+                  )
                   (real_preds, _), vars_d = Discriminator().apply(
                       {'params': params_d, 'batch_stats': vars_d_batch_stats},
                       data, mutable=['batch_stats']
@@ -139,17 +143,18 @@ def train_step_disc(params_d, batch_stats_d, data, fake_imgs, fake_cat_input, op
 
                   loss = (real_loss + fake_loss) + loss_mi* 0.1
                 
-                  return loss, (vars_d)
+                  return loss, (vars_d, vars_g)
 
         grad_fn_disc = jax.value_and_grad(loss_discriminator, has_aux=True)
-        (loss, (vars_d)), grads = grad_fn_disc(params_d, batch_stats_d)
+        (loss, (vars_d,vars_g)), grads = grad_fn_disc(params_d, batch_stats_d)
         
         # apply gradients
         updates, new_opt_state = solver.update(grads, opt_disc)
         params_d = optax.apply_updates(params_d, updates)
+        batch_stats_g = vars_g['batch_stats']
         # update batch stats
         batch_stats_d = vars_d['batch_stats']
-        return params_d, batch_stats_d, new_opt_state
+        return params_d, batch_stats_d, batch_stats_g, new_opt_state
 
 #class QNetwork(nn.Module):
 #    features: int = 64
@@ -422,21 +427,22 @@ class Trainer(object):
                     params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
 
                     #(fake_images), vars_g = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
-                    fake_images, batch_stats_gen = train_step_gen(
-                        params_gen_formatted,
-                        batch_stats_gen,
-                        latent,
-                    )
+                    #fake_images, batch_stats_gen = train_step_gen(
+                    #    params_gen_formatted,
+                    #    batch_stats_gen,
+                    #    latent,
+                    #)
 
                     #batch_stats_gen = vars_g['batch_stats']
                     #jax.debug.print('params disc shape: {} ', params_disc.shape)
                     #jax.debug.print('batch stats disc shape: {} ', self.batch_stats_disc.shape)
                     # Train the discriminator.
                     params_disc, self.batch_stats_disc, opt_disc = train_step_disc(
+                        params_gen_formatted,
+                        batch_stats_gen,
                         params_disc,
                         self.batch_stats_disc,
                         data,
-                        fake_images,
                         cat_codes,
                         opt_disc,
                         solver_disc,
