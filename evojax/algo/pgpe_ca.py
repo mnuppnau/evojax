@@ -279,9 +279,9 @@ class PGPE(NEAlgorithm):
 
         if optimizer_config is None:
             optimizer_config = {}
-        decay_coef = optimizer_config.get("center_lr_decay_coef", 1.0)
+        decay_coef = optimizer_config.get("center_lr_decay_coef", 0.9)
         self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 1000
+            "center_lr_decay_steps", 20000
         )
 
         if optimizer == "adam":
@@ -320,7 +320,7 @@ class PGPE(NEAlgorithm):
 
     def get_top_idx(self) -> jnp.ndarray:
         """Get the index of the top solution."""
-        return self._top_idx
+        return self._top_indices
 
     def ask_ca(self) -> jnp.ndarray:
         center_ca, stdev_ca, min_index = get_updated_params(
@@ -391,8 +391,9 @@ class PGPE(NEAlgorithm):
         # add a dimension to the fitness scores so that (256,) becomes (256, 1)
         fitness_adv = fitness_adv[:, None]
         fitness_mi = fitness_mi[:, None]
+        fitness_con = fitness_con[:, None]
 
-        objectives = jnp.hstack([-fitness_mi, -fitness_adv])
+        objectives = jnp.hstack([-fitness_adv, -fitness_mi])
         #jax.debug.print('objectives {} : ', objectives)
         #jax.debug.print('objectives shape {} : ', objectives.shape)
         ranks = non_dominated_sort_lax(objectives)
@@ -405,11 +406,19 @@ class PGPE(NEAlgorithm):
 
         #cdist = compute_crowding_distance(objectives, ranks)
 
+        #if adv:
+        #order = jnp.lexsort((-fitness_adv.flatten(), ranks))
+        #else:
         order = jnp.lexsort((-fitness_adv.flatten(), ranks))
-        
+
         top_index = order[:1]
 
-        self._top_idx = top_index
+        #self._top_idx = top_index
+        
+        top_indices = order[:40]
+
+        self._top_indices = top_indices
+
         top_solution = self._solutions[top_index]
         top_scaled_noise = self._scaled_noises[top_index]
 
@@ -442,21 +451,33 @@ class PGPE(NEAlgorithm):
         avg_fitness_adv = jnp.mean(fitness_adv)
         avg_fitness_mi = jnp.mean(fitness_mi)
 
+        rolling_window_avg_adv = self.belief_space[5][2]
+        rolling_window_avg_mi = self.belief_space[5][3]
+
+        mu_adv = jnp.mean(rolling_window_avg_adv)
+        mu_mi = jnp.mean(rolling_window_avg_mi)
+
+        sigma_adv = jnp.std(rolling_window_avg_adv) + 1e-8
+        sigma_mi = jnp.std(rolling_window_avg_mi) + 1e-8
+
+        L_adv_norm = (fitness_adv.flatten() - mu_adv) / sigma_adv
+        L_mi_norm = (fitness_mi.flatten() - mu_mi) / sigma_mi
+
+
         rng_adv = jnp.max(fitness_adv) - jnp.min(fitness_adv)
         rng_mi = jnp.max(fitness_mi) - jnp.min(fitness_mi)
 
-        norm_fitness_adv = (fitness_adv - best_adv) / rng_adv
-        norm_fitness_mi = (fitness_mi - best_mi) / rng_mi
+        #norm_fitness_adv = (fitness_adv - best_adv) / rng_adv
+        #norm_fitness_mi = (fitness_mi - best_mi) / rng_mi
 
-        fitness_adv_avg = jnp.mean(fitness_adv)
-        fitness_mi_avg = jnp.mean(fitness_mi)
-
-        w_adv = fitness_adv_avg / (fitness_adv_avg + fitness_mi_avg)
+        w_adv = avg_fitness_adv / (avg_fitness_adv + avg_fitness_mi)
         w_adv = jnp.clip(w_adv, 0.1, 0.9)
+        #w_adv = w_adv*3
+        #w_adv = jnp.clip(w_adv, 0.5, 0.9)
         w_mi = 1 - w_adv
 
         #jax.debug.print('w_adv : {} ', w_adv)
-        #jax.debug.print('w_mi : {} ', w_mi)
+        #jax.debug.print('w_con : {} ', w_con)
         best_adv_window = self.belief_space[5][0]
         best_mi_window = self.belief_space[5][1]
 
@@ -464,28 +485,26 @@ class PGPE(NEAlgorithm):
         mi_window_var = jnp.var(best_mi_window)
         total_var = adv_window_var + mi_window_var
 
-        if total_var < 1e-8:
-           lambda_adv = 0.5
-           lambda_mi = 0.5
-        elif self._t < 60:
-            lambda_adv = 0.3
-            lambda_mi = 0.7
-        elif adv:
-            lambda_adv = 0.7
-            lambda_mi = 0.3
+        if self._t < 24000:
+            lambda_mi = 0.1 + self._t // 60000
+        else: 
+            lambda_adv = 0.1 + self._t // 60000
+            lambda_mi = 1 - lambda_adv
+
+        #lambda_mi = 0.4
+        if self._t < 100:
+            tchebycheff_scores = fitness_adv.flatten() + fitness_mi.flatten()
+        #elif self._t < 8000:
+        #    tchebycheff_scores = L_adv_norm + L_mi_norm * 0.08
+        #elif self._t < 16000:
+        #    tchebycheff_scores = L_adv_norm + L_mi_norm * 0.2
+        #elif self._t < 24000:
+        #    tchebycheff_scores = L_adv_norm + L_mi_norm * 0.5
         else:
-            lambda_adv = 0.3
-            lambda_mi = 0.7
-            #lambda_adv = 0.82
-            #lambda_mi = 0.18
-            #lambda_adv = adv_window_var / total_var
-            #lambda_mi = mi_window_var / total_var
-        # Clip to reasonable range
-        #lambda_adv = np.clip(lambda_adv, 0.1, 0.9)
-        lambda_mi = 1 - lambda_adv
-        
-        #tchebycheff_scores = w_adv * fitness_adv.flatten() + (w_mi*40) * fitness_mi.flatten() 
-        tchebycheff_scores = w_adv * norm_fitness_adv.flatten() + w_mi * norm_fitness_mi.flatten() 
+            tchebycheff_scores = L_adv_norm + L_mi_norm * lambda_mi
+
+        #tchebycheff_scores = w_adv * fitness_adv.flatten() + w_mi * fitness_mi.flatten() 
+        #tchebycheff_scores =  lambda_adv * norm_fitness_adv.flatten() + lambda_mi * norm_fitness_mi.flatten() 
         top_tchebycheff = tchebycheff_scores[top_index]
 
         best_tchebycheff_scores = jnp.max(tchebycheff_scores)
@@ -624,25 +643,33 @@ class PGPE(NEAlgorithm):
         #ranks = jnp.log10(ranks + 2)
 
         # multiply each value in tchhebycheff_scores (axis 0, which is shape (128,1)) by the value in the same index in ranks (which is a scalar) 
-        #if self._t < 6000:
-        #fitness_scores = -jnp.argsort(order+1)
+        #if adv:
+            #fitness_scores = -jnp.argsort(order+1)
         #else:
+        if adv:
+            fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*0.1
+        #elif not adv and self._t > 6000:
         #fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
-        #closeness = compute_closeness(objectives)
+            #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()
+            #closeness = compute_closeness(objectives)
+            #fitness_scores = compute_fitness(closeness, ranks)
+        else:
+            fitness_scores = -jnp.argsort(order+1)
         #else:
-        #    fitness_scores = -jnp.argsort(order+1)
+            #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()* 0.1
+            #closeness = compute_closeness(objectives)
+            #fitness_scores = compute_fitness(closeness, ranks)
         #fitness_scores = compute_fitness(closeness, ranks)
         #if self._t < 200:
         #    fitness_scores = fitness_adv.flatten()
         #elif self._t >= 200 and self._t % 2 == 0:
-        if adv:
-            fitness_scores = fitness_adv.flatten()
-            #fitness_scores = -jnp.argsort(order+1)
+        #if adv:
+            #fitness_scores = fitness_adv.flatten()
+        #fitness_scores = -jnp.argsort(order+1)
         #fitness_scores = tchebycheff_scores
-        else:
+        #else:
             #fitness_scores = fitness_mi.flatten()
-            fitness_scores = -jnp.argsort(order+1)
-        #fitness_scores = fitness_mi
+            #fitness_scores = fitness_mi
         #jax.debug.print('weights : {} ', weights)
         #weights = -weights
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)

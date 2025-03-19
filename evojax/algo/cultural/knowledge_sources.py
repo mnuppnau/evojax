@@ -144,11 +144,11 @@ def initialize_topographic_ks(
 
 def initialize_normative_ks(param_size: int, pop_size: int = 64):
     return (
-        jnp.ones(5),  # rolling_best_fitness_adv_short
-        jnp.ones(5),  # rolling_best_fitness_mi_short
-        jnp.ones(5),  # rolling_avg_fitness_adv_short
-        jnp.ones(5),  # rolling_avg_fitness_mi_short
-        jnp.ones(5),  # rolling_rng_adv_short
+        jnp.ones(100),  # rolling_best_fitness_adv_short
+        jnp.ones(100),  # rolling_best_fitness_mi_short
+        jnp.ones(100),  # rolling_avg_fitness_adv_short
+        jnp.ones(100),  # rolling_avg_fitness_mi_short
+        jnp.ones(100),  # rolling_rng_adv_short
         jnp.ones(60),  # rolling_digits
         jnp.ones(5),  # rolling_best_tchebyschev_scores_short
         jnp.ones(5),  # rolling_entropy_short

@@ -31,6 +31,7 @@ class State(TaskState):
     obs: jnp.ndarray
     #latent_input: jnp.ndarray
     cat_codes: jnp.ndarray
+    con_codes: jnp.ndarray
     batch_stats_gen: any
     batch_stats_disc: any
     batch_stats_q: any
@@ -102,10 +103,12 @@ class Latent_Points(VectorizedTask):
 
                 #batch_cat_one_hot = jax.nn.one_hot(batch_cat, self.n_classes)
 
-                c = jnp.tile(jnp.arange(10),13)
+                c = jnp.tile(jnp.arange(10),52)
                 # remove the last 4 elements to make it 256
                 c = c[:self.batch_size]
                 batch_cat_one_hot = jax.nn.one_hot(c, 10)
+
+                #batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-1.0, maxval=1.0)
 
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=-1)
 
@@ -113,18 +116,19 @@ class Latent_Points(VectorizedTask):
                 
                 batch_latent = random.normal(noise_key, (self.batch_size, self.latent_dim))
 
-                #batch_cat = random.randint(cat_key, (self.batch_size,), 0, self.n_classes)
+                batch_cat = random.randint(cat_key, (self.batch_size,), 0, self.n_classes)
                 
-                #batch_cat_one_hot = jax.nn.one_hot(batch_cat, self.n_classes)
+                batch_cat_one_hot = jax.nn.one_hot(batch_cat, self.n_classes)
 
-                c = jnp.tile(jnp.arange(10),13)
+                #c = jnp.tile(jnp.arange(10),13)
                 # remove the last 4 elements to make it 256
-                c = c[:self.batch_size]
-                batch_cat_one_hot = jax.nn.one_hot(c, 10)
-
+                #c = c[:self.batch_size]
+                #batch_cat_one_hot = jax.nn.one_hot(c, 10)
+                #batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-1.0, maxval=1.0)
+                
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=-1)
 
-            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q)
+            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, con_codes=batch_cat_one_hot, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q)
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
@@ -135,10 +139,13 @@ class Latent_Points(VectorizedTask):
             loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
 
             loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
-            
+           
+            #loss_con = neg_log_likelihood_normal(state.con_codes, action, jnp.zeros_like(action))
+
+            loss_con = -loss_g
             loss_g = -loss_g#*0.1 + loss_q_disc# + loss_q_cont*0.005
             
-            return state, loss_q_disc, loss_g, jnp.ones(())
+            return state, loss_q_disc, loss_g, loss_con, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
