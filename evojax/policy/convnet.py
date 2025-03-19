@@ -209,7 +209,7 @@ class GenPolicy(PolicyNetwork):
         else:
             self._logger = logger
 
-        self.model_gen = Generator()
+        self.model_gen = Generator(training=False)
        
         #self.model_bin_classifier = BinaryMNISTClassifier()
         
@@ -236,7 +236,7 @@ class GenPolicy(PolicyNetwork):
 
         #jax.debug.print('latent shape before init : {} ', latent.shape)
 
-        variables_gen = self.model_gen.init(key_gen, jnp.ones([128,74], jnp.float32))
+        variables_gen = self.model_gen.init(key_gen, jnp.ones([64,74], jnp.float32))
 
         self.init_params_gen, self.init_batch_stats_gen = variables_gen['params'], variables_gen['batch_stats']
 

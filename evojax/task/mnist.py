@@ -83,6 +83,11 @@ class MNIST(VectorizedTask):
         self.batch_stats_disc = batch_stats_disc
         self.batch_stats_q = batch_stats_q
         
+        self.latent_dim = 64
+        self.n_classes = 10
+        self.n_con = 2
+
+        self.noise_dim = self.latent_dim - self.n_con
         #self.fake_imgs = None
         #self.cat_codes = None
         # Delayed importing of torchvision
@@ -105,7 +110,7 @@ class MNIST(VectorizedTask):
             else:
                 batch_data, batch_labels = sample_batch(
                     key, data, labels, self.batch_size)
-                batch_latent = random.normal(noise_key, (self.batch_size, 64))
+                batch_latent = random.normal(noise_key, (self.batch_size, self.latent_dim))
                 #batch_cat = random.randint(cat_key, (self.batch_size,), 0, 10)
                 
                 #batch_cat_one_hot = jax.nn.one_hot(batch_cat, 10)
@@ -114,6 +119,7 @@ class MNIST(VectorizedTask):
                 # remove the last 4 elements to make it 256
                 c = c[:self.batch_size]
                 batch_cat_one_hot = jax.nn.one_hot(c, 10)
+                #batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-1.0, maxval=1.0)
 
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=-1)
             
