@@ -50,7 +50,13 @@ class Generator(nn.Module):
     @nn.compact
     def __call__(self, z):
         z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-        x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(z)
+        
+        # Add an extra upsampling block
+        x = nn.ConvTranspose(self.features*8, [3, 3], [2, 2], 'VALID')(z)  # New layer
+        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+        x = nn.relu(x)
+
+        x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(x)
         x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
         x = nn.relu(x)
         x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=he_normal())(x)
@@ -59,7 +65,7 @@ class Generator(nn.Module):
         x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(x)
         x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
         x = nn.relu(x)
-        x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=he_normal())(x)
+        x = nn.ConvTranspose(1, [4, 4], [2, 2], 'SAME', kernel_init=he_normal())(x)
         x = jnp.tanh(x)
         return x
 
@@ -83,8 +89,11 @@ class Discriminator(nn.Module):
         d = d.reshape((d.shape[0], -1))
 
         # Q Network
-        q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+        q = nn.Conv(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
         q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
+        q = nn.leaky_relu(q, 0.1)
+
+        q = nn.Dense(self.features*2, kernel_init=normal_init(0.02))(q)
         q = nn.leaky_relu(q, 0.1)
 
         q = nn.Conv(10, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
@@ -133,7 +142,15 @@ def train_step_disc(state, data, fake_imgs, fake_cat_input, solver):
                   # Calculate Mutual Information loss
                   q_cat = nn.log_softmax(q, axis=-1)
                   loss_mi = loss_mutual_information(fake_cat_input, q_cat)
-                
+               
+                  #predicted_cat = jnp.argmax(q, axis=-1)
+                  
+                  #true_cat = jnp.argmax(fake_cat_input, axis=-1)
+
+                  #accuracy = jnp.mean(predicted_cat == true_cat)
+
+                  #jax.debug.print('accuracy: {} ', accuracy)
+
                   # real_preds reshape array of shape (64, 0) (size 0) to (64,)
                   #real_preds = real_preds.reshape((real_preds.shape[0],))
                   #fake_preds = fake_preds.reshape((fake_preds.shape[0],))
@@ -184,7 +201,7 @@ def train_step_disc(state, data, fake_imgs, fake_cat_input, solver):
 #        return disc_logits
 
 def sample_latent(key, shape_noise, shape_cat):
-  noise_key, cat_key = jax.random.split(key, 2)
+  noise_key, cat_key, con_key = jax.random.split(key, 3)
   
   # Sample irreducible noise
   noise = jax.random.normal(noise_key, shape_noise)
@@ -198,9 +215,9 @@ def sample_latent(key, shape_noise, shape_cat):
 
   #code_cat = jax.nn.one_hot(c, 10)
 
-  #con = jax.random.uniform(key, (32, 2), minval=-1, maxval=1)
+  con = jax.random.uniform(con_key, (64, 2), minval=-1, maxval=1)
   
-  latent = jnp.concatenate([noise, code_cat], axis=-1)
+  latent = jnp.concatenate([noise, code_cat, con], axis=-1)
 
   return latent, code_cat
 
@@ -218,7 +235,6 @@ class Trainer(object):
 
     def __init__(self,
                  policy_gen: PolicyNetwork,
-                 policy_disc: PolicyNetwork,
                  solver_gen: NEAlgorithm,
                  #solver_disc: NEAlgorithm,
                  #solver_q: NEAlgorithm,
@@ -237,7 +253,7 @@ class Trainer(object):
                  use_for_loop: bool = False,
                  normalize_obs: bool = False,
                  model_dir: str = None,
-                 batch_size: int = 128,
+                 batch_size: int = 32,
                  log_dir: str = None,
                  logger: logging.Logger = None,
                  log_scores_fn: Optional[Callable[[int, jnp.ndarray, str], None]] = None):
@@ -271,12 +287,11 @@ class Trainer(object):
             self._logger = logger
 
         self.batch_stats_gen = policy_gen.flat_batch_stats_gen
-        self.batch_stats_disc = policy_disc.flat_batch_stats_disc
-        self.batch_stats_q = policy_disc.flat_batch_stats_q
+        self.batch_stats_disc = policy_gen.flat_batch_stats_disc
 
         self.batch_size = batch_size
         self.mini_batch_size = 64
-        self.num_mini_batches = 4
+        self.num_mini_batches = 8
        
         self.avg_mi_loss = -2.30
         self.fake_imgs = None
@@ -334,21 +349,7 @@ class Trainer(object):
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        #self.solver_disc = optax.adamw(learning_rate=0.0002, b1=0.5, b2=0.999, weight_decay=1e-6)
         self.solver_disc = optax.adam(learning_rate=0.0002, b1=0.5, b2=0.999)
-        #self.sim_mgr_disc = SimManager(
-        #    n_repeats=n_repeats,
-        #    test_n_repeats=test_n_repeats,
-        #    pop_size=solver_disc.pop_size,
-        #    n_evaluations=n_evaluations,
-        #    policy_net=policy_disc,
-        #    train_vec_task=train_task_disc,
-        #    valid_vec_task=test_task_disc,
-        #    seed=seed + 1,
-        #    obs_normalizer=self._obs_normalizer,
-        #    use_for_loop=use_for_loop,
-        #    logger=self._logger,
-        #)
 
     def run(self, demo_mode: bool = False) -> float:
 
@@ -405,41 +406,15 @@ class Trainer(object):
             num_mini_batches = self.num_mini_batches
             
             for i in range(self._max_iter):
-                #params_gen, belief_space = self.solver_gen.ask()
-
-                #if self.avg_mi_loss > -0.10:
-                #    num_mini_batches = 6
-                #else:
-                #    num_mini_batches = 8
                 
-                # Sample latent codes.
-                #self._key, subkey = jax.random.split(self._key)
-                shape_noise = (self.mini_batch_size, self.latent_dim)
+                shape_noise = (self.mini_batch_size, self.latent_dim-self.n_con)
                 shape_cat = (self.mini_batch_size,)
-                #latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
 
-                #best_params_gen = self.solver_gen.best_params
-                #best_params_gen = jnp.expand_dims(best_params_gen, axis=0)
-                #params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
-              
-                #if self.batch_stats_gen.shape[0] != 400 and len(self.batch_stats_gen.shape) == 2: #and not test:
-                #    # add pop size as first dimension to batch_stats_gen and batch_stats_disc
-                #    batch_stats_gen = jnp.repeat(self.batch_stats_gen[None, :], 400, axis=0)
-        
-                # add dimension to self.batch_stats_gen of shape (896,) to (1, 896)
-               
                 if i < 1:
                     if len(self.batch_stats_gen.shape) == 1:
                         batch_stats_gen = jnp.expand_dims(self.batch_stats_gen, axis=0)
                 
                     batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
-                #jax.debug.print('batch stats gen: {} ', batch_stats_gen)
-                #else:
-                #    batch_stats_gen = self.batch_stats_gen
-                #best_params_gen = self.solver_gen.best_params
-                #params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
-
-                #state = (params_gen_formatted, batch_stats_gen, params_disc, self.batch_stats_disc, opt_disc)
 
                 for mini_batch in range(num_mini_batches):
                     # Sample batch of data.
@@ -457,24 +432,14 @@ class Trainer(object):
                     params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
                     #else:
                     
-                    (fake_images), vars_g = Generator(training=False).apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                    (fake_images), vars_g = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                    #batch_stats_gen = vars_g['batch_stats']
                     # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
                     fake_images = fake_images.reshape((self.batch_size, 28, 28, 1))
-                    #batch_stats_gen = vars_g['batch_stats']
-                    #jax.debug.print('fake images shape: {} ', fake_images.shape) 
+                    
                     state = (params_disc, self.batch_stats_disc, opt_disc)
 
-                    #fake_images, batch_stats_gen = train_step_gen(
-                    #    params_gen_formatted,
-                    #    batch_stats_gen,
-                    #    latent,
-                    #)
-
-                    #batch_stats_gen = vars_g['batch_stats']
-                    #jax.debug.print('params disc shape: {} ', params_disc.shape)
-                    #jax.debug.print('batch stats disc shape: {} ', self.batch_stats_disc.shape)
-                    # Train the discriminator.
-                    state, loss = train_step_disc(
+                    state, d_loss = train_step_disc(
                         state,
                         data,
                         fake_images,
@@ -496,8 +461,7 @@ class Trainer(object):
                 flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
 
                 params_gen, belief_space = self.solver_gen.ask()
-                disc_reset_keys_cat_code = None
-                # Generator step.
+                
                 scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
                 params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
                 )
@@ -507,77 +471,54 @@ class Trainer(object):
                 
                 self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, adv=False)
 
-                #jax.debug.print('first batch stats gen individual : {} ', batch_stats_gen[0])
-                #top_gen_idxs = self.solver_gen.get_top_idx()
-                # get top 20 index values from scores_gen_adv
-                #top_gen_idxs = jnp.argsort(scores_gen_adv)[-20:]
-                #top_gen_idx = jnp.argmax(scores_gen_adv)
-                # select top gen idx batch norm stats with a shape of (pop_size, num_features)
-                #batch_stats_gen = batch_stats_gen[top_gen_idxs]#.flatten()
-                #n = batch_stats_gen.shape[0]
-                #weights = self.decay_factor ** jnp.arange(n)
+                #params_gen, belief_space = self.solver_gen.ask()
 
-                #weighted_mean = jnp.average(batch_stats_gen, axis=0, weights=weights)
+                #scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
+                #params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
+                #)
 
-                #if i < 1:
-                #    self.batch_stats_gen =  weighted_mean
-                #else:
-                #    self.batch_stats_gen = jnp.mean(self.batch_stats_gen, axis=0) * 0.9 + weighted_mean * 0.1
-               
-                #jax.debug.print('batch stats gen : {} ', self.batch_stats_gen)
-                params_gen, belief_space = self.solver_gen.ask()
-               
+                #if isinstance(self.solver_gen, QualityDiversityMethod):
+                #    self.solver_gen.observe_bd(bds_gen)
+                #
+                #self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, adv=True)
+
                 best_params_gen = self.solver_gen.best_params
                 best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
 
                 self._key, subkey = jax.random.split(self._key)
-                shape_noise = (self.batch_size, self.latent_dim)
-                shape_cat = (self.batch_size,)
-                latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
-
-                (fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
-                batch_stats_gen = vars_g['batch_stats']
-
-                leaves_batch_stats_gen, _ = jax.tree_flatten(batch_stats_gen)
-                flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
-
-                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
-                )
-
-                if isinstance(self.solver_gen, QualityDiversityMethod):
-                    self.solver_gen.observe_bd(bds_gen)
-                
-                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, adv=True)
-
-                #top_gen_idx = self.solver_gen.get_top_idx()
-                #top_gen_idxs = self.solver_gen.get_top_idx()
-                best_params_gen = self.solver_gen.best_params
-                best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
-
-                self._key, subkey = jax.random.split(self._key)
-                shape_noise = (self.batch_size, self.latent_dim)
+                shape_noise = (self.batch_size, self.latent_dim-self.n_con)
                 shape_cat = (self.batch_size,)
                 latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
 
                 (fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
                 batch_stats_gen = vars_g['batch_stats'] 
 
-                #(fake_images), vars_d = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
-                #batch_stats_gen = vars_d['batch_stats']
 
-                #top_gen_idxs = jnp.argsort(scores_gen_adv)[-20:]
-                #top_gen_idx = jnp.argmax(scores_gen_adv)
-                # select top gen idx batch norm stats with a shape of (pop_size, num_features)
-                #batch_stats_gen = batch_stats_gen[top_gen_idxs]#.flatten()
-             
-                #weighted_mean = jnp.average(batch_stats_gen, axis=0, weights=weights)
+                params_gen, belief_space = self.solver_gen.ask()
 
-                #self.batch_stats_gen = jnp.mean(self.batch_stats_gen, axis=0) * 0.9 + weighted_mean * 0.1 
+                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
+                )
 
-                #jax.debug.print('batch stats gen : {} ', self.batch_stats_gen)
-                self.batch_stats_gen = batch_stats_gen
+                #if isinstance(self.solver_gen, QualityDiversityMethod):
+                #    self.solver_gen.observe_bd(bds_gen)
                 
+                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, adv=True)
+
+                best_params_gen = self.solver_gen.best_params
+                best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
+
+                self._key, subkey = jax.random.split(self._key)
+                shape_noise = (self.batch_size, self.latent_dim-self.n_con)
+                shape_cat = (self.batch_size,)
+                latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
+
+                (fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                batch_stats_gen = vars_g['batch_stats'] 
+
+                #self.batch_stats_gen = batch_stats_gen
+                
+
                 self.avg_mi_loss = jnp.mean(scores_gen_mi)
 
                 if i > 0 and i % self._log_interval == 0:
@@ -603,48 +544,45 @@ class Trainer(object):
                             i, scores_mi.size, scores_mi.max(), scores_mi.mean(),
                             scores_mi.min(), scores_mi.std()))
 
+                    scores_con = np.array(scores_gen_con*0.01)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, scores_con.size, scores_con.max(), scores_con.mean(),
+                            scores_con.min(), scores_con.std()))
+
+                    self._logger.info(
+                        'Iter={0}, d_loss={1:.4f}'.format(
+                            i, d_loss))
+                    
                     #with open('/home/gh0st/Downloads/pgpe_main.csv', 'a') as file:
                         #file.write(f'Iter: {i}, Max: {scores.max()}, Mean: {scores.mean()}, Std: {scores.std()}, Min: {scores.min()}\n')
                     #self._log_scores_fn(i, scores, "train")
 
                 if i > 0 and i % self._test_interval == 0:
                     best_params_gen = self.solver_gen.best_params
+                    best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
+
                     batch_stats_gen_leaves, _ = jax.tree_flatten(batch_stats_gen)
                     flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in batch_stats_gen_leaves])
-                    #best_params_disc = self.solver_disc.best_params
-                    #best_params_q = self.solver_q.best_params
-                    #jax.debug.print('batch stats gen shape : {} ', self.batch_stats_gen.shape)
+                    
+                    self._key, noise_key, con_key = jax.random.split(self._key, 3)
 
-                    test_scores, _, _, _, _, _, _, fake_imgs = self.sim_mgr_gen.eval_params(
-                        params_gen=best_params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, generator=True, test=True)
-                    test_scores = np.array(test_scores)
-                    self._logger.info(
-                        '[TEST] Iter={0}, #tests={1}, max={2:.4f}, avg={3:.4f}, '
-                        'min={4:.4f}, std={5:.4f}'.format(
-                            i, test_scores.size, test_scores.max(),
-                            test_scores.mean(), test_scores.min(),
-                            test_scores.std()))
-                   
-                    #jax.debug.print('test scores shape : {} ', test_scores.shape)
+                    batch_latent = jax.random.normal(noise_key, (self.batch_size, self.latent_dim-self.n_con))
+                    c = jnp.tile(jnp.arange(10), 7)
+                    c = c[:self.batch_size]
+                    con = jax.random.uniform(con_key, (self.batch_size, 2), minval=-1, maxval=1) 
+                    
+                    latent = jnp.concatenate([batch_latent, jax.nn.one_hot(c, 10), con], axis=-1)
+
+                    (fake_imgs) = Generator(training=False).apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent)
+                    
                     filename = f"iteration-{i}.npy"
-                    np.save(filename, fake_imgs[23, :, :, :, :])
-
-                    #jax.debug.print('testing, fake_imgs shape : {} ', self.fake_imgs.shape)
-
-                    self._log_scores_fn(i, test_scores, "test")
-                    mean_test_score = test_scores.mean()
-                    #save_model(
-                    #    model_dir=self._log_dir,
-                    #    model_name='iter_{}'.format(i),
-                    #    params=best_params,
-                    #    obs_params=self.sim_mgr.obs_params,
-                    #    best=mean_test_score > best_score,
-                    #)
-                    #best_score = max(best_score, mean_test_score)
+                    np.save(filename, fake_imgs[:, :, :, :])
 
             # Test and save the final model.
             best_params_gen = self.solver_gen.best_params
-            best_params_disc = self.solver_disc.best_params
+            #best_params_disc = self.solver_disc.best_params
             #test_scores, _ = self.sim_mgr.eval_params(
             #    params=best_params, test=True)
             #self._logger.info(
@@ -658,17 +596,17 @@ class Trainer(object):
                 model_name='final_model_gen',
                 params=best_params_gen,
                 obs_params=self.sim_mgr_gen.obs_params,
-                batch_stats=self.batch_stats_gen,
+                batch_stats=batch_stats_gen,
                 #best=mean_test_score > best_score,
             )
-            save_model(
-                model_dir=self._log_dir,
-                model_name='final_model_disc',
-                params=best_params_disc,
-                obs_params=self.sim_mgr_disc.obs_params,
-                batch_stats=self.batch_stats_disc,
-                #best=mean_test_score > best_score,
-            )
+            #save_model(
+            #    model_dir=self._log_dir,
+            #    model_name='final_model_disc',
+            #    params=best_params_disc,
+            #    obs_params=self.sim_mgr_disc.obs_params,
+            #    batch_stats=self.batch_stats_disc,
+            #    #best=mean_test_score > best_score,
+            #)
             #best_score = max(best_score, mean_test_score)
             #if isinstance(self.solver, QualityDiversityMethod):
             #    save_lattices(

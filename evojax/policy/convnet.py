@@ -89,7 +89,13 @@ class Generator(nn.Module):
         #    z = z.reshape((z.shape[0], z.shape[1], 1, 1, z.shape[2]))
         #else:
         z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-        x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(z)
+        
+        # Add an extra upsampling block
+        x = nn.ConvTranspose(self.features*8, [3, 3], [2, 2], 'VALID')(z)  # New layer
+        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+        x = nn.relu(x)
+
+        x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(x)
         x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
         x = nn.relu(x)
         #activations1 = x
@@ -101,7 +107,7 @@ class Generator(nn.Module):
         x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
         x = nn.relu(x)
         #activations3 = x
-        x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=he_normal())(x)
+        x = nn.ConvTranspose(1, [4, 4], [2, 2], 'SAME', kernel_init=he_normal())(x)
         x = jnp.tanh(x)
         # use sigmoid
         #x = nn.sigmoid(x)
@@ -156,19 +162,21 @@ class Discriminator(nn.Module):
         #d = d.reshape((d.shape[0], -1))
         #d = nn.sigmoid(d)
         # Q outpiut
-        q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+        q = nn.Conv(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
         q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
-        q = nn.leaky_relu(q, 0.2)
+        q = nn.leaky_relu(q, 0.1)
         
+        q = nn.Dense(self.features*2, kernel_init=normal_init(0.02))(q)
+        q = nn.leaky_relu(q, 0.1)
 
-        disc_logits = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
-        disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
+        q = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
+        q = q.reshape((q.shape[0], -1))
                
         #mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
         #log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
         #var = jnp.squeeze(log_var)
     
-        return d, disc_logits#, disc_logits, mu.squeeze(), jnp.exp(var)
+        return d, q#, disc_logits, mu.squeeze(), jnp.exp(var)
 
 class QNetwork(nn.Module):
     features: int = 64
@@ -209,36 +217,19 @@ class GenPolicy(PolicyNetwork):
         else:
             self._logger = logger
 
-        self.model_gen = Generator(training=False)
+        self.model_gen = Generator()
        
-        #self.model_bin_classifier = BinaryMNISTClassifier()
-        
+        self.model_disc = Discriminator()
+
         key = random.PRNGKey(122)
 
         key, key_gen, key_disc, key_bin = random.split(key, 4)
 
-        empty_state, self.model_bin_classifier = create_train_state(key_bin)
-        
-        loaded_state = load_model(empty_state, '/home/gh0st/projects/evojax/mnist-classification/models/state/')
-
-        self.variables_bin_classifier = {'params': loaded_state.params}
-
-        #noise = random.normal(key_latent, (100, 64))
-        #c = jnp.tile(jnp.arange(10), 10)
-        #c = jax.nn.one_hot(c, 10)
-
-        #cat_codes = random.randint(key_latent, (64, 100), 0, 10)
-
-        # Apply one-hot encoding
-        #c = nn.one_hot(cat_codes, 10)
-        
-        #latent = jnp.concatenate([noise, c], axis=-1)
-
-        #jax.debug.print('latent shape before init : {} ', latent.shape)
-
         variables_gen = self.model_gen.init(key_gen, jnp.ones([64,74], jnp.float32))
-
+        variables_disc = self.model_disc.init(key_disc, jnp.ones([64,28,28,1], jnp.float32))
+        
         self.init_params_gen, self.init_batch_stats_gen = variables_gen['params'], variables_gen['batch_stats']
+        self.init_params_disc, self.init_batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
         #jax.debug.print('batch stats gen shape : {}', self.init_batch_stats_gen.shape)
         self.latent_dim = 64
@@ -265,12 +256,26 @@ class GenPolicy(PolicyNetwork):
 
         self.flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
 
+        self.num_params_disc, format_params_disc_fn = get_params_format_fn(self.init_params_disc)
+        self._logger.info(
+            'DiscPolicy.num_params = {}'.format(self.num_params_disc))
+        self._format_params_disc_fn = jax.vmap(format_params_disc_fn)
+        self.num_batch_stats_disc, format_batch_stats_disc_fn = get_params_format_fn(self.init_batch_stats_disc)
+        self._logger.info(
+            'DiscPolicy.num_batch_stats = {}'.format(self.num_batch_stats_disc))
+        self._format_batch_stats_disc_fn = jax.vmap(format_batch_stats_disc_fn)
+
+        leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(self.init_batch_stats_disc)
+        self.flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
+
         def forward_fn_gen(params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, latent_input):
           
-            (fake_data), vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
+            #(fake_data) = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input)
        
-            (preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
+            #(preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
+            (fake_data), vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
+            (preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
             #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
 
             leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
@@ -291,18 +296,6 @@ class GenPolicy(PolicyNetwork):
 
     def set_format_batch_stats_disc_fn(self, format_batch_stats_disc_fn):
         self._format_batch_stats_disc_fn = format_batch_stats_disc_fn
-
-    def set_model_disc(self, model_disc):
-        self.model_disc = model_disc
-
-    def set_model_q(self, model_q):
-        self.model_q = model_q
-
-    def set_format_params_q_fn(self, format_params_q_fn):
-        self._format_params_q_fn = format_params_q_fn
-    
-    def set_format_batch_stats_q_fn(self, format_batch_stats_q_fn):
-        self._format_batch_stats_q_fn = format_batch_stats_q_fn
 
     def get_actions(self,
                     t_states: TaskState,
