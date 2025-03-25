@@ -36,11 +36,11 @@ def parse_args():
     parser.add_argument(
         '--pop-size-gen', type=int, default=128, help='NE population size.')
     parser.add_argument(
-        '--pop-size', type=int, default=512, help='NE population size.')
+        '--pop-size', type=int, default=440, help='NE population size.')
     parser.add_argument(
         '--batch-size', type=int, default=64, help='Batch size for training.')
     parser.add_argument(
-        '--max-iter', type=int, default=40000, help='Max training iterations.')
+        '--max-iter', type=int, default=60000, help='Max training iterations.')
     parser.add_argument(
         '--test-interval', type=int, default=1000, help='Test interval.')
     parser.add_argument(
@@ -78,12 +78,9 @@ def main(config):
     logger.info('=' * 30)
 
     policy_gen = GenPolicy(logger=logger)
-    policy_disc = DiscPolicy(policy_gen, logger=logger)
 
     init_params_gen = policy_gen.init_params_gen
     flat_params_gen = policy_gen.flat_params_gen
-    flat_params_disc = policy_disc.flat_params_disc
-    flat_params_q = policy_disc.flat_params_q
 
     train_task_mnist = MNIST(batch_size=config.batch_size, test=False)
     test_task_mnist = MNIST(batch_size=config.batch_size, test=True)
@@ -134,7 +131,6 @@ def main(config):
     # Train.
     trainer = Trainer(
         policy_gen=policy_gen,
-        policy_disc=policy_disc,
         solver_gen=solver_gen,
         #solver_disc=solver_disc,
         #solver_q=solver_q,

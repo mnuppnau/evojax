@@ -279,9 +279,9 @@ class PGPE(NEAlgorithm):
 
         if optimizer_config is None:
             optimizer_config = {}
-        decay_coef = optimizer_config.get("center_lr_decay_coef", 0.9)
+        decay_coef = optimizer_config.get("center_lr_decay_coef", 0.99)
         self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 20000
+            "center_lr_decay_steps", 2000
         )
 
         if optimizer == "adam":
@@ -393,10 +393,10 @@ class PGPE(NEAlgorithm):
         fitness_mi = fitness_mi[:, None]
         fitness_con = fitness_con[:, None]
 
-        objectives = jnp.hstack([-fitness_adv, -fitness_mi])
+        #objectives = jnp.hstack([-fitness_adv, -fitness_mi])
         #jax.debug.print('objectives {} : ', objectives)
         #jax.debug.print('objectives shape {} : ', objectives.shape)
-        ranks = non_dominated_sort_lax(objectives)
+        #ranks = non_dominated_sort_lax(objectives)
         #get unique ranks
         #unique_ranks = jnp.unique(ranks)
         #crowding_distances = compute_crowding_distance_lax(objectives, ranks, unique_ranks)
@@ -409,26 +409,26 @@ class PGPE(NEAlgorithm):
         #if adv:
         #order = jnp.lexsort((-fitness_adv.flatten(), ranks))
         #else:
-        order = jnp.lexsort((-fitness_adv.flatten(), ranks))
+        #order = jnp.lexsort((-fitness_adv.flatten(), ranks))
 
-        top_index = order[:1]
+        #top_index = order[:1]
 
         #self._top_idx = top_index
         
-        top_indices = order[:40]
+        #top_indices = order[:40]
 
-        self._top_indices = top_indices
+        #self._top_indices = top_indices
 
-        top_solution = self._solutions[top_index]
-        top_scaled_noise = self._scaled_noises[top_index]
+        #top_solution = self._solutions[top_index]
+        #top_scaled_noise = self._scaled_noises[top_index]
 
-        top_fitness_adv = fitness_adv[top_index]
-        top_fitness_mi = fitness_mi[top_index]
+        #top_fitness_adv = fitness_adv[top_index]
+        #top_fitness_mi = fitness_mi[top_index]
 
-        top_disc_logit = disc_logits[top_index]
+        #top_disc_logit = disc_logits[top_index]
 
         # apply softmax to the logits
-        softmax_logits = jax.nn.softmax(top_disc_logit, axis=-1)
+        #softmax_logits = jax.nn.softmax(top_disc_logit, axis=-1)
         #max_disc_logit_idx = jnp.argmax(abs(top_disc_logit))
 
         best_fitness_adv = jnp.max(fitness_adv)
@@ -485,129 +485,130 @@ class PGPE(NEAlgorithm):
         mi_window_var = jnp.var(best_mi_window)
         total_var = adv_window_var + mi_window_var
 
-        if self._t < 24000:
-            lambda_mi = 0.1 + self._t // 60000
-        else: 
-            lambda_adv = 0.1 + self._t // 60000
-            lambda_mi = 1 - lambda_adv
+        #if self._t < 24000:
+        #    lambda_mi = 0.1 + self._t // 60000
+        #else: 
+        #    lambda_adv = 0.1 + self._t // 60000
+        #    lambda_mi = 1 - lambda_adv
 
-        #lambda_mi = 0.4
-        if self._t < 100:
-            tchebycheff_scores = fitness_adv.flatten() + fitness_mi.flatten()
+        lambda_mi = 0.5
+
+        #if self._t < 100:
+        tchebycheff_scores = L_adv_norm + L_mi_norm * lambda_mi
         #elif self._t < 8000:
         #    tchebycheff_scores = L_adv_norm + L_mi_norm * 0.08
         #elif self._t < 16000:
         #    tchebycheff_scores = L_adv_norm + L_mi_norm * 0.2
         #elif self._t < 24000:
         #    tchebycheff_scores = L_adv_norm + L_mi_norm * 0.5
-        else:
-            tchebycheff_scores = L_adv_norm + L_mi_norm * lambda_mi
+        #else:
+        #    tchebycheff_scores = L_adv_norm + L_mi_norm * lambda_mi
 
         #tchebycheff_scores = w_adv * fitness_adv.flatten() + w_mi * fitness_mi.flatten() 
         #tchebycheff_scores =  lambda_adv * norm_fitness_adv.flatten() + lambda_mi * norm_fitness_mi.flatten() 
-        top_tchebycheff = tchebycheff_scores[top_index]
+        #top_tchebycheff = tchebycheff_scores[top_index]
 
         best_tchebycheff_scores = jnp.max(tchebycheff_scores)
         avg_tchebycheff_scores = jnp.mean(tchebycheff_scores)
 
         #self._subkey, norm_entropy = calculate_entropy_sampling(self._subkey, self._solutions)
         
-        self.belief_space = update_domain_ks(
-            self.belief_space,
-            top_solution,
-            self._stdev,
-            top_scaled_noise,
-            top_fitness_adv,
-            top_fitness_mi,
-            top_tchebycheff,
-            softmax_logits,
-        )
+        #self.belief_space = update_domain_ks(
+        #    self.belief_space,
+        #    top_solution,
+        #    self._stdev,
+        #    top_scaled_noise,
+        #    top_fitness_adv,
+        #    top_fitness_mi,
+        #    top_tchebycheff,
+        #    softmax_logits,
+        #)
 
-        self.belief_space = update_situational_ks(
-            self.belief_space, 
-            top_solution, 
-            self._stdev, 
-            top_scaled_noise, 
-            top_fitness_adv, 
-            top_fitness_mi, 
-            top_tchebycheff, 
-            softmax_logits,
-        )
+        #self.belief_space = update_situational_ks(
+        #    self.belief_space, 
+        #    top_solution, 
+        #    self._stdev, 
+        #    top_scaled_noise, 
+        #    top_fitness_adv, 
+        #    top_fitness_mi, 
+        #    top_tchebycheff, 
+        #    softmax_logits,
+        #)
 
-        if self._t > 400 and self._t % 10 == 0:
-            self.belief_space = update_history_ks(
-                self.belief_space, 
-                top_solution, 
-                self._stdev, 
-                top_scaled_noise, 
-                top_fitness_adv, 
-                top_fitness_mi, 
-                top_tchebycheff, 
-                softmax_logits, 
-            )
-        elif self._t <= 400:
-            self.belief_space = update_history_ks(
-                self.belief_space, 
-                top_solution, 
-                self._stdev, 
-                top_scaled_noise, 
-                top_fitness_adv, 
-                top_fitness_mi, 
-                top_tchebycheff, 
-                softmax_logits, 
-            )
+        #if self._t > 400 and self._t % 10 == 0:
+        #    self.belief_space = update_history_ks(
+        #        self.belief_space, 
+        #        top_solution, 
+        #        self._stdev, 
+        #        top_scaled_noise, 
+        #        top_fitness_adv, 
+        #        top_fitness_mi, 
+        #        top_tchebycheff, 
+        #        softmax_logits, 
+        #    )
+        #elif self._t <= 400:
+        #    self.belief_space = update_history_ks(
+        #        self.belief_space, 
+        #        top_solution, 
+        #        self._stdev, 
+        #        top_scaled_noise, 
+        #        top_fitness_adv, 
+        #        top_fitness_mi, 
+        #        top_tchebycheff, 
+        #        softmax_logits, 
+        #    )
 
 
         # top_disc_logit is shape (1,128,10), take the average over the 10 logits and return shape (10,)
-        softmax_avg = jnp.mean(softmax_logits, axis=1).squeeze()
+        #softmax_avg = jnp.mean(softmax_logits, axis=1).squeeze()
 
-        max_softmax_logits_idx = jnp.argmax(abs(softmax_avg))
+        #max_softmax_logits_idx = jnp.argmax(abs(softmax_avg))
 
         #self._arr = jnp.concatenate(([max_softmax_logits_idx], self._arr[self._arr != max_softmax_logits_idx]))
        
         #oldest_idx = self._arr[-1]
 
         #jax.debug.print('max softmax idx {} : ', max_softmax_logits_idx)
-        if max_softmax_logits_idx == 0:
-            self.belief_space = update_topographic_ks_idx_zero(
-                self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
-            )
-        elif max_softmax_logits_idx == 1:
-            self.belief_space = update_topographic_ks_idx_one(
-                self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
-            )
-        elif max_softmax_logits_idx == 2:
-            self.belief_space = update_topographic_ks_idx_two(
-                self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
-            )
-        elif max_softmax_logits_idx == 3:
-            self.belief_space = update_topographic_ks_idx_three(
-                self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
-            )
-        elif max_softmax_logits_idx == 4:
-            self.belief_space = update_topographic_ks_idx_four(
-                self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
-            )
-        elif max_softmax_logits_idx == 5:
-            self.belief_space = update_topographic_ks_idx_five(
-                self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
-            )
-        elif max_softmax_logits_idx == 6:
-            self.belief_space = update_topographic_ks_idx_six(
-                self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
-            )
-        elif max_softmax_logits_idx == 7:
-            self.belief_space = update_topographic_ks_idx_seven(
-                self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
-            )
-        elif max_softmax_logits_idx == 8:
-            self.belief_space = update_topographic_ks_idx_eight(
-                self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
-            )
-        elif max_softmax_logits_idx == 9:
-            self.belief_space = update_topographic_ks_idx_nine(
-                self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
-            )
+        #if max_softmax_logits_idx == 0:
+        #    self.belief_space = update_topographic_ks_idx_zero(
+        #        self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
+        #    )
+        #elif max_softmax_logits_idx == 1:
+        #    self.belief_space = update_topographic_ks_idx_one(
+        #        self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
+        #    )
+        #elif max_softmax_logits_idx == 2:
+        #    self.belief_space = update_topographic_ks_idx_two(
+        #        self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
+        #    )
+        #elif max_softmax_logits_idx == 3:
+        #    self.belief_space = update_topographic_ks_idx_three(
+        #        self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
+        #    )
+        #elif max_softmax_logits_idx == 4:
+        #    self.belief_space = update_topographic_ks_idx_four(
+        #        self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
+        #    )
+        #elif max_softmax_logits_idx == 5:
+        #    self.belief_space = update_topographic_ks_idx_five(
+        #        self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
+        #    )
+        #elif max_softmax_logits_idx == 6:
+        #    self.belief_space = update_topographic_ks_idx_six(
+        #        self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
+        #    )
+        #elif max_softmax_logits_idx == 7:
+        #    self.belief_space = update_topographic_ks_idx_seven(
+        #        self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
+        #    )
+        #elif max_softmax_logits_idx == 8:
+        #    self.belief_space = update_topographic_ks_idx_eight(
+        #        self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
+        #    )
+        #elif max_softmax_logits_idx == 9:
+        #    self.belief_space = update_topographic_ks_idx_nine(
+        #        self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
+        #    )
 
         rolling_digits = self.belief_space[5][5]
         unique_digits = jnp.unique(rolling_digits)
@@ -622,7 +623,9 @@ class PGPE(NEAlgorithm):
         topographic_center_idx = (first_missing_digit+1)*6-6
         topographic_center = self.belief_space[4][topographic_center_idx][0]
         topographic_stdev = self.belief_space[4][topographic_center_idx+1][0]
-        
+       
+        # create empty array
+        softmax_logits = jnp.zeros((10, 128))
         self.belief_space = update_normative_ks(
             self.belief_space,
             best_fitness=best_fitness_adv,
@@ -632,7 +635,7 @@ class PGPE(NEAlgorithm):
             best_adv=best_adv,
             best_mi=best_mi,
             rng_adv=rng_adv,
-            digit=max_softmax_logits_idx,
+            digit=None,#max_softmax_logits_idx,
             best_tchebycheff_scores=best_tchebycheff_scores,
             softmax_logits=softmax_logits,
             missing_digit=first_missing_digit,
@@ -643,20 +646,21 @@ class PGPE(NEAlgorithm):
         #ranks = jnp.log10(ranks + 2)
 
         # multiply each value in tchhebycheff_scores (axis 0, which is shape (128,1)) by the value in the same index in ranks (which is a scalar) 
-        #if adv:
+        if adv:
             #fitness_scores = -jnp.argsort(order+1)
         #else:
-        if adv:
-            fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*0.1
+        #if adv:
+            fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() + fitness_con.flatten()*0.004
         #elif not adv and self._t > 6000:
         #fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()
             #closeness = compute_closeness(objectives)
             #fitness_scores = compute_fitness(closeness, ranks)
         else:
-            fitness_scores = -jnp.argsort(order+1)
+            fitness_scores = tchebycheff_scores
+            #fitness_scores = -jnp.argsort(order+1)
         #else:
-            #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()* 0.1
+            #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*50
             #closeness = compute_closeness(objectives)
             #fitness_scores = compute_fitness(closeness, ranks)
         #fitness_scores = compute_fitness(closeness, ranks)
