@@ -246,7 +246,7 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            fake_imgs, actions, disc_logits, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
+            fake_imgs, actions, disc_logits, batch_stats_gen, batch_stats_disc, mu, var, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
             
             task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
@@ -257,7 +257,7 @@ class SimManager(object):
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, loss_mi, loss_g, loss_con, done = task.step(task_state, actions, disc_logits)
+            task_state, loss_mi, loss_g, loss_con, done = task.step(task_state, actions, disc_logits, mu, var)
             
             reward_adv =  loss_g 
             reward_mi = loss_mi
@@ -285,7 +285,7 @@ class SimManager(object):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_con = jnp.zeros(params_gen.shape[0])
-            disc_logits = jnp.zeros((220,64,10))
+            disc_logits = jnp.zeros((110,64,10))
             loss_g = jnp.zeros(self._pop_size//2) #//2
             #fake_imgs = jnp.zeros((64,128,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
@@ -340,7 +340,7 @@ class SimManager(object):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_con = jnp.zeros(params_gen.shape[0])
-            fake_imgs = jnp.zeros((220,64,28, 28, 1))
+            fake_imgs = jnp.zeros((110,64,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params,
               accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, fake_imgs, valid_masks),

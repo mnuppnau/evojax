@@ -41,33 +41,100 @@ from torchvision import datasets
 from typing import Tuple
 
 
+#class Generator(nn.Module):
+#    """ Generator CNN for MNIST """
+#
+#    features: int = 64
+#    training: bool = True
+#
+#    @nn.compact
+#    def __call__(self, z):
+#        z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+#        
+#        # Add an extra upsampling block
+#        x = nn.ConvTranspose(self.features*8, [3, 3], [2, 2], 'VALID')(z)  # New layer
+#        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+#        x = nn.relu(x)
+#
+#        x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(x)
+#        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+#        x = nn.relu(x)
+#        x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=he_normal())(x)
+#        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+#        x = nn.relu(x)
+#        x = nn.ConvTranspose(self.features, [4, 4], [1, 1], 'VALID', kernel_init=he_normal())(x)
+#        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+#        x = nn.relu(x)
+#        x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=he_normal())(x)
+#        x = jnp.tanh(x)
+#        return x
+
 class Generator(nn.Module):
-    """ Generator CNN for MNIST """
-
-    features: int = 64
+    """
+    Flax Generator for MNIST with fewer channels (approx ~1.7M params).
+    Matches a DCGAN-like flow:
+      (z_dim,1,1) -> (256,1,1) -> (128,7,7) -> (64,14,14) -> (1,28,28)
+    """
+    z_dim: int = 74      # Typically noise + InfoGAN code dimension
     training: bool = True
-
+    
     @nn.compact
     def __call__(self, z):
-        z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+        """Forward pass. Returns images in [0, 1]."""
+        # Reshape from (batch, z_dim) to (batch, 1,1, z_dim)
+        x = z.reshape((z.shape[0], 1, 1, z.shape[1]))
         
-        # Add an extra upsampling block
-        x = nn.ConvTranspose(self.features*8, [3, 3], [2, 2], 'VALID')(z)  # New layer
-        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+        # 1) ConvTranspose: 74 -> 256, kernel=1, stride=1 => still (1,1)
+        x = nn.ConvTranspose(
+            features=256,
+            kernel_size=(1,1),
+            strides=(1,1),
+            padding='VALID',
+            use_bias=False,
+            kernel_init=normal_init(0.02),
+        )(x)
+        x = nn.BatchNorm(use_running_average=not self.training)(x)
         x = nn.relu(x)
+        
+        # 2) ConvTranspose: 256 -> 128, kernel=7, stride=1 => goes (1,1) -> (7,7)
+        x = nn.ConvTranspose(
+            features=128,
+            kernel_size=(7,7),
+            strides=(1,1),
+            padding='VALID',
+            use_bias=False,
+            kernel_init=normal_init(0.02),
+        )(x)
+        x = nn.BatchNorm(use_running_average=not self.training)(x)
+        x = nn.relu(x)
+        
+        # 3) ConvTranspose: 128 -> 64, kernel=4, stride=2 => goes (7,7) -> (14,14)
+        x = nn.ConvTranspose(
+            features=64,
+            kernel_size=(4,4),
+            strides=(2,2),
+            padding='SAME',  # 'SAME' with stride=2 ~ padding=1 in PyTorch
+            use_bias=False,
+            kernel_init=normal_init(0.02),
+        )(x)
+        x = nn.BatchNorm(use_running_average=not self.training)(x)
+        x = nn.relu(x)
+        
+        # 4) ConvTranspose: 64 -> 1, kernel=4, stride=2 => goes (14,14) -> (28,28)
+        x = nn.ConvTranspose(
+            features=1,
+            kernel_size=(4,4),
+            strides=(2,2),
+            padding='SAME',
+            use_bias=False,
+            kernel_init=normal_init(0.02),
+        )(x)
 
-        x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(x)
-        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-        x = nn.relu(x)
-        x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=he_normal())(x)
-        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-        x = nn.relu(x)
-        x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(x)
-        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-        x = nn.relu(x)
-        x = nn.ConvTranspose(1, [4, 4], [2, 2], 'SAME', kernel_init=he_normal())(x)
-        x = jnp.tanh(x)
+        # Output in [0,1] for MNIST
+        x = nn.sigmoid(x)
+        
         return x
+
 
 class Discriminator(nn.Module):
     features: int = 64
@@ -93,13 +160,16 @@ class Discriminator(nn.Module):
         q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
         q = nn.leaky_relu(q, 0.1)
 
-        q = nn.Dense(self.features*2, kernel_init=normal_init(0.02))(q)
-        q = nn.leaky_relu(q, 0.1)
+        q_latent = nn.Dense(self.features*2, kernel_init=normal_init(0.02))(q)
+        q_latent = nn.leaky_relu(q_latent, 0.1)
 
-        q = nn.Conv(10, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
-        q = q.reshape((q.shape[0], -1))
+        q_logits_cat = nn.Conv(10, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q_latent)
+        q_logits_cat = q_logits_cat.reshape((q_logits_cat.shape[0], -1))
 
-        return d,q#, disc_logits, mu.squeeze(), jnp.exp(var)
+        mu = nn.Dense(features=2)(q_latent)
+        log_var = nn.Dense(features=2)(q_latent)
+        var = jnp.square(log_var)
+        return d,q_logits_cat, mu.squeeze(), jnp.exp(var)
 
 #@jax.jit
 #def train_step_gen(params_g, batch_stats_g, latent):
@@ -108,7 +178,7 @@ class Discriminator(nn.Module):
 #    return fake_images, batch_stats_g
 
 @partial(jax.jit, static_argnames=['solver'])
-def train_step_disc(state, data, fake_imgs, fake_cat_input, solver):
+def train_step_disc(state, data, fake_imgs, fake_cat_input, con_codes, solver):
        
         params_d, batch_stats_d, opt_disc = state
         #def bce_logits(logit, label):
@@ -122,7 +192,19 @@ def train_step_disc(state, data, fake_imgs, fake_cat_input, solver):
 
         def loss_mutual_information(code_cat, q_cat):
                   return -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
+           
+        def normal_nll_loss(x, mu, var):
+            """
+            Calculate the negative log likelihood of a normal distribution
+            (treating Q(c_j | x) as a factored Gaussian).
+            """
+            # log-likelihood term
+            logli = -0.5 * jnp.log(var * 2.0 * jnp.pi + 1e-6) \
+                    - ((x - mu) ** 2) / (2.0 * var + 1e-6)
             
+            # negative log-likelihood (to be minimized)
+            nll = -jnp.mean(jnp.sum(logli, axis=1))
+            return nll
             
         def loss_discriminator(params_d, vars_d_batch_stats):
                 
@@ -130,11 +212,11 @@ def train_step_disc(state, data, fake_imgs, fake_cat_input, solver):
                   #    {'params': params_g, 'batch_stats': batch_stats_g},
                   #    latent, mutable=['batch_stats']
                   #)
-                  (real_preds, _), vars_d = Discriminator().apply(
+                  (real_preds, _, _, _), vars_d = Discriminator().apply(
                       {'params': params_d, 'batch_stats': vars_d_batch_stats},
                       data, mutable=['batch_stats']
                   )
-                  (fake_preds, q), vars_d = Discriminator().apply(
+                  (fake_preds, q, mu, var), vars_d = Discriminator().apply(
                       {'params': params_d, 'batch_stats': vars_d['batch_stats']},
                       fake_imgs, mutable=['batch_stats']
                   )
@@ -143,6 +225,7 @@ def train_step_disc(state, data, fake_imgs, fake_cat_input, solver):
                   q_cat = nn.log_softmax(q, axis=-1)
                   loss_mi = loss_mutual_information(fake_cat_input, q_cat)
                
+                  loss_con = normal_nll_loss(con_codes, mu, var)
                   #predicted_cat = jnp.argmax(q, axis=-1)
                   
                   #true_cat = jnp.argmax(fake_cat_input, axis=-1)
@@ -168,7 +251,7 @@ def train_step_disc(state, data, fake_imgs, fake_cat_input, solver):
                   #jax.debug.print('real loss: {} ', real_loss)
                   #jax.debug.print('fake loss: {} ', fake_loss)
 
-                  loss = (real_loss + fake_loss) / 2.0 + loss_mi*0.1
+                  loss = (real_loss + fake_loss) / 2.0 + loss_mi + loss_con*0.01
                 
                   return loss, vars_d
 
@@ -219,7 +302,7 @@ def sample_latent(key, shape_noise, shape_cat):
   
   latent = jnp.concatenate([noise, code_cat, con], axis=-1)
 
-  return latent, code_cat
+  return latent, code_cat, con
 
 def sample_batch(key: jnp.ndarray,
                  data: jnp.ndarray,
@@ -291,7 +374,7 @@ class Trainer(object):
 
         self.batch_size = batch_size
         self.mini_batch_size = 64
-        self.num_mini_batches = 8
+        self.num_mini_batches = 4
        
         self.avg_mi_loss = -2.30
         self.fake_imgs = None
@@ -425,7 +508,7 @@ class Trainer(object):
                     data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
                     #data = np.expand_dims(data / 255.0, axis=-1)
 
-                    latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
+                    latent, cat_codes, con_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
                   
                     #if i > 600:
                     params_gen = self.solver_gen.best_params
@@ -444,6 +527,7 @@ class Trainer(object):
                         data,
                         fake_images,
                         cat_codes,
+                        con_codes,
                         solver_disc,
                     )
 
@@ -471,7 +555,7 @@ class Trainer(object):
                 
                 self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, adv=False)
 
-                #params_gen, belief_space = self.solver_gen.ask()
+                params_gen, belief_space = self.solver_gen.ask()
 
                 #scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
                 #params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
@@ -480,21 +564,21 @@ class Trainer(object):
                 #if isinstance(self.solver_gen, QualityDiversityMethod):
                 #    self.solver_gen.observe_bd(bds_gen)
                 #
-                #self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, adv=True)
+                #self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, adv=False)
 
-                best_params_gen = self.solver_gen.best_params
-                best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
+                #best_params_gen = self.solver_gen.best_params
+                #best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
 
-                self._key, subkey = jax.random.split(self._key)
-                shape_noise = (self.batch_size, self.latent_dim-self.n_con)
-                shape_cat = (self.batch_size,)
-                latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
+                #self._key, subkey = jax.random.split(self._key)
+                #shape_noise = (self.batch_size, self.latent_dim-self.n_con)
+                #shape_cat = (self.batch_size,)
+                #latent, cat_codes, con_codes = sample_latent(subkey, shape_noise, shape_cat)
 
-                (fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
-                batch_stats_gen = vars_g['batch_stats'] 
+                #(fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                #batch_stats_gen = vars_g['batch_stats'] 
 
 
-                params_gen, belief_space = self.solver_gen.ask()
+                #params_gen, belief_space = self.solver_gen.ask()
 
                 scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
                 params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
@@ -511,7 +595,7 @@ class Trainer(object):
                 self._key, subkey = jax.random.split(self._key)
                 shape_noise = (self.batch_size, self.latent_dim-self.n_con)
                 shape_cat = (self.batch_size,)
-                latent, cat_codes = sample_latent(subkey, shape_noise, shape_cat)
+                latent, cat_codes, con_codes = sample_latent(subkey, shape_noise, shape_cat)
 
                 (fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
                 batch_stats_gen = vars_g['batch_stats'] 
@@ -544,7 +628,7 @@ class Trainer(object):
                             i, scores_mi.size, scores_mi.max(), scores_mi.mean(),
                             scores_mi.min(), scores_mi.std()))
 
-                    scores_con = np.array(scores_gen_con*0.01)
+                    scores_con = np.array(scores_gen_con)
                     self._logger.info(
                         'Iter={0}, size={1}, max={2:.4f}, '
                         'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(

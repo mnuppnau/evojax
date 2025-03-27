@@ -55,8 +55,21 @@ def bce_logits(logit, label):
     batch_bce = jnp.maximum(logit, 0) - logit * label + jnp.log(1 + jnp.exp(neg_abs))
     return jnp.mean(batch_bce)
 
-def neg_log_likelihood_normal(x, mean, logvar):
-    return 0.5 * jnp.mean(jnp.sum(logvar + jnp.exp(-logvar) * (x - mean) ** 2, axis=-1))
+#def neg_log_likelihood_normal(x, mean, logvar):
+#    return 0.5 * jnp.mean(jnp.sum(logvar + jnp.exp(-logvar) * (x - mean) ** 2, axis=-1))
+
+def normal_nll_loss(x, mu, var):
+    """
+    Calculate the negative log likelihood of a normal distribution
+    (treating Q(c_j | x) as a factored Gaussian).
+    """
+    # log-likelihood term
+    logli = -0.5 * jnp.log(var * 2.0 * jnp.pi + 1e-6) \
+            - ((x - mu) ** 2) / (2.0 * var + 1e-6)
+    
+    # negative log-likelihood (to be minimized)
+    nll = -jnp.mean(jnp.sum(logli, axis=1))
+    return nll
 
 class Latent_Points(VectorizedTask):
     """Latent point task for InfoGAN Generator."""
@@ -128,11 +141,11 @@ class Latent_Points(VectorizedTask):
                 
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot, batch_con], axis=-1)
 
-            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, con_codes=batch_cat_one_hot, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q)
+            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, con_codes=batch_con, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q)
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
-        def step_fn(state, action, q):
+        def step_fn(state, action, q, mu, var):
            
             q_cat = jax.nn.log_softmax(q, axis=-1)
             
@@ -140,7 +153,9 @@ class Latent_Points(VectorizedTask):
 
             loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
            
-            loss_con = neg_log_likelihood_normal(state.con_codes, action, jnp.zeros_like(action))
+            #loss_con = neg_log_likelihood_normal(state.con_codes, action, jnp.zeros_like(action))
+            
+            loss_con = normal_nll_loss(state.con_codes, mu, var)*0.1
 
             #loss_con = loss_con
             loss_g = -loss_g#*0.1 + loss_q_disc# + loss_q_cont*0.005
@@ -155,5 +170,7 @@ class Latent_Points(VectorizedTask):
     def step(self,
              state: TaskState,
              action: jnp.ndarray,
-             disc_logits: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
-        return self._step_fn(state, action, disc_logits)
+             disc_logits: jnp.ndarray,
+             mu: jnp.ndarray,
+             var: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
+        return self._step_fn(state, action, disc_logits, mu, var)
