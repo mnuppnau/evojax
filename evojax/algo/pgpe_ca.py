@@ -279,9 +279,9 @@ class PGPE(NEAlgorithm):
 
         if optimizer_config is None:
             optimizer_config = {}
-        decay_coef = optimizer_config.get("center_lr_decay_coef", 0.99)
+        decay_coef = optimizer_config.get("center_lr_decay_coef", 0.95)
         self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 2000
+            "center_lr_decay_steps", 30000
         )
 
         if optimizer == "adam":
@@ -485,13 +485,13 @@ class PGPE(NEAlgorithm):
         mi_window_var = jnp.var(best_mi_window)
         total_var = adv_window_var + mi_window_var
 
-        #if self._t < 24000:
-        #    lambda_mi = 0.1 + self._t // 60000
-        #else: 
-        #    lambda_adv = 0.1 + self._t // 60000
-        #    lambda_mi = 1 - lambda_adv
+        if self._t < 30000:
+            lambda_mi = 0.2 + self._t // 50000
+        else: 
+            lambda_adv = 0.1 + self._t // 60000
+            lambda_mi = 1 - lambda_adv
 
-        lambda_mi = 0.5
+        #lambda_mi = 0.5
 
         #if self._t < 100:
         tchebycheff_scores = L_adv_norm + L_mi_norm * lambda_mi
@@ -650,7 +650,7 @@ class PGPE(NEAlgorithm):
             #fitness_scores = -jnp.argsort(order+1)
         #else:
         #if adv:
-            fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() + fitness_con.flatten()*0.004
+            fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*0.1 + fitness_con.flatten()*0.2
         #elif not adv and self._t > 6000:
         #fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()
