@@ -133,7 +133,10 @@ class Latent_Points(VectorizedTask):
                 
                 batch_cat_one_hot = jax.nn.one_hot(batch_cat, self.n_classes)
 
-                #c = jnp.tile(jnp.arange(10),13)
+                #c1 = jnp.tile(jnp.arange(10),6)
+                #c2 = jax.random.randint(cat_key, (4,), 0, 10)
+                #c = jnp.concatenate([c1, c2])
+                #c = jax.random.permutation(cat_key, c)  # Shuffle the array
                 # remove the last 4 elements to make it 256
                 #c = c[:self.batch_size]
                 #batch_cat_one_hot = jax.nn.one_hot(c, 10)
