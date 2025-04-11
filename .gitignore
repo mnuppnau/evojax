@@ -1,6 +1,7 @@
 # Other to ignore
 .DS_Store
 /data/
+/new-env/
 /local/
 /test-images/
 # Byte-compiled / optimized / DLL files
