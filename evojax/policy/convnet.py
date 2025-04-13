@@ -57,24 +57,8 @@ def generate_latent_points(rng, latent_dim, n_samples):
     
       return z_input, cat_codes
 
-def create_train_state(rng, learning_rate=1e-3):
-    model = BinaryMNISTClassifier() 
-    dummy_input = jnp.ones((1, 784), jnp.float32)
-    params = model.init(rng, dummy_input)['params']
-
-    tx = optax.adam(learning_rate)
-
-    state = train_state.TrainState.create(
-        apply_fn=model.apply,
-        params=params,
-        tx=tx
-    )
-    return state, model
-
-def load_model(state, path):
-    checkpointer = orbax_cp.PyTreeCheckpointer()
-    restored_state = checkpointer.restore(path, item=state)
-    return restored_state
+def normal_init(stddev):
+    return nn.initializers.normal(stddev)
 
 class Generator(nn.Module):
   features: int = 64
@@ -93,7 +77,7 @@ class Generator(nn.Module):
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.relu(x)
     x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = jnp.tanh(x)
+    x = nn.sigmoid(x)
     return x
 
 
@@ -106,12 +90,12 @@ class Discriminator(nn.Module):
   @nn.compact
   def __call__(self, x):
     x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    #x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.leaky_relu(x, 0.2)
     x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.leaky_relu(x, 0.2)
-    
+
     # Discriminator output
     d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     d = d.reshape((d.shape[0], -1))
@@ -120,335 +104,15 @@ class Discriminator(nn.Module):
     q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
     q = nn.leaky_relu(q, 0.2)
+    q = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
+    q = q.reshape((q.shape[0], -1))
+    return d, q
 
-    disc_logits = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
-    disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
-      
-    mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
-    #print('mu shape : ', mu.shape)
-    log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
-    #print('log var shape : ', log_var.shape)
-    var = jnp.squeeze(log_var)
-    
-    return d, disc_logits, mu.squeeze(), jnp.exp(var)
+def load_model(state, path):
+    checkpointer = orbax_cp.PyTreeCheckpointer()
+    restored_state = checkpointer.restore(path, item=state)
+    return restored_state
 
-#class Generator(nn.Module):
-#    """
-#    Flax Generator for InfoGAN MNIST.
-#    Flow: (z_dim,1,1) -> (256,1,1) -> (128,7,7) -> (64,14,14) -> (1,28,28)
-#    """
-#    z_dim: int = 74      # Total latent dimension (noise + latent codes)
-#    training: bool = True
-#    
-#    @nn.compact
-#    def __call__(self, z):
-#        """Forward pass. Returns images in [0, 1]."""
-#        # Reshape from (batch, z_dim) to (batch, 1, 1, z_dim)
-#        x = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-#        
-#        # 1) ConvTranspose: z_dim -> 256
-#        x = nn.ConvTranspose(
-#            features=256,
-#            kernel_size=(1,1),
-#            strides=(1,1),
-#            padding='VALID',
-#            kernel_init=normal_init(0.02),  # GAN standard initialization
-#            use_bias=False,
-#        )(x)
-#        x = nn.BatchNorm(use_running_average=not self.training)(x)
-#        x = nn.relu(x)
-#        
-#        # 2) ConvTranspose: 256 -> 128, (1,1) -> (7,7)
-#        x = nn.ConvTranspose(
-#            features=128,
-#            kernel_size=(7,7),
-#            strides=(1,1),
-#            padding='VALID',
-#            kernel_init=normal_init(0.02),
-#            use_bias=False,
-#        )(x)
-#        x = nn.BatchNorm(use_running_average=not self.training)(x)
-#        x = nn.relu(x)
-#        
-#        # 3) ConvTranspose: 128 -> 64, (7,7) -> (14,14)
-#        x = nn.ConvTranspose(
-#            features=64,
-#            kernel_size=(4,4),
-#            strides=(2,2),
-#            padding='SAME',
-#            kernel_init=normal_init(0.02),
-#            use_bias=False,
-#        )(x)
-#        x = nn.BatchNorm(use_running_average=not self.training)(x)
-#        x = nn.relu(x)
-#        
-#        # 4) ConvTranspose: 64 -> 1, (14,14) -> (28,28)
-#        x = nn.ConvTranspose(
-#            features=1,
-#            kernel_size=(4,4),
-#            strides=(2,2),
-#            padding='SAME',
-#            kernel_init=normal_init(0.02),
-#            use_bias=True,
-#        )(x)
-#        
-#        # Output in [0,1] for MNIST
-#        x = nn.sigmoid(x)
-#        
-#        return x  # Output shape: (batch_size, 28, 28, 1)
-#
-#class Discriminator(nn.Module):
-#    features: int = 64
-#    training: bool = True
-#    q_cat: int = 10
-#    q_cont: int = 2
-#    
-#    @nn.compact
-#    def __call__(self, x):
-#        # Shared feature extraction
-#        x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-#        x = nn.leaky_relu(x, 0.2)
-#        
-#        x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02), use_bias=False)(x)
-#        x = nn.BatchNorm(use_running_average=not self.training)(x)
-#        x = nn.leaky_relu(x, 0.2)
-#        
-#        # Shared features
-#        features = x
-#        
-#        # Discriminator output path - properly flatten the tensor
-#        d = nn.Conv(1, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(features)
-#        # Flatten all dimensions except batch
-#        d = d.reshape((d.shape[0], -1))  # Shape becomes (batch_size, 2*2*1)
-#        # Then use Dense layer to get to a single value per batch item
-#        d = nn.Dense(1, kernel_init=normal_init(0.02))(d)
-#        d = d.squeeze(-1)  # Shape becomes (batch_size,)
-#        
-#        # Q-network path for mutual information maximization
-#        q = nn.Conv(self.features*4, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02), use_bias=False)(features)
-#        q = nn.BatchNorm(use_running_average=not self.training)(q)
-#        q = nn.leaky_relu(q, 0.2)
-#        q = q.reshape((q.shape[0], -1))  # Flattens all dimensions except batch
-#        
-#        # Latent feature space
-#        q_latent = nn.Dense(128)(q)
-#        q_latent = nn.leaky_relu(q_latent, 0.2)
-#        
-#        # Categorical distribution for digit class
-#        q_logits_cat = nn.Dense(self.q_cat)(q_latent)
-#        
-#        # Continuous distribution parameters
-#        mu = nn.Dense(features=self.q_cont)(q_latent)
-#        logvar = nn.Dense(features=self.q_cont)(q_latent)
-#        var = jnp.exp(logvar)
-#        
-#        return d, q_logits_cat, mu, var
-
-#class Generator(nn.Module):
-#    """
-#    Flax Generator for MNIST with fewer channels (approx ~1.7M params).
-#    Matches a DCGAN-like flow:
-#      (z_dim,1,1) -> (256,1,1) -> (128,7,7) -> (64,14,14) -> (1,28,28)
-#    """
-#    z_dim: int = 74      # Typically noise + InfoGAN code dimension
-#    training: bool = True
-#    
-#    @nn.compact
-#    def __call__(self, z):
-#        """Forward pass. Returns images in [0, 1]."""
-#        # Reshape from (batch, z_dim) to (batch, 1,1, z_dim)
-#        x = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-#        
-#        # 1) ConvTranspose: 74 -> 256, kernel=1, stride=1 => still (1,1)
-#        x = nn.ConvTranspose(
-#            features=256,
-#            kernel_size=(1,1),
-#            strides=(1,1),
-#            padding='VALID',
-#            kernel_init=he_normal(),  # He normal initialization
-#            use_bias=False,
-#            #kernel_init=normal_init(0.02),
-#        )(x)
-#        x = nn.BatchNorm(use_running_average=not self.training)(x)
-#        x = nn.relu(x)
-#        
-#        # 2) ConvTranspose: 256 -> 128, kernel=7, stride=1 => goes (1,1) -> (7,7)
-#        x = nn.ConvTranspose(
-#            features=128,
-#            kernel_size=(7,7),
-#            strides=(1,1),
-#            padding='VALID',
-#            kernel_init=he_normal(),  # He normal initialization
-#            use_bias=False,
-#            #kernel_init=normal_init(0.02),
-#        )(x)
-#        x = nn.BatchNorm(use_running_average=not self.training)(x)
-#        x = nn.relu(x)
-#        
-#        # 3) ConvTranspose: 128 -> 64, kernel=4, stride=2 => goes (7,7) -> (14,14)
-#        x = nn.ConvTranspose(
-#            features=64,
-#            kernel_size=(4,4),
-#            strides=(2,2),
-#            padding='SAME',  # 'SAME' with stride=2 ~ padding=1 in PyTorch
-#            kernel_init=he_normal(),  # He normal initialization
-#            use_bias=False,
-#            #kernel_init=normal_init(0.02),
-#        )(x)
-#        x = nn.BatchNorm(use_running_average=not self.training)(x)
-#        x = nn.relu(x)
-#        
-#        # 4) ConvTranspose: 64 -> 1, kernel=4, stride=2 => goes (14,14) -> (28,28)
-#        x = nn.ConvTranspose(
-#            features=1,
-#            kernel_size=(4,4),
-#            strides=(2,2),
-#            padding='SAME',
-#            kernel_init=he_normal(),  # He normal initialization
-#            use_bias=False,
-#            #kernel_init=normal_init(0.02),
-#        )(x)
-#
-#        # Output in [0,1] for MNIST
-#        x = nn.sigmoid(x)
-#        
-#        return x
-
-#class Generator(nn.Module):
-#    """ Generator CNN for MNIST """
-#
-#    features: int = 64
-#    training: bool = True
-#
-#    @nn.compact
-#    def __call__(self, z):
-#        #jax.debug.print('z shape : {} ', z.shape)
-#        #if len(z.shape) == 3:
-#        #    z = z.reshape((z.shape[0], z.shape[1], 1, 1, z.shape[2]))
-#        #else:
-#        z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-#        
-#        # Add an extra upsampling block
-#        x = nn.ConvTranspose(self.features*8, [3, 3], [2, 2], 'VALID')(z)  # New layer
-#        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-#        x = nn.relu(x)
-#
-#        x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(x)
-#        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-#        x = nn.relu(x)
-#        #activations1 = x
-#        x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=he_normal())(x)
-#        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-#        x = nn.relu(x)
-#        #activations2 = x
-#        x = nn.ConvTranspose(self.features, [4, 4], [1, 1], 'VALID', kernel_init=he_normal())(x)
-#        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-#        x = nn.relu(x)
-#        #activations3 = x
-#        x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=he_normal())(x)
-#        x = jnp.tanh(x)
-#        # use sigmoid
-#        #x = nn.sigmoid(x)
-#        return x#, activations1, activations2, activations3
-
-class BinaryMNISTClassifier(nn.Module):
-    """CNN for MNIST."""
-
-    @nn.compact
-    def __call__(self, x, training: bool = True): 
-        x = x.reshape((x.shape[0], 28, 28, 1))
-
-        x = nn.Conv(features=16, kernel_size=(3, 3))(x)
-        x = nn.relu(x)
-        x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
-
-        x = nn.Conv(features=32, kernel_size=(3, 3))(x)
-        x = nn.relu(x)
-        x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
-
-        x = x.reshape((x.shape[0], -1))  # flatten
-
-        x = nn.Dense(features=64)(x)
-        x = nn.relu(x)
-
-        x = nn.Dense(features=1)(x)
-        return jnp.squeeze(x)
-
-#class Discriminator(nn.Module):
-#    features: int = 32
-#    training: bool = True
-#
-#    q_cat: int = 10
-#
-#    @nn.compact
-#    def __call__(self, x):
-#        x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-#        #x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-#        x = nn.leaky_relu(x, 0.1)
-#        
-#        x = nn.Conv(self.features*4, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02), use_bias=False)(x)
-#        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-#        x = nn.leaky_relu(x, 0.1)
-#        
-#        x = nn.Conv(self.features*16, [3, 3], [1, 1], 'VALID', kernel_init=normal_init(0.02), use_bias=False)(x)
-#        x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-#        x = nn.leaky_relu(x, 0.1)
-#
-#        # Discriminator output
-#        d = nn.Conv(1, [3, 3], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
-#        #d = nn.sigmoid(d)
-#        d = d.reshape((d.shape[0], -1))
-#        #d = d.reshape((d.shape[0], -1))
-#        #d = nn.sigmoid(d)
-#        # Q outpiut
-#        q = nn.Conv(self.features*2, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02), use_bias=False)(x)
-#        q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
-#        q = nn.leaky_relu(q, 0.1)
-#       
-#        q = q.reshape((q.shape[0], -1))
-#
-#        q_latent = nn.Dense(self.features*2)(q)
-#        q_latent = nn.leaky_relu(q_latent, 0.1)
-#
-#        q_logits_cat = nn.Dense(self.q_cat)(q_latent)
-#        #q = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
-#        #q = q.reshape((q.shape[0], -1))
-#               
-#        mu = nn.Dense(features=2)(q_latent)
-#        log_var = nn.Dense(features=2)(q_latent)
-#        var = jnp.squeeze(log_var)
-#    
-#        return d, q_logits_cat, mu.squeeze(), jnp.exp(var)
-
-class QNetwork(nn.Module):
-    features: int = 64
-    training: bool = True
-
-    q_cat: int = 10
-
-    @nn.compact
-    def __call__(self, x):
-        #x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-        #x = nn.leaky_relu(x, 0.2)
-        #x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-        #x = nn.leaky_relu(x, 0.2)
-
-        #q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-        q = nn.Conv(self.features, [3, 3], [2, 2], 'VALID', kernel_init=he_normal())(x) 
-        q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
-        q = nn.leaky_relu(q, 0.1)
-       
-        disc_logits = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=he_normal())(q)
-        disc_logits = disc_logits.reshape((disc_logits.shape[0], -1)) 
-
-        #mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
-        #mu = jnp.squeeze(mu)
-
-        #log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
-        #var = jnp.squeeze(log_var)
-        #var = jnp.exp(var)
-
-        return disc_logits#, mu, var
 
 class GenPolicy(PolicyNetwork):
     """A convolutional neural network for the MNIST classification task."""
@@ -517,7 +181,7 @@ class GenPolicy(PolicyNetwork):
             #(preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
             (fake_data), vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
-            (preds, q, mu, var), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
+            (preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
             #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
 
             leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
@@ -529,7 +193,7 @@ class GenPolicy(PolicyNetwork):
             #leaves_batch_stats_q, _ = jax.tree_util.tree_flatten(vars_q['batch_stats'])
             #flat_batch_stats_q = jnp.concatenate([p.flatten() for p in leaves_batch_stats_q])
             
-            return fake_data, flat_batch_stats_gen, preds, q, flat_batch_stats_disc, mu, var
+            return fake_data, flat_batch_stats_gen, preds, q, flat_batch_stats_disc#, mu, var
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -556,9 +220,9 @@ class GenPolicy(PolicyNetwork):
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, batch_stats_g, preds, disc_logits, batch_stats_d, mu, var = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
+        fake_data, batch_stats_g, preds, disc_logits, batch_stats_d = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
         
-        return fake_data, preds, disc_logits, batch_stats_g, batch_stats_d, mu, var, p_states
+        return fake_data, preds, disc_logits, batch_stats_g, batch_stats_d, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
