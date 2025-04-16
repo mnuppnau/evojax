@@ -499,7 +499,7 @@ class PGPE(NEAlgorithm):
         #if self._t < 100:
         #tchebycheff_scores = norm_fitness_adv.flatten()*(1-w_mi) + norm_fitness_mi.flatten()*w_mi #+ norm_fitness_con.flatten()*0.01
         #elif self._t < 8000:
-        tchebycheff_scores = L_adv_norm + L_mi_norm 
+        tchebycheff_scores = L_adv_norm*(1-w_mi) + L_mi_norm*w_mi
         #elif self._t < 16000:
         #    tchebycheff_scores = L_adv_norm + L_mi_norm * 0.2
         #elif self._t < 24000:
@@ -653,18 +653,20 @@ class PGPE(NEAlgorithm):
             #fitness_scores = -jnp.argsort(order+1)
         #else:
         #if adv:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(30*(w_mi)) + fitness_con.flatten() * 0.1
+            #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(10*(w_mi)) + fitness_con.flatten() * 0.1
         #elif not adv and self._t > 6000:
-            fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
+            #fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
+            fitness_scores = norm_fitness_adv.flatten()*(1-w_mi) + norm_fitness_mi.flatten()*w_mi + norm_fitness_con.flatten() * 0.1
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()# + fitness_con.flatten()
             #closeness = compute_closeness(objectives)
             #fitness_scores = compute_fitness(closeness, ranks)
         else:
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(10*(w_mi)) + fitness_con.flatten()
-         #fitness_scores = tchebycheff_scores
+            #fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten()*w_mi + norm_fitness_con.flatten() * 0.1
+            fitness_scores = tchebycheff_scores
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() + fitness_con.flatten() * 0.01
         #fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten() + norm_fitness_con.flatten() * 0.1
-            fitness_scores = -jnp.argsort(order+1)
+            #fitness_scores = -jnp.argsort(order+1)
         #else:
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*50
             #closeness = compute_closeness(objectives)

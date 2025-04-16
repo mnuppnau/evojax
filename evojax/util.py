@@ -99,13 +99,16 @@ def load_model_gen(model_dir: str) -> Tuple[np.ndarray, np.ndarray]:
         (param_size,) and (1 + 2 * batch_stats_size,).
     """
 
-    model_file = os.path.join(model_dir, 'bp_model_gen.npz')
+    model_file = os.path.join(model_dir, 'final_model_gen.npz')
     if not os.path.exists(model_file):
         raise ValueError('Model file {} does not exist.')
-    with np.load(model_file) as data:
+    with np.load(model_file, allow_pickle=True) as data:
         params = data['params']
         batch_stats = data['batch_stats']
-    return params, batch_stats
+        params_disc = data['params_disc'] 
+        batch_stats_disc = data['batch_stats_disc']
+        obs_params = data['obs_params']
+    return params, batch_stats, params_disc, batch_stats_disc, obs_params
 
 def load_model_disc(model_dir: str) -> Tuple[np.ndarray, np.ndarray]:
     """Load policy parameters from the specified directory.
@@ -128,8 +131,10 @@ def load_model_disc(model_dir: str) -> Tuple[np.ndarray, np.ndarray]:
 def save_model(model_dir: str,
                model_name: str,
                params: Union[np.ndarray, jnp.ndarray],
+               params_disc: Union[np.ndarray, jnp.ndarray] = None,
                obs_params: Union[np.ndarray, jnp.ndarray] = None,
                batch_stats: Union[np.ndarray, jnp.ndarray] = None,
+               batch_stats_disc: Union[np.ndarray, jnp.ndarray] = None,
                best: bool = False) -> None:
     """Save policy parameters to the specified directory.
 
@@ -144,8 +149,10 @@ def save_model(model_dir: str,
     model_file = os.path.join(model_dir, '{}.npz'.format(model_name))
     np.savez(model_file,
              params=np.array(params),
+             params_disc=np.array(params_disc),
              obs_params=np.array(obs_params),
-             batch_stats=np.array(batch_stats))
+             batch_stats=np.array(batch_stats),
+             batch_stats_disc=np.array(batch_stats_disc))
     if best:
         model_file = os.path.join(model_dir, 'best.npz')
         np.savez(model_file,

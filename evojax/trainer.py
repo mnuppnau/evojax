@@ -16,10 +16,12 @@ import logging
 import time
 from typing import Optional, Callable
 
+import os
 import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+import flax.serialization as serialization
 
 from functools import partial
 from evojax.task.base import VectorizedTask
@@ -40,6 +42,33 @@ from torchvision import datasets
 # import Tuple
 from typing import Tuple
 
+def save_optimizer_state(opt_state, file_path: str):
+    """
+    Saves the optimizer state to disk using Flax serialization.
+    """
+    # Convert the pytree to raw bytes
+    bytes_output = serialization.to_bytes(opt_state)
+    # Write to file
+    with open(file_path, 'wb') as f:
+        f.write(bytes_output)
+
+def load_optimizer_state(file_path: str, optimizer_state_structure):
+    """
+    Loads the optimizer state from disk. You must provide a "template"
+    structure (optimizer_state_structure) that has the same structure 
+    (PyTree) as what was originally saved.
+    
+    Typically, you can pass in an uninitialized or dummy version 
+    of the optimizer state.
+    """
+    with open(file_path, 'rb') as f:
+        bytes_input = f.read()
+    # 'optimizer_state_structure' is a placeholder with the same structure.
+    loaded_optimizer_state = serialization.from_bytes(
+        optimizer_state_structure,
+        bytes_input
+    )
+    return loaded_optimizer_state
 
 #class Generator(nn.Module):
 #    """ Generator CNN for MNIST """
@@ -86,7 +115,7 @@ class Generator(nn.Module):
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.relu(x)
     x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = jnp.tanh(x)
+    x = nn.sigmoid(x)
     return x
 
 
@@ -614,7 +643,7 @@ class Trainer(object):
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.solver_disc = optax.adam(learning_rate=0.0001, b1=0.5, b2=0.999)
+        self.solver_disc = optax.adam(learning_rate=0.0002, b1=0.5, b2=0.999)
 
     def run(self, demo_mode: bool = False) -> float:
 
@@ -632,35 +661,51 @@ class Trainer(object):
 
         """Start the training / test process."""
 
+        solver_disc = self.solver_disc
+
         if self.model_dir is not None:
-            params_gen, self.batch_stats_gen = load_model_gen(model_dir=self.model_dir)
-            params_disc, self.batch_stats_disc = load_model_disc(model_dir=self.model_dir)
-            #self.sim_mgr.obs_params = obs_params
+            params_gen, batch_stats_gen, params_disc, self.batch_stats_disc, obs_params = load_model_gen(model_dir=self.model_dir)
+            
+            #jax.debug.print('params gen shape: {}', params_gen.shape) 
+            #jax.debug.print('batch stats gen shape: {}', batch_stats_gen.shape)
+            self.params_disc = self.policy_gen._format_single_params_disc_fn(params_disc)
+            
+            batch_stats_disc = jnp.expand_dims(self.batch_stats_disc, axis=0)
+            
+            self.batch_stats_disc = self.policy_gen._format_batch_stats_disc_fn(batch_stats_disc)
+          
+            init_opt_state = solver_disc.init(params_disc)
+            
+            opt_disc = load_optimizer_state(os.path.join(self._log_dir, 'disc_opt_state.msgpack'), init_opt_state)
+        
+            self.sim_mgr_gen.obs_params = obs_params
             self._logger.info(
                 'Loaded model parameters from {}.'.format(self.model_dir))
         else:
-            params_gen, params_disc, params_q = None, None, None
+            params_gen, params_disc = None, None
+
+            opt_disc = solver_disc.init(self.params_disc)
 
         if demo_mode:
-            if params is None:
+            if params_gen is None:
                 raise ValueError('No policy parameters to evaluate.')
             self._logger.info('Start to test the parameters.')
             scores = np.array(
-                self.sim_mgr.eval_params(params=params, test=True)[0])
+                self.sim_mgr_gen.eval_params(params=params_gen, test=True)[0])
             self._logger.info(
                 '[TEST] #tests={0}, max={1:.4f}, avg={2:.4f}, min={3:.4f}, '
                 'std={4:.4f}'.format(scores.size, scores.max(), scores.mean(),
                                      scores.min(), scores.std()))
             return scores.mean()
         else:
-            solver_disc = self.solver_disc
-            opt_disc = solver_disc.init(self.params_disc)
-
 
             self._logger.info(
                 'Start to train for {} iterations.'.format(self._max_iter))
 
-            if params_gen is not None and params_disc is not None and params_q is not None:
+            if params_gen is not None and self.params_disc is not None:# and params_q is not None:
+            
+
+                jax.debug.print('Continuing training from the last checkpoint.')
                 # Continue training from the breakpoint.
                 self.solver_gen.best_params = params_gen
 
@@ -687,9 +732,9 @@ class Trainer(object):
 
                 if i < 1:
                     if len(self.batch_stats_gen.shape) == 1:
-                        batch_stats_gen = jnp.expand_dims(self.batch_stats_gen, axis=0)
+                        self.batch_stats_gen = jnp.expand_dims(self.batch_stats_gen, axis=0)
                 
-                    batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
+                    batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(self.batch_stats_gen)
 
                 for mini_batch in range(num_mini_batches):
                     # Sample batch of data.
@@ -758,15 +803,15 @@ class Trainer(object):
                 #
                 #self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, adv=True)
 
-                best_params_gen = self.solver_gen.best_params
-                best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
+                #best_params_gen = self.solver_gen.best_params
+                #best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
 
-                self._key, subkey = jax.random.split(self._key)
-                shape_noise = (self.batch_size, self.latent_dim-self.n_con)
-                shape_cat = (self.batch_size,)
-                latent, cat_codes, con_codes = sample_latent(subkey, shape_noise, shape_cat)
+                #self._key, subkey = jax.random.split(self._key)
+                #shape_noise = (self.batch_size, self.latent_dim-self.n_con)
+                #shape_cat = (self.batch_size,)
+                #latent, cat_codes, con_codes = sample_latent(subkey, shape_noise, shape_cat)
 
-                (fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                #(fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
                 #batch_stats_gen = vars_g['batch_stats'] 
 
                 #(_, _, _, _), vars_d = Discriminator().apply({'params': params_disc, 'batch_stats': self.batch_stats_disc}, fake_images, mutable=['batch_stats'])
@@ -878,13 +923,22 @@ class Trainer(object):
             #        self._max_iter, test_scores.size, test_scores.max(),
             #        test_scores.mean(), test_scores.min(), test_scores.std()))
             #mean_test_score = test_scores.mean()
+            leaves_batch_stats_gen, _ = jax.tree_flatten(batch_stats_gen)
+            flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+
             save_model(
                 model_dir=self._log_dir,
                 model_name='final_model_gen',
                 params=best_params_gen,
+                params_disc=flat_params_disc,
                 obs_params=self.sim_mgr_gen.obs_params,
-                batch_stats=batch_stats_gen,
+                batch_stats=flat_batch_stats_gen,
+                batch_stats_disc=flat_batch_stats_disc,
                 #best=mean_test_score > best_score,
+            )
+            save_optimizer_state(
+                opt_state=opt_disc,
+                file_path=os.path.join(self._log_dir, 'disc_opt_state.msgpack'),
             )
             #save_model(
             #    model_dir=self._log_dir,
@@ -903,6 +957,7 @@ class Trainer(object):
             #        params_lattice=self.solver.params_lattice,
             #        occupancy_lattice=self.solver.occupancy_lattice,
             #    )
+            best_score = scores_gen_adv.mean()
             self._logger.info(
                 'Training done, best_score={0:.4f}'.format(best_score))
 

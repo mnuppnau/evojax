@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument(
         '--batch-size', type=int, default=64, help='Batch size for training.')
     parser.add_argument(
-        '--max-iter', type=int, default=99000, help='Max training iterations.')
+        '--max-iter', type=int, default=7000, help='Max training iterations.')
     parser.add_argument(
         '--test-interval', type=int, default=1000, help='Test interval.')
     parser.add_argument(
@@ -48,9 +48,9 @@ def parse_args():
     parser.add_argument(
         '--seed', type=int, default=42, help='Random seed for training.')
     parser.add_argument(
-        '--center-lr-gen', type=float, default=0.005, help='Center learning rate.')
+        '--center-lr-gen', type=float, default=0.0054, help='Center learning rate.')
     parser.add_argument(
-        '--std-lr-gen', type=float, default=0.069, help='Std learning rate.')
+        '--std-lr-gen', type=float, default=0.079, help='Std learning rate.')
     parser.add_argument(
         '--init-std-gen', type=float, default=0.039, help='Initial std.')
     parser.add_argument(
@@ -139,7 +139,7 @@ def main(config):
         train_task_disc=train_task_mnist,
         test_task_disc=test_task_mnist,
         #test_task=test_task,
-        #model_dir=model_dir, 
+        model_dir=model_dir, 
         max_iter=config.max_iter,
         log_interval=config.log_interval,
         test_interval=config.test_interval,
@@ -157,7 +157,7 @@ def main(config):
     tar_file = os.path.join(log_dir, 'model.npz')
     #shutil.copy(src_file, tar_file)
     trainer.model_dir = log_dir
-    trainer.run(demo_mode=True)
+    #trainer.run(demo_mode=True)
 
 
 if __name__ == '__main__':

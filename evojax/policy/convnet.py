@@ -93,7 +93,7 @@ class Generator(nn.Module):
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.relu(x)
     x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = jnp.tanh(x)
+    x = nn.sigmoid(x)
     return x
 
 
@@ -481,6 +481,9 @@ class GenPolicy(PolicyNetwork):
         format_single_params_gen_fn = get_single_params_format_fn(self.init_params_gen)
         self._format_single_params_gen_fn = format_single_params_gen_fn
         
+        format_single_params_disc_fn = get_single_params_format_fn(self.init_params_disc)
+        self._format_single_params_disc_fn = format_single_params_disc_fn
+
         self._logger.info(
             'GenPolicy.num_params = {}'.format(self.num_params))
         self._format_params_gen_fn = jax.vmap(format_params_gen_fn)
@@ -594,6 +597,9 @@ class DiscPolicy(PolicyNetwork):
             'DiscPolicy.num_params = {}'.format(self.num_params))
         self._format_params_disc_fn = jax.vmap(format_params_disc_fn)
 
+        format_single_params_disc_fn = get_single_params_format_fn(self.init_params_disc)
+        self._format_single_params_disc_fn = format_single_params_disc_fn
+
         self.num_batch_stats, format_batch_stats_disc_fn = get_params_format_fn(self.init_batch_stats_disc)
         self._logger.info(
             'DiscPolicy.num_batch_stats = {}'.format(self.num_batch_stats))
@@ -613,7 +619,7 @@ class DiscPolicy(PolicyNetwork):
         self._format_batch_stats_gen_fn = gen_policy._format_batch_stats_gen_fn
 
         gen_policy.set_model_disc(self.model_disc)
-        gen_policy.set_format_params_disc_fn(self._format_params_disc_fn)
+        gen_policy.set_format_params_disc_fn(self._format_single_params_disc_fn)
         gen_policy.set_format_batch_stats_disc_fn(self._format_batch_stats_disc_fn)
         gen_policy.set_model_q(self.model_q)
         gen_policy.set_format_params_q_fn(self._format_params_q_fn)

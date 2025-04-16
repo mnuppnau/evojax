@@ -158,7 +158,7 @@ class Latent_Points(VectorizedTask):
            
             #loss_con = neg_log_likelihood_normal(state.con_codes, action, jnp.zeros_like(action))
             
-            loss_con = normal_nll_loss(state.con_codes, mu, var)*0.1
+            loss_con = normal_nll_loss(state.con_codes, mu, var)
 
             #loss_con = loss_con
             loss_g = -loss_g#*0.1 + loss_q_disc# + loss_q_cont*0.005
