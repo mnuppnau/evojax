@@ -58,6 +58,15 @@ def bce_logits(logit, label):
 #def neg_log_likelihood_normal(x, mean, logvar):
 #    return 0.5 * jnp.mean(jnp.sum(logvar + jnp.exp(-logvar) * (x - mean) ** 2, axis=-1))
 
+def continuous_loss(x, mu, var):
+    # Simple MSE for mean prediction
+    mse = jnp.mean((x - mu) ** 2)
+    
+    # Regularize variance to stay near 1.0
+    var_reg = jnp.mean((var - 1.0) ** 2) * 0.1
+    
+    return mse + var_reg
+
 def normal_nll_loss(x, mu, var):
     """
     Calculate the negative log likelihood of a normal distribution
@@ -158,9 +167,10 @@ class Latent_Points(VectorizedTask):
            
             #loss_con = neg_log_likelihood_normal(state.con_codes, action, jnp.zeros_like(action))
             
-            loss_con = normal_nll_loss(state.con_codes, mu, var)
+            #loss_con = normal_nll_loss(state.con_codes, mu, var)
 
-            #loss_con = loss_con
+            loss_con = continuous_loss(state.con_codes, mu, var)
+            #loss_con = -loss_con
             loss_g = -loss_g#*0.1 + loss_q_disc# + loss_q_cont*0.005
             
             return state, loss_q_disc, loss_g, loss_con, jnp.ones(())

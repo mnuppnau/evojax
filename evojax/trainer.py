@@ -105,16 +105,16 @@ class Generator(nn.Module):
   @nn.compact
   def __call__(self, z):
     z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
+    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(z)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
     x = nn.sigmoid(x)
     return x
 
@@ -143,7 +143,12 @@ class Discriminator(nn.Module):
     q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
     q = nn.leaky_relu(q, 0.2)
 
-    disc_logits = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
+    # ADD BOTTLENECK: Force through narrow layer
+    q = nn.Conv(8, [1, 1], [1, 1], 'SAME')(q)  # Squeeze to 8 channels
+    q = nn.leaky_relu(q, 0.2)
+    q = nn.Conv(self.features, [1, 1], [1, 1], 'SAME')(q)  # Expand back
+
+    disc_logits = nn.Conv(self.q_cat, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02))(q)
     disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
       
     mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
@@ -384,7 +389,7 @@ class Discriminator(nn.Module):
 #    return fake_images, batch_stats_g
 
 @partial(jax.jit, static_argnames=['solver'])
-def train_step_disc(state, data, fake_imgs, fake_cat_input, con_codes, solver):
+def train_step_disc(state, data, fake_imgs, fake_cat_input, con_codes, solver, key, iteration):
        
         params_d, batch_stats_d, opt_disc = state
         #def bce_logits(logit, label):
@@ -399,6 +404,15 @@ def train_step_disc(state, data, fake_imgs, fake_cat_input, con_codes, solver):
         def loss_mutual_information(code_cat, q_cat):
                   return -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
            
+        def continuous_loss(x, mu, var):
+            # Simple MSE for mean prediction
+            mse = jnp.mean((x - mu) ** 2)
+            
+            # Regularize variance to stay near 1.0
+            var_reg = jnp.mean((var - 1.0) ** 2) * 0.1
+            
+            return mse + var_reg
+
         def normal_nll_loss(x, mu, var):
             """
             Calculate the negative log likelihood of a normal distribution
@@ -426,12 +440,21 @@ def train_step_disc(state, data, fake_imgs, fake_cat_input, con_codes, solver):
                       {'params': params_d, 'batch_stats': vars_d['batch_stats']},
                       fake_imgs, mutable=['batch_stats']
                   )
-                
+               
+                  #noise_multiplier = jnp.maximum(0.0, 1.0 - iteration / 20.0)
+                  #noise_level = 0.05 * noise_multiplier  # Only 0.05 max noise, not 0.3
+                  
+                  #noise = jax.random.normal(key, fake_cat_input.shape) * noise_level
+                  #jax.debug.print('noise level: {}', noise)
+                  #fake_cat_noisy = fake_cat_input + noise
+                  #fake_cat_noisy = nn.softmax(fake_cat_noisy, axis=-1)
+
                   # Calculate Mutual Information loss
                   q_cat = nn.log_softmax(q, axis=-1)
                   loss_mi = loss_mutual_information(fake_cat_input, q_cat)
                
-                  loss_con = normal_nll_loss(con_codes, mu, var)
+                  #loss_con = normal_nll_loss(con_codes, mu, var)
+                  loss_con = continuous_loss(con_codes, mu, var)
                   #predicted_cat = jnp.argmax(q, axis=-1)
                   
                   #true_cat = jnp.argmax(fake_cat_input, axis=-1)
@@ -447,9 +470,9 @@ def train_step_disc(state, data, fake_imgs, fake_cat_input, con_codes, solver):
                   #fake_loss = bce_logits(fake_preds, jnp.zeros((32,), dtype=jnp.int32))
               
                   # use 0.9 as the label for real images instead of 1.0
-                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds))
+                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.9)
                   # use 0.1 as the label for fake images instead of 0.0
-                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds))
+                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds)+0.1)
 
                   real_loss = jnp.mean(real_loss)
                   fake_loss = jnp.mean(fake_loss)
@@ -459,7 +482,7 @@ def train_step_disc(state, data, fake_imgs, fake_cat_input, con_codes, solver):
 
                   #jax.debug.print('mi loss: {} ', loss_mi)
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = (real_loss + fake_loss) / 2.0 + loss_mi + loss_con*0.1
+                  loss = (real_loss + fake_loss) / 2.0 + loss_mi + loss_con*0.12
                 
                   return loss, vars_d
 
@@ -602,6 +625,8 @@ class Trainer(object):
 
         self._key = jax.random.PRNGKey(44)
 
+        self._cat_code_noise_key = jax.random.PRNGKey(56)
+        
         self._log_interval = log_interval
         self._test_interval = test_interval
         self._max_iter = max_iter
@@ -643,7 +668,7 @@ class Trainer(object):
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.solver_disc = optax.adam(learning_rate=0.0002, b1=0.5, b2=0.999)
+        self.solver_disc = optax.adam(learning_rate=0.00006, b1=0.5, b2=0.999)
 
     def run(self, demo_mode: bool = False) -> float:
 
@@ -724,6 +749,7 @@ class Trainer(object):
                     
             fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, 10), fixed_con], axis=-1)
 
+            self._cat_code_noise_key, cat_code_subkey = jax.random.split(self._cat_code_noise_key)
  
             for i in range(self._max_iter):
                 
@@ -752,8 +778,8 @@ class Trainer(object):
                     params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
                     #else:
                     
-                    (fake_images), vars_g = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
-                    batch_stats_gen = vars_g['batch_stats']
+                    fake_images = Generator(training=False).apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
+                    #batch_stats_gen = vars_g['batch_stats']
                     # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
                     fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
                     
@@ -766,6 +792,8 @@ class Trainer(object):
                         cat_codes,
                         con_codes,
                         solver_disc,
+                        cat_code_subkey,
+                        iteration=i
                     )
 
                     #jax.debug.print('loss: {} ', loss)
