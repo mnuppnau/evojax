@@ -133,7 +133,7 @@ def save_model(model_dir: str,
                params: Union[np.ndarray, jnp.ndarray],
                params_disc: Union[np.ndarray, jnp.ndarray] = None,
                obs_params: Union[np.ndarray, jnp.ndarray] = None,
-               batch_stats: Union[np.ndarray, jnp.ndarray] = None,
+               #batch_stats: Union[np.ndarray, jnp.ndarray] = None,
                batch_stats_disc: Union[np.ndarray, jnp.ndarray] = None,
                best: bool = False) -> None:
     """Save policy parameters to the specified directory.
@@ -151,7 +151,7 @@ def save_model(model_dir: str,
              params=np.array(params),
              params_disc=np.array(params_disc),
              obs_params=np.array(obs_params),
-             batch_stats=np.array(batch_stats),
+             #batch_stats=np.array(batch_stats),
              batch_stats_disc=np.array(batch_stats_disc))
     if best:
         model_file = os.path.join(model_dir, 'best.npz')

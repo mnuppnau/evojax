@@ -393,7 +393,17 @@ class PGPE(NEAlgorithm):
         fitness_mi = fitness_mi[:, None]
         fitness_con = fitness_con[:, None]
 
-        objectives = jnp.hstack([-fitness_mi, -fitness_adv])
+        # print average fitness of the population
+        #jax.debug.print('avg fitness adv {} : ', jnp.mean(fitness_adv))
+        #jax.debug.print('avg fitness mi {} : ', jnp.mean(fitness_mi))
+        #jax.debug.print('avg fitness con {} : ', jnp.mean(fitness_con))
+
+        ## print stddev of the population
+        #jax.debug.print('stddev fitness adv {} : ', jnp.std(fitness_adv))
+        #jax.debug.print('stddev fitness mi {} : ', jnp.std(fitness_mi))
+        #jax.debug.print('stddev fitness con {} : ', jnp.std(fitness_con))
+
+        objectives = jnp.hstack([-fitness_mi, -fitness_adv, -fitness_con])
         #jax.debug.print('objectives {} : ', objectives)
         #jax.debug.print('objectives shape {} : ', objectives.shape)
         ranks = non_dominated_sort_lax(objectives)
@@ -407,7 +417,7 @@ class PGPE(NEAlgorithm):
         #cdist = compute_crowding_distance(objectives, ranks)
 
         #if adv:
-        order = jnp.lexsort((-fitness_con.flatten(), ranks))
+        order = jnp.lexsort((-fitness_adv.flatten(), ranks))
         #else:
         #order = jnp.lexsort((-fitness_adv.flatten(), ranks))
 
@@ -474,7 +484,7 @@ class PGPE(NEAlgorithm):
         norm_fitness_con = (fitness_con - best_fitness_con) / rng_con
 
         w_adv = avg_fitness_adv / (avg_fitness_adv + avg_fitness_mi)
-        w_adv = jnp.clip(w_adv, 0.4, 0.6)
+        w_adv = jnp.clip(w_adv, 0.1, 0.9)
         #w_adv = w_adv*3
         #w_adv = jnp.clip(w_adv, 0.5, 0.9)
         w_mi = 1 - w_adv
@@ -499,7 +509,7 @@ class PGPE(NEAlgorithm):
         #if self._t < 100:
         #tchebycheff_scores = norm_fitness_adv.flatten()*(1-w_mi) + norm_fitness_mi.flatten()*w_mi #+ norm_fitness_con.flatten()*0.01
         #elif self._t < 8000:
-        tchebycheff_scores = L_adv_norm*(1-w_mi) + L_mi_norm*w_mi
+        tchebycheff_scores = L_adv_norm*(1-w_adv) + L_mi_norm*w_adv
         #elif self._t < 16000:
         #    tchebycheff_scores = L_adv_norm + L_mi_norm * 0.2
         #elif self._t < 24000:
@@ -653,16 +663,16 @@ class PGPE(NEAlgorithm):
             #fitness_scores = -jnp.argsort(order+1)
         #else:
         #if adv:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(10*(w_mi)) + fitness_con.flatten()
+        #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*w_mi + fitness_con.flatten()*2
         #elif not adv and self._t > 6000:
-            #fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
-        fitness_scores = norm_fitness_adv.flatten()*(0.4) + norm_fitness_mi.flatten()*(0.4) + norm_fitness_con.flatten() * (0.2)
+        #    fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
+        fitness_scores = norm_fitness_adv.flatten()*(0.9*(1-w_mi)) + norm_fitness_mi.flatten()*(0.9*(w_mi)) + norm_fitness_con.flatten() * (0.2)
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()# + fitness_con.flatten()
             #closeness = compute_closeness(objectives)
             #fitness_scores = compute_fitness(closeness, ranks)
         #else:
-            #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(10*(w_mi)) + fitness_con.flatten()
-            #fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten()*w_mi + norm_fitness_con.flatten() * 0.1
+        #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(30*(w_mi)) + fitness_con.flatten()
+        #fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten()*w_mi + norm_fitness_con.flatten() * 0.1
         #    fitness_scores = tchebycheff_scores
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() + fitness_con.flatten() * 0.01
         #fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten() + norm_fitness_con.flatten() * 0.1
@@ -684,7 +694,7 @@ class PGPE(NEAlgorithm):
             #fitness_scores = fitness_mi
         #jax.debug.print('weights : {} ', weights)
         #weights = -weights
-        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
+        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,False)
 
         grad_center, grad_stdev = compute_reinforce_update(
                 fitness_scores=fitness_scores,

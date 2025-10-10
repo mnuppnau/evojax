@@ -98,28 +98,75 @@ def load_optimizer_state(file_path: str, optimizer_state_structure):
 #        x = jnp.tanh(x)
 #        return x
 
-class Generator(nn.Module):
+class PixelNorm(nn.Module):
+    eps: float = 1e-8
+    @nn.compact
+    def __call__(self, x):
+        return x / jnp.sqrt(jnp.mean(x**2, axis=-1, keepdims=True) + self.eps)
+
+
+class GeneratorOld(nn.Module):
   features: int = 64
   training: bool = True
-
+  
   @nn.compact
   def __call__(self, z):
     z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(z)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
+    x = PixelNorm()(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = PixelNorm()(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = PixelNorm()(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
+    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     x = nn.sigmoid(x)
     return x
 
 
-class Discriminator(nn.Module):
+class Generator(nn.Module):
+  features: int = 64
+  training: bool = True
+  
+  @nn.compact
+  def __call__(self, z):
+    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
+    x = nn.GroupNorm(num_groups=16)(x)
+    x = nn.silu(x)
+    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.GroupNorm(num_groups=16)(x)
+    x = nn.silu(x)
+    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.GroupNorm(num_groups=16)(x)
+    x = nn.silu(x)
+    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.sigmoid(x)
+    return x
+
+#class Generator(nn.Module):
+#  features: int = 64
+#  training: bool = True
+#
+#  @nn.compact
+#  def __call__(self, z):
+#    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+#    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(z)
+#    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+#    x = nn.relu(x)
+#    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
+#    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+#    x = nn.relu(x)
+#    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
+#    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+#    x = nn.relu(x)
+#    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
+#    x = nn.sigmoid(x)
+#    return x
+
+class SharedEncoder(nn.Module):
   features: int = 64
   training: bool = True
 
@@ -128,25 +175,60 @@ class Discriminator(nn.Module):
   @nn.compact
   def __call__(self, x):
     x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.GroupNorm(num_groups=16)(x)
     x = nn.leaky_relu(x, 0.2)
     x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.GroupNorm(num_groups=16)(x)
     x = nn.leaky_relu(x, 0.2)
     
+    return x
+
+class Discriminator(nn.Module):
+  features: int = 64
+  training: bool = True
+
+  q_cat: int = 10
+
+  @nn.compact
+  def __call__(self, features):
     # Discriminator output
-    d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(features)
     d = d.reshape((d.shape[0], -1))
 
     # Q outpiut
-    q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
-    q = nn.leaky_relu(q, 0.2)
+    #q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    #q = nn.GroupNorm(num_groups=16)(q)
+    #q = nn.leaky_relu(q, 0.2)
 
     # ADD BOTTLENECK: Force through narrow layer
-    q = nn.Conv(8, [1, 1], [1, 1], 'SAME')(q)  # Squeeze to 8 channels
+    #q = nn.Conv(32, [1, 1], [1, 1], 'SAME')(q)  # Squeeze to 8 channels
+    #q = nn.leaky_relu(q, 0.2)
+    #q = nn.Conv(self.features, [1, 1], [1, 1], 'SAME')(q)  # Expand back
+
+    #disc_logits = nn.Conv(self.q_cat, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02))(q)
+    #disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
+      
+    #mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
+    #print('mu shape : ', mu.shape)
+    #log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
+    #print('log var shape : ', log_var.shape)
+    #var = jnp.squeeze(log_var)
+    
+    return d#, disc_logits, mu.squeeze(), jnp.exp(var)
+
+
+class Q(nn.Module):
+  features: int = 64
+  training: bool = True
+
+  q_cat: int = 10
+
+  @nn.compact
+  def __call__(self, features):
+    # Q outpiut
+    q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(features)
+    q = nn.GroupNorm(num_groups=16)(q)
     q = nn.leaky_relu(q, 0.2)
-    q = nn.Conv(self.features, [1, 1], [1, 1], 'SAME')(q)  # Expand back
 
     disc_logits = nn.Conv(self.q_cat, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02))(q)
     disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
@@ -157,7 +239,7 @@ class Discriminator(nn.Module):
     #print('log var shape : ', log_var.shape)
     var = jnp.squeeze(log_var)
     
-    return d, disc_logits, mu.squeeze(), jnp.exp(var)
+    return disc_logits, mu.squeeze(), jnp.exp(var)
 
 #class Generator(nn.Module):
 #    """
@@ -388,18 +470,61 @@ class Discriminator(nn.Module):
 #    batch_stats_g = vars_g['batch_stats']
 #    return fake_images, batch_stats_g
 
-@partial(jax.jit, static_argnames=['solver'])
-def train_step_disc(state, data, fake_imgs, fake_cat_input, con_codes, solver, key, iteration):
+#@partial(jax.jit, static_argnames=['solver_enc', 'solver_disc'])
+def train_step_disc(state, data, fake_imgs, solver_enc, solver_disc, key, iteration):
        
-        params_d, batch_stats_d, opt_disc = state
-        #def bce_logits(logit, label):
-        #          """
-        #          Implements the BCE with logits loss, as described:
-        #          https://github.com/pytorch/pytorch/issues/751
-        #          """
-        #          neg_abs = -jnp.abs(logit)
-        #          batch_bce = jnp.maximum(logit, 0) - logit * label + jnp.log(1 + jnp.exp(neg_abs))
-        #          return jnp.mean(batch_bce)
+        params_e, params_d, opt_enc, opt_disc = state
+                
+        def loss_discriminator(params_e, params_d):
+                
+                  real_features = SharedEncoder().apply(
+                      {'params': params_e}, data
+                  )
+
+                  real_preds = Discriminator().apply(
+                      {'params': params_d}, real_features
+                  )
+                  
+                  fake_features = SharedEncoder().apply( 
+                      {'params': params_e}, fake_imgs
+                  )
+
+                  fake_preds = Discriminator().apply(
+                      {'params': params_d}, fake_features
+                  )
+
+                  # use 0.9 as the label for real images instead of 1.0
+                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds))
+                  # use 0.1 as the label for fake images instead of 0.0
+                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds))
+
+                  real_loss = jnp.mean(real_loss)
+                  fake_loss = jnp.mean(fake_loss)
+
+                  loss = (real_loss + fake_loss) / 2.0 #+ loss_mi*0.4 + loss_con*0.06
+                
+                  return loss
+
+           
+        grad_fn_disc = jax.value_and_grad(loss_discriminator, argnums=(0,1))
+        loss, (grads_e, grads_d) = grad_fn_disc(params_e, params_d)
+
+        # apply enc gradients
+        updates_enc, new_opt_state_enc = solver_enc.update(grads_e, opt_enc, params_d)
+        params_e = optax.apply_updates(params_e, updates_enc)
+       
+        # apply disc gradients
+        updates_d, new_opt_state_disc = solver_disc.update(grads_d, opt_disc, params_d)
+        params_d = optax.apply_updates(params_d, updates_d)
+
+        return (params_e, params_d, new_opt_state_enc, new_opt_state_disc), loss
+
+
+
+@partial(jax.jit, static_argnames=['solver'])
+def train_step_q(state, fake_imgs, fake_cat_input, con_codes, solver, key, iteration):
+       
+        params_e, params_q, opt_q = state
 
         def loss_mutual_information(code_cat, q_cat):
                   return -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
@@ -413,89 +538,36 @@ def train_step_disc(state, data, fake_imgs, fake_cat_input, con_codes, solver, k
             
             return mse + var_reg
 
-        def normal_nll_loss(x, mu, var):
-            """
-            Calculate the negative log likelihood of a normal distribution
-            (treating Q(c_j | x) as a factored Gaussian).
-            """
-            # log-likelihood term
-            logli = -0.5 * jnp.log(var * 2.0 * jnp.pi + 1e-6) \
-                    - ((x - mu) ** 2) / (2.0 * var + 1e-6)
-            
-            # negative log-likelihood (to be minimized)
-            nll = -jnp.mean(jnp.sum(logli, axis=1))
-            return nll
-            
-        def loss_discriminator(params_d, vars_d_batch_stats):
+        def loss_q(params_q):
                 
-                  #(fake_imgs, vars_g) = Generator().apply(
-                  #    {'params': params_g, 'batch_stats': batch_stats_g},
-                  #    latent, mutable=['batch_stats']
-                  #)
-                  (real_preds, _, _, _), vars_d = Discriminator().apply(
-                      {'params': params_d, 'batch_stats': vars_d_batch_stats},
-                      data, mutable=['batch_stats']
+                  fake_features = SharedEncoder(training=False).apply( 
+                      {'params': params_e}, fake_imgs
                   )
-                  (fake_preds, q, mu, var), vars_d = Discriminator().apply(
-                      {'params': params_d, 'batch_stats': vars_d['batch_stats']},
-                      fake_imgs, mutable=['batch_stats']
-                  )
-               
-                  #noise_multiplier = jnp.maximum(0.0, 1.0 - iteration / 20.0)
-                  #noise_level = 0.05 * noise_multiplier  # Only 0.05 max noise, not 0.3
                   
-                  #noise = jax.random.normal(key, fake_cat_input.shape) * noise_level
-                  #jax.debug.print('noise level: {}', noise)
-                  #fake_cat_noisy = fake_cat_input + noise
-                  #fake_cat_noisy = nn.softmax(fake_cat_noisy, axis=-1)
+                  q, mu, var = Q().apply(
+                      {'params': params_q}, fake_features
+                  )
 
+                  
                   # Calculate Mutual Information loss
                   q_cat = nn.log_softmax(q, axis=-1)
                   loss_mi = loss_mutual_information(fake_cat_input, q_cat)
                
                   #loss_con = normal_nll_loss(con_codes, mu, var)
                   loss_con = continuous_loss(con_codes, mu, var)
-                  #predicted_cat = jnp.argmax(q, axis=-1)
-                  
-                  #true_cat = jnp.argmax(fake_cat_input, axis=-1)
-
-                  #accuracy = jnp.mean(predicted_cat == true_cat)
-
-                  #jax.debug.print('accuracy: {} ', accuracy)
-
-                  # real_preds reshape array of shape (64, 0) (size 0) to (64,)
-                  #real_preds = real_preds.reshape((real_preds.shape[0],))
-                  #fake_preds = fake_preds.reshape((fake_preds.shape[0],))
-                  #real_loss = bce_logits(real_preds, jnp.ones((32,), dtype=jnp.int32))
-                  #fake_loss = bce_logits(fake_preds, jnp.zeros((32,), dtype=jnp.int32))
-              
-                  # use 0.9 as the label for real images instead of 1.0
-                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.9)
-                  # use 0.1 as the label for fake images instead of 0.0
-                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds)+0.1)
-
-                  real_loss = jnp.mean(real_loss)
-                  fake_loss = jnp.mean(fake_loss)
-
-                  #jax.debug.print('real loss: {} ', real_loss)
-                  #jax.debug.print('fake loss: {} ', fake_loss)
-
-                  #jax.debug.print('mi loss: {} ', loss_mi)
+                                
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = (real_loss + fake_loss) / 2.0 + loss_mi + loss_con*0.12
+                  loss = loss_mi + loss_con*0.1
                 
-                  return loss, vars_d
+                  return loss
 
-        grad_fn_disc = jax.value_and_grad(loss_discriminator, has_aux=True)
-        (loss, vars_d), grads = grad_fn_disc(params_d, batch_stats_d)
-        
-        # apply gradients
-        updates, new_opt_state = solver.update(grads, opt_disc, params_d)
-        params_d = optax.apply_updates(params_d, updates)
-        #batch_stats_g = vars_g['batch_stats']
-        # update batch stats
-        batch_stats_d = vars_d['batch_stats']
-        return (params_d, batch_stats_d, new_opt_state), loss
+        grad_fn_q = jax.value_and_grad(loss_q)
+        loss_q_val, grads_q = grad_fn_q(params_q)
+
+        updates_q, new_opt_state_q = solver.update(grads_q, opt_q, params_q)
+        params_q = optax.apply_updates(params_q, updates_q)
+
+        return (params_q, new_opt_state_q), loss_q_val
 
 #class QNetwork(nn.Module):
 #    features: int = 64
@@ -603,14 +675,14 @@ class Trainer(object):
         else:
             self._logger = logger
 
-        self.batch_stats_gen = policy_gen.flat_batch_stats_gen
-        self.batch_stats_disc = policy_gen.flat_batch_stats_disc
+        #self.batch_stats_gen = policy_gen.flat_batch_stats_gen
+        #self.batch_stats_disc = policy_gen.flat_batch_stats_disc
 
         self.batch_size = batch_size
         self.mini_batch_size = 64
         self.num_mini_batches = 1
        
-        self.avg_mi_loss = -2.30
+        #self.avg_mi_loss = -2.30
         self.fake_imgs = None
         self.cat_codes = None
 
@@ -658,18 +730,30 @@ class Trainer(object):
             logger=self._logger,
         )
 
-        self._key, subkey = jax.random.split(self._key)
+        self._key, subkey_enc, subkey_disc, subkey_q = jax.random.split(self._key, 4)
         
         dataset = datasets.MNIST('./data', train=True, download=True)
         self.data = np.expand_dims(dataset.data.numpy() / 255.0, axis=-1)
         self.labels = dataset.targets.numpy()
 
+        # initialize the shared encoder
+        variables_enc = SharedEncoder().init(subkey_enc, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
+        self.params_enc = variables_enc['params']
+
+        self.solver_enc = optax.adam(learning_rate=0.0001, b1=0.5, b2=0.999)
+
         # initialize the discriminator
-        variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
-        self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
+        variables_disc = Discriminator().init(subkey_disc, jnp.ones((self.batch_size, 5, 5, 128), dtype=jnp.float32))
+        self.params_disc = variables_disc['params']
 
-        self.solver_disc = optax.adam(learning_rate=0.00006, b1=0.5, b2=0.999)
+        self.solver_disc = optax.adam(learning_rate=0.0001, b1=0.5, b2=0.999)
 
+        # initialize the Q network
+        variables_q = Q().init(subkey_q, jnp.ones((self.batch_size, 5, 5, 128), dtype=jnp.float32))
+        self.params_q = variables_q['params']
+
+        self.solver_q = optax.adam(learning_rate=0.00004, b1=0.5, b2=0.999)
+        
     def run(self, demo_mode: bool = False) -> float:
 
         def gather_pop_stats(belief_space):
@@ -686,30 +770,34 @@ class Trainer(object):
 
         """Start the training / test process."""
 
+        solver_enc = self.solver_enc
         solver_disc = self.solver_disc
+        solver_q = self.solver_q
 
-        if self.model_dir is not None:
-            params_gen, batch_stats_gen, params_disc, self.batch_stats_disc, obs_params = load_model_gen(model_dir=self.model_dir)
-            
-            #jax.debug.print('params gen shape: {}', params_gen.shape) 
-            #jax.debug.print('batch stats gen shape: {}', batch_stats_gen.shape)
-            self.params_disc = self.policy_gen._format_single_params_disc_fn(params_disc)
-            
-            batch_stats_disc = jnp.expand_dims(self.batch_stats_disc, axis=0)
-            
-            self.batch_stats_disc = self.policy_gen._format_batch_stats_disc_fn(batch_stats_disc)
-          
-            init_opt_state = solver_disc.init(params_disc)
-            
-            opt_disc = load_optimizer_state(os.path.join(self._log_dir, 'disc_opt_state.msgpack'), init_opt_state)
-        
-            self.sim_mgr_gen.obs_params = obs_params
-            self._logger.info(
-                'Loaded model parameters from {}.'.format(self.model_dir))
-        else:
-            params_gen, params_disc = None, None
+        #if self.model_dir is not None:
+        #    params_gen, batch_stats_gen, params_disc, self.batch_stats_disc, obs_params = load_model_gen(model_dir=self.model_dir)
+        #    
+        #    #jax.debug.print('params gen shape: {}', params_gen.shape) 
+        #    #jax.debug.print('batch stats gen shape: {}', batch_stats_gen.shape)
+        #    self.params_disc = self.policy_gen._format_single_params_disc_fn(params_disc)
+        #    
+        #    batch_stats_disc = jnp.expand_dims(self.batch_stats_disc, axis=0)
+        #    
+        #    self.batch_stats_disc = self.policy_gen._format_batch_stats_disc_fn(batch_stats_disc)
+        #  
+        #    init_opt_state = solver_disc.init(params_disc)
+        #    
+        #    opt_disc = load_optimizer_state(os.path.join(self._log_dir, 'disc_opt_state.msgpack'), init_opt_state)
+        #
+        #    self.sim_mgr_gen.obs_params = obs_params
+        #    self._logger.info(
+        #        'Loaded model parameters from {}.'.format(self.model_dir))
+        #else:
+        params_gen, params_disc = None, None
 
-            opt_disc = solver_disc.init(self.params_disc)
+        opt_enc = solver_enc.init(self.params_enc)
+        opt_disc = solver_disc.init(self.params_disc)
+        opt_q = solver_q.init(self.params_q)
 
         if demo_mode:
             if params_gen is None:
@@ -727,17 +815,19 @@ class Trainer(object):
             self._logger.info(
                 'Start to train for {} iterations.'.format(self._max_iter))
 
-            if params_gen is not None and self.params_disc is not None:# and params_q is not None:
-            
+            #if params_gen is not None and self.params_disc is not None:# and params_q is not None:
+            #
 
-                jax.debug.print('Continuing training from the last checkpoint.')
-                # Continue training from the breakpoint.
-                self.solver_gen.best_params = params_gen
+            #    jax.debug.print('Continuing training from the last checkpoint.')
+            #    # Continue training from the breakpoint.
+            #    self.solver_gen.best_params = params_gen
 
             best_score_gen, best_score_disc, best_score_q = -float('Inf'), -float('Inf'), -float('Inf')
 
+            params_enc = self.params_enc
             params_disc = self.params_disc
-           
+            params_q = self.params_q 
+
             num_mini_batches = self.num_mini_batches
            
             self._key, noise_key, con_key = jax.random.split(self._key, 3)
@@ -756,11 +846,11 @@ class Trainer(object):
                 shape_noise = (self.mini_batch_size, self.latent_dim-self.n_con)
                 shape_cat = (self.mini_batch_size,)
 
-                if i < 1:
-                    if len(self.batch_stats_gen.shape) == 1:
-                        self.batch_stats_gen = jnp.expand_dims(self.batch_stats_gen, axis=0)
+                #if i < 1:
+                    #if len(self.batch_stats_gen.shape) == 1:
+                    #    self.batch_stats_gen = jnp.expand_dims(self.batch_stats_gen, axis=0)
                 
-                    batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(self.batch_stats_gen)
+                    #batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(self.batch_stats_gen)
 
                 for mini_batch in range(num_mini_batches):
                     # Sample batch of data.
@@ -769,6 +859,7 @@ class Trainer(object):
                     
 
                     data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
+
                     #data = np.expand_dims(data / 255.0, axis=-1)
 
                     latent, cat_codes, con_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
@@ -778,41 +869,57 @@ class Trainer(object):
                     params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
                     #else:
                     
-                    fake_images = Generator(training=False).apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
+                    #fake_images = Generator(training=False).apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
+                    fake_images = Generator(training=False).apply({'params': params_gen_formatted}, latent)
                     #batch_stats_gen = vars_g['batch_stats']
                     # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
                     fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
                     
-                    state = (params_disc, self.batch_stats_disc, opt_disc)
+                    state_d = (params_enc, params_disc, opt_enc, opt_disc)
 
-                    state, d_loss = train_step_disc(
-                        state,
+                    state_d, d_loss = train_step_disc(
+                        state_d,
                         data,
                         fake_images,
-                        cat_codes,
-                        con_codes,
+                        solver_enc,
                         solver_disc,
                         cat_code_subkey,
                         iteration=i
                     )
 
+                    
                     #jax.debug.print('loss: {} ', loss)
                     
-                    params_disc, self.batch_stats_disc, opt_disc = state 
+                    params_enc, params_disc, opt_enc, opt_disc = state_d
+
+                    state_q = (params_enc, params_q, opt_q)
+
+                    state_q, q_loss = train_step_q(
+                        state_q,
+                        fake_images,
+                        cat_codes,
+                        con_codes,
+                        solver_q,
+                        cat_code_subkey,
+                        iteration=i
+                    )
+
+                    params_q, opt_q = state_q
+
+                
+                leaves_params, _ = jax.tree_flatten(params_enc)
+                flat_params_enc = jnp.concatenate([p.flatten() for p in leaves_params])
 
                 leaves_params, _ = jax.tree_flatten(params_disc) 
                 flat_params_disc = jnp.concatenate([p.flatten() for p in leaves_params])
 
-                leaves_batch_stats_disc, _ = jax.tree_flatten(self.batch_stats_disc)
-                flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
-
-                leaves_batch_stats_gen, _ = jax.tree_flatten(batch_stats_gen)
-                flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
-
+                leaves_params, _ = jax.tree_flatten(params_q)
+                flat_params_q = jnp.concatenate([p.flatten() for p in leaves_params])
+                                
                 params_gen, belief_space = self.solver_gen.ask()
                 
-                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
+                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, _ = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_enc=flat_params_enc, params_disc=flat_params_disc, params_q=flat_params_q, generator=True, test=False
                 )
 
                 if isinstance(self.solver_gen, QualityDiversityMethod):
@@ -853,8 +960,8 @@ class Trainer(object):
 
                 params_gen, belief_space = self.solver_gen.ask()
 
-                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
+                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, _ = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_enc=flat_params_enc, params_disc=flat_params_disc, params_q=flat_params_q,  generator=True, test=False
                 )
 
                 if isinstance(self.solver_gen, QualityDiversityMethod):
@@ -862,23 +969,23 @@ class Trainer(object):
                 
                 self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, adv=True)
 
-                best_params_gen = self.solver_gen.best_params
-                best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
+                #best_params_gen = self.solver_gen.best_params
+                #best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
 
-                self._key, subkey = jax.random.split(self._key)
-                shape_noise = (self.mini_batch_size, self.latent_dim-self.n_con)
-                shape_cat = (self.batch_size,)
-                latent, cat_codes, con_codes = sample_latent(subkey, shape_noise, shape_cat)
+                #self._key, subkey = jax.random.split(self._key)
+                #shape_noise = (self.mini_batch_size, self.latent_dim-self.n_con)
+                #shape_cat = (self.batch_size,)
+                #latent, cat_codes, con_codes = sample_latent(subkey, shape_noise, shape_cat)
 
-                (fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
-                batch_stats_gen = vars_g['batch_stats'] 
-
+                #(fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                #batch_stats_gen = vars_g['batch_stats'] 
+                
                 #(_, _, _, _), vars_d = Discriminator().apply({'params': params_disc, 'batch_stats': self.batch_stats_disc}, fake_images, mutable=['batch_stats'])
                 #self.batch_stats_disc = vars_d['batch_stats']
                 #self.batch_stats_disc = batch_stats_disc
                 #self.batch_stats_gen = batch_stats_gen
                 
-                self.avg_mi_loss = jnp.mean(scores_gen_mi)
+                #self.avg_mi_loss = jnp.mean(scores_gen_mi)
 
                 if i > 0 and i % self._log_interval == 0:
                     scores_gen_adv = np.array(scores_gen_adv)
@@ -935,8 +1042,8 @@ class Trainer(object):
                     #batch_stats_gen_leaves, _ = jax.tree_flatten(batch_stats_gen)
                     #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in batch_stats_gen_leaves])
                     
-                    (fake_imgs) = Generator(training=False).apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},fixed_latent)
-                    
+                    #(fake_imgs) = Generator(training=False).apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},fixed_latent)
+                    fake_imgs = Generator(training=False).apply({'params': best_params_gen_formatted}, fixed_latent)
                     filename = f"iteration-{i}.npy"
                     np.save(filename, fake_imgs[:, :, :, :])
 
@@ -951,8 +1058,8 @@ class Trainer(object):
             #        self._max_iter, test_scores.size, test_scores.max(),
             #        test_scores.mean(), test_scores.min(), test_scores.std()))
             #mean_test_score = test_scores.mean()
-            leaves_batch_stats_gen, _ = jax.tree_flatten(batch_stats_gen)
-            flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+            #leaves_batch_stats_gen, _ = jax.tree_flatten(batch_stats_gen)
+            #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
 
             save_model(
                 model_dir=self._log_dir,
@@ -960,7 +1067,7 @@ class Trainer(object):
                 params=best_params_gen,
                 params_disc=flat_params_disc,
                 obs_params=self.sim_mgr_gen.obs_params,
-                batch_stats=flat_batch_stats_gen,
+                #batch_stats=flat_batch_stats_gen,
                 batch_stats_disc=flat_batch_stats_disc,
                 #best=mean_test_score > best_score,
             )

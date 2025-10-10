@@ -237,7 +237,7 @@ class SimManager(object):
                     self._n_evaluations, self._num_device))
 
         def step_once_gen(carry, input_data, task):
-            (task_state, policy_state, params_gen, params_disc, obs_params, t,
+            (task_state, policy_state, params_gen, params_enc, params_disc, params_q, obs_params, t,
              accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, disc_logits, loss_g, valid_mask) = carry
             if task.multi_agent_training:
                 num_tasks, num_agents = task_state.obs.shape[:2]
@@ -246,10 +246,10 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            fake_imgs, actions, disc_logits, batch_stats_gen, batch_stats_disc, mu, var, policy_state = policy_net.get_actions(
-                task_state, params_gen, params_disc, policy_state)
+            fake_imgs, actions, disc_logits, mu, var, policy_state = policy_net.get_actions(
+                task_state, params_gen, params_enc, params_disc, params_q, policy_state)
             
-            task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
+            #task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
 
             if task.multi_agent_training:
                 task_state = task_state.replace(
@@ -276,11 +276,11 @@ class SimManager(object):
             #jax.debug.print('accumulated_reward_con shape : {}', accumulated_reward_con.shape)
             valid_mask = valid_mask * (1 - done.ravel())
             
-            return ((task_state, policy_state, params_gen, params_disc, obs_params, t,
+            return ((task_state, policy_state, params_gen, params_enc , params_disc, params_q, obs_params, t,
                      accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, disc_logits, loss_g, valid_mask),
                     (org_obs, valid_mask))
 
-        def rollout_gen(task_states, policy_states, params_gen, params_disc, obs_params, t,
+        def rollout_gen(task_states, policy_states, params_gen, params_enc, params_disc, params_q, obs_params, t,
                     step_once_gen_fn, max_steps):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
@@ -289,16 +289,16 @@ class SimManager(object):
             loss_g = jnp.zeros(self._pop_size//2) #//2
             #fake_imgs = jnp.zeros((64,128,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
-            ((task_states, policy_states, params_gen, params_disc, obs_params, t,
+            ((task_states, policy_states, params_gen, params_enc, params_disc, params_q, obs_params, t,
               accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, disc_logits, loss_g, valid_masks),
              (obs_set, obs_mask)) = jax.lax.scan(
                 step_once_gen_fn,
-                (task_states, policy_states, params_gen, params_disc, obs_params, t,
+                (task_states, policy_states, params_gen, params_enc, params_disc, params_q, obs_params, t,
                  accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, disc_logits, loss_g, valid_masks), (), max_steps)
             return accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, obs_set, obs_mask, task_states, disc_logits, loss_g
 
         def step_once_valid(carry, input_data, task):
-            (task_state, policy_state, params_gen, params_disc, obs_params,
+            (task_state, policy_state, params_gen, params_enc, params_disc, params_q, obs_params,
              accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, fake_imgs, valid_mask) = carry
             if task.multi_agent_training:
                 num_tasks, num_agents = task_state.obs.shape[:2]
@@ -307,9 +307,9 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            fake_imgs, actions, disc_logits, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
-                task_state, params_gen, params_disc, policy_state)
-            task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
+            fake_imgs, actions, disc_logits, policy_state = policy_net.get_actions(
+                task_state, params_gen, params_enc, params_disc, params_q, policy_state)
+            #task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
 
             if task.multi_agent_training:
                 task_state = task_state.replace(
@@ -330,23 +330,23 @@ class SimManager(object):
             accumulated_reward_con = accumulated_reward_con + reward_con * valid_mask
 
             valid_mask = valid_mask * (1 - done.ravel())
-            return ((task_state, policy_state, params_gen, params_disc, obs_params,
+            return ((task_state, policy_state, params_gen, params_enc, params_disc, params_q, obs_params,
                      accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, fake_imgs, valid_mask),
                     (org_obs, valid_mask))
 
 
-        def rollout_valid(task_states, policy_states, params_gen, params_disc, obs_params,
+        def rollout_valid(task_states, policy_states, params_gen, params_enc, params_disc, params_q, obs_params,
                     step_once_gen_fn, max_steps):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_con = jnp.zeros(params_gen.shape[0])
             fake_imgs = jnp.zeros((256,64,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
-            ((task_states, policy_states, params_gen, params_disc, obs_params,
+            ((task_states, policy_states, params_gen, params_enc, params_disc, params_q, obs_params,
               accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, fake_imgs, valid_masks),
              (obs_set, obs_mask)) = jax.lax.scan(
                 step_once_gen_fn,
-                (task_states, policy_states, params_gen, params_disc, obs_params,
+                (task_states, policy_states, params_gen, params_enc, params_disc, params_q, obs_params,
                  accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, fake_imgs, valid_masks), (), max_steps)
             return accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, obs_set, obs_mask, task_states, fake_imgs
 
@@ -380,7 +380,7 @@ class SimManager(object):
         
         if self._num_device > 1:
             self._train_rollout_gen_fn = jax.jit(jax.pmap(
-                self._train_rollout_gen_fn, in_axes=(0, 0, 0, 0, None, None)))
+                self._train_rollout_gen_fn, in_axes=(0, 0, 0, 0, 0, 0, None, None)))
             #self._train_rollout_disc_fn = jax.jit(jax.pmap(
             #    self._train_rollout_disc_fn, in_axes=(0, 0, 0, 0, 0, None)))
 
@@ -395,14 +395,15 @@ class SimManager(object):
             max_steps=valid_vec_task.max_steps)
         if self._num_device > 1:
             self._valid_rollout_fn = jax.jit(jax.pmap(
-                self._valid_rollout_fn, in_axes=(0, 0, 0, 0, None)))
+                self._valid_rollout_fn, in_axes=(0, 0, 0, 0, 0, 0, None)))
 
     def eval_params(self,
                     params_gen: jnp.ndarray,
+                    params_enc: jnp.ndarray,
                     params_disc: jnp.ndarray,
-                    #params_q: jnp.ndarray,
-                    batch_stats_gen: dict,
-                    batch_stats_disc: dict,
+                    params_q: jnp.ndarray,
+                    #batch_stats_gen: dict,
+                    #batch_stats_disc: dict,
                     #batch_stats_q: dict,
                     #pop_stats: jnp.ndarray,
                     #disc_reset_keys_cat_code: jnp.ndarray,
@@ -417,9 +418,9 @@ class SimManager(object):
             An array of fitness scores.
         """
         if self._use_for_loop:
-            return self._for_loop_eval(params_gen, params_disc, params_q, batch_stats_gen, batch_stats_disc, generator, test)
+            return self._for_loop_eval(params_gen, params_enc, params_disc, params_q, generator, test)
         else:
-            return self._scan_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, generator, test)
+            return self._scan_loop_eval(params_gen, params_enc, params_disc, params_q, generator, test)
 
     def _for_loop_eval(self,
                        params: jnp.ndarray,
@@ -472,10 +473,11 @@ class SimManager(object):
 
     def _scan_loop_eval(self,
                         params_gen: jnp.ndarray,
+                        params_enc: jnp.ndarray,
                         params_disc: jnp.ndarray,
-                        #params_q: jnp.ndarray,
-                        batch_stats_gen: dict,
-                        batch_stats_disc: dict,
+                        params_q: jnp.ndarray,
+                        #batch_stats_gen: dict,
+                        #batch_stats_disc: dict,
                         #batch_stats_q: dict,
                         #pop_stats: jnp.ndarray,
                         #disc_reset_keys_cat_code: jnp.ndarray,
@@ -485,29 +487,35 @@ class SimManager(object):
         policy_reset_func = self._policy_reset_fn
 
         # check if first dimension of batch_stats_gen and batch_stats_disc is equal to pop_size
-        if batch_stats_gen.shape[0] != self._pop_size and len(batch_stats_gen.shape) == 2: #and not test:
-            # add pop size as first dimension to batch_stats_gen and batch_stats_disc
-            batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
+        #if batch_stats_gen.shape[0] != self._pop_size and len(batch_stats_gen.shape) == 2: #and not test:
+        #    # add pop size as first dimension to batch_stats_gen and batch_stats_disc
+        #    batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
         
-        if len(batch_stats_gen.shape) == 1:
-            batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
+        #if len(batch_stats_gen.shape) == 1:
+        #    batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
         
         if params_gen is not None and params_gen.shape[0] != self._pop_size:
             params_gen = jnp.repeat(params_gen[None, :], self._pop_size, axis=0)
             
-        self.batch_stats_gen = batch_stats_gen
+        #self.batch_stats_gen = batch_stats_gen
 
-        if batch_stats_disc.shape[0] != self._pop_size and len(batch_stats_disc.shape) == 2: #and not test:
+        #if batch_stats_disc.shape[0] != self._pop_size and len(batch_stats_disc.shape) == 2: #and not test:
             # add pop size as first dimension to batch_stats_gen and batch_stats_disc
-            batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
+            #batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
 
-        if len(batch_stats_disc.shape) == 1:
-            batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
+        #if len(batch_stats_disc.shape) == 1:
+        #    batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
+
+        if params_enc is not None and params_enc.shape[0] != self._pop_size:
+            params_enc = jnp.repeat(params_enc[None, :], self._pop_size, axis=0)
 
         if params_disc is not None and params_disc.shape[0] != self._pop_size:
             params_disc = jnp.repeat(params_disc[None, :], self._pop_size, axis=0)
 
-        self.batch_stats_disc = batch_stats_disc
+        if params_q is not None and params_q.shape[0] != self._pop_size:
+            params_q = jnp.repeat(params_q[None, :], self._pop_size, axis=0)
+        
+        #self.batch_stats_disc = batch_stats_disc
 
         if test: 
             n_repeats = self._n_repeats
@@ -519,7 +527,9 @@ class SimManager(object):
             rollout_func = self._train_rollout_gen_fn
 
         params_gen = duplicate_params(params_gen, n_repeats, self._ma_training) 
+        params_enc = duplicate_params(params_enc, n_repeats, self._ma_training)
         params_disc = duplicate_params(params_disc, n_repeats, self._ma_training)
+        params_q = duplicate_params(params_q, n_repeats, self._ma_training)
 
         self._key, reset_keys_latent, reset_keys_cat_code, reset_keys_con_code = get_task_reset_keys(
             self._key, self._pop_size, self._n_evaluations, n_repeats, self._ma_training)
@@ -530,8 +540,8 @@ class SimManager(object):
     
         #task_state = task_state.replace(var_con=var_con)
 
-        task_state = task_state.replace(batch_stats_gen=self.batch_stats_gen)
-        task_state = task_state.replace(batch_stats_disc=self.batch_stats_disc)
+        #task_state = task_state.replace(batch_stats_gen=self.batch_stats_gen)
+        #task_state = task_state.replace(batch_stats_disc=self.batch_stats_disc)
         #task_state = task_state.replace(batch_stats_q=self.batch_stats_q)
 
         #if not generator:
@@ -543,14 +553,16 @@ class SimManager(object):
         if self._num_device > 1: #and not test:
             #if generator:
             params_gen = split_params_for_pmap(params_gen)
-            batch_stats_gen = split_params_for_pmap(batch_stats_gen)
+            #batch_stats_gen = split_params_for_pmap(batch_stats_gen)
             #if not generator:
             #    fake_imgs = split_params_for_pmap(fake_imgs)
+            params_enc = split_params_for_pmap(params_enc)
             params_disc = split_params_for_pmap(params_disc)
+            params_q = split_params_for_pmap(params_q)
             task_state = split_states_for_pmap(task_state)
             #params_q = split_params_for_pmap(params_q)
             policy_state = split_states_for_pmap(policy_state)
-            batch_stats_disc = split_params_for_pmap(batch_stats_disc)
+            #batch_stats_disc = split_params_for_pmap(batch_stats_disc)
             #batch_stats_q = split_params_for_pmap(batch_stats_q)
 
         #jax.debug.print('obs params : {}', self.obs_params)
@@ -558,10 +570,10 @@ class SimManager(object):
         #if generator:
         if test:
             scores_adv, scores_mi, scores_con, all_obs, masks, final_states, fake_imgs = rollout_func(
-                task_state, policy_state, params_gen, params_disc, self.obs_params)
+                task_state, policy_state, params_gen, params_enc, params_disc, params_q, self.obs_params)
         else:
             scores_adv, scores_mi, scores_con, all_obs, masks, final_states, disc_logits, loss_g = rollout_func(
-            task_state, policy_state, params_gen, params_disc, self.obs_params, self._i)
+            task_state, policy_state, params_gen, params_enc, params_disc, params_q, self.obs_params, self._i)
 
         if self._num_device > 1:
             all_obs = reshape_data_from_pmap(all_obs)
@@ -605,8 +617,8 @@ class SimManager(object):
         #    pop_stats = jnp.array([mean_mi, mean_g, mean_con, var_mi, var_g, var_con])
 
 
-        batch_stats_gen_updated = final_states.batch_stats_gen
-        batch_stats_disc_updated = final_states.batch_stats_disc
+        #batch_stats_gen_updated = final_states.batch_stats_gen
+        #batch_stats_disc_updated = final_states.batch_stats_disc
         #batch_stats_q_updated = final_states.batch_stats_q
 
         #noise_keys, cat_keys = random.split(self._key, 2)
@@ -690,4 +702,4 @@ class SimManager(object):
             scores3 = scores_con
             scores4 = None
         #self._key = new_key
-        return scores1, scores2, scores3, scores4, self._bd_summarize_fn(final_states), batch_stats_gen_updated, batch_stats_disc_updated, fake_imgs
+        return scores1, scores2, scores3, scores4, self._bd_summarize_fn(final_states), fake_imgs

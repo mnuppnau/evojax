@@ -32,9 +32,9 @@ class State(TaskState):
     #latent_input: jnp.ndarray
     cat_codes: jnp.ndarray
     con_codes: jnp.ndarray
-    batch_stats_gen: any
-    batch_stats_disc: any
-    batch_stats_q: any
+    #batch_stats_gen: any
+    #batch_stats_disc: any
+    #batch_stats_q: any
 
 def sample_batch(key: jnp.ndarray,
                  latent_inputs: jnp.ndarray,
@@ -93,9 +93,9 @@ class Latent_Points(VectorizedTask):
         self.max_steps = 1
         self.obs_shape = (latent_dim + n_classes,)
 
-        self.batch_stats_gen = None
-        self.batch_stats_disc = None
-        self.batch_stats_q = None 
+        #self.batch_stats_gen = None
+        #self.batch_stats_disc = None
+        #self.batch_stats_q = None 
 
         self.mean_mi = jnp.array([0.0])
         self.mean_g = jnp.array([0.0])
@@ -153,7 +153,7 @@ class Latent_Points(VectorizedTask):
                 
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot, batch_con], axis=-1)
 
-            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, con_codes=batch_con, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q)
+            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, con_codes=batch_con)
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
@@ -163,8 +163,8 @@ class Latent_Points(VectorizedTask):
             
             loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
 
-            loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
-           
+            #loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
+            loss_g = optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,))).mean()
             #loss_con = neg_log_likelihood_normal(state.con_codes, action, jnp.zeros_like(action))
             
             #loss_con = normal_nll_loss(state.con_codes, mu, var)

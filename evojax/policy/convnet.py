@@ -76,28 +76,75 @@ def load_model(state, path):
     restored_state = checkpointer.restore(path, item=state)
     return restored_state
 
-class Generator(nn.Module):
+class PixelNorm(nn.Module):
+    eps: float = 1e-8
+    @nn.compact
+    def __call__(self, x):
+        return x / jnp.sqrt(jnp.mean(x**2, axis=-1, keepdims=True) + self.eps)
+
+
+class GeneratorOld(nn.Module):
   features: int = 64
   training: bool = True
-
+  
   @nn.compact
   def __call__(self, z):
     z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(z)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
+    x = PixelNorm()(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = PixelNorm()(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = PixelNorm()(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
+    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.sigmoid(x)
+    return x
+
+class Generator(nn.Module):
+  features: int = 64
+  training: bool = True
+  
+  @nn.compact
+  def __call__(self, z):
+    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
+    x = nn.GroupNorm(num_groups=16)(x)
+    x = nn.silu(x)
+    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.GroupNorm(num_groups=16)(x)
+    x = nn.silu(x)
+    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.GroupNorm(num_groups=16)(x)
+    x = nn.silu(x)
+    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     x = nn.sigmoid(x)
     return x
 
 
-class Discriminator(nn.Module):
+#class Generator(nn.Module):
+#  features: int = 64
+#  training: bool = True
+#
+#  @nn.compact
+#  def __call__(self, z):
+#    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+#    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(z)
+#    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+#    x = nn.relu(x)
+#    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
+#    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+#    x = nn.relu(x)
+#    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
+#    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+#    x = nn.relu(x)
+#    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02),use_bias=False)(x)
+#    x = nn.sigmoid(x)
+#    return x
+
+class SharedEncoder(nn.Module):
   features: int = 64
   training: bool = True
 
@@ -106,25 +153,77 @@ class Discriminator(nn.Module):
   @nn.compact
   def __call__(self, x):
     x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.GroupNorm(num_groups=16)(x)
     x = nn.leaky_relu(x, 0.2)
     x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.GroupNorm(num_groups=16)(x)
     x = nn.leaky_relu(x, 0.2)
     
+    return x 
+
+class Discriminator(nn.Module):
+  features: int = 64
+  training: bool = True
+
+  q_cat: int = 10
+
+  @nn.compact
+  def __call__(self, features):
+    
     # Discriminator output
-    d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(features)
     d = d.reshape((d.shape[0], -1))
 
     # Q outpiut
-    q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
+    #q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    #q = nn.GroupNorm(num_groups=16)(q)
+    #q = nn.leaky_relu(q, 0.2)
+
+    # ADD q bottleneck layer
+    #q = nn.Conv(32, [1, 1], [1, 1], 'SAME')(q)
+    #q = nn.leaky_relu(q, 0.2)
+    #q = nn.Conv(self.features, [1, 1], [1, 1], 'SAME')(q)
+
+    #disc_logits = nn.Conv(self.q_cat, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02))(q)
+    #disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
+      
+    #mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
+    #print('mu shape : ', mu.shape)
+    #log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
+    #print('log var shape : ', log_var.shape)
+    #var = jnp.squeeze(log_var)
+    
+    return d#, disc_logits, mu.squeeze(), jnp.exp(var)
+
+
+class Q(nn.Module):
+  features: int = 64
+  training: bool = True
+
+  q_cat: int = 10
+
+  @nn.compact
+  def __call__(self, features):
+    #x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    #x = nn.GroupNorm(num_groups=16)(x)
+    #x = nn.leaky_relu(x, 0.2)
+    #x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    #x = nn.GroupNorm(num_groups=16)(x)
+    #x = nn.leaky_relu(x, 0.2)
+    
+    # Discriminator output
+    #d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    #d = d.reshape((d.shape[0], -1))
+
+    # Q outpiut
+    q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(features)
+    q = nn.GroupNorm(num_groups=16)(q)
     q = nn.leaky_relu(q, 0.2)
 
     # ADD q bottleneck layer
-    q = nn.Conv(8, [1, 1], [1, 1], 'SAME')(q)
-    q = nn.leaky_relu(q, 0.2)
-    q = nn.Conv(self.features, [1, 1], [1, 1], 'SAME')(q)
+    #q = nn.Conv(32, [1, 1], [1, 1], 'SAME')(q)
+    #q = nn.leaky_relu(q, 0.2)
+    #q = nn.Conv(self.features, [1, 1], [1, 1], 'SAME')(q)
 
     disc_logits = nn.Conv(self.q_cat, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02))(q)
     disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
@@ -135,7 +234,7 @@ class Discriminator(nn.Module):
     #print('log var shape : ', log_var.shape)
     var = jnp.squeeze(log_var)
     
-    return d, disc_logits, mu.squeeze(), jnp.exp(var)
+    return disc_logits, mu.squeeze(), jnp.exp(var)
 
 #class Generator(nn.Module):
 #    """
@@ -466,20 +565,31 @@ class GenPolicy(PolicyNetwork):
 
         self.model_gen = Generator()
        
+        self.model_shared = SharedEncoder(training=False)
+
         self.model_disc = Discriminator(training=False)
 
-        self.model_q = Discriminator()
+        self.model_q = Q(training=False)
 
         key = random.PRNGKey(122)
 
-        key, key_gen, key_disc, key_bin = random.split(key, 4)
+        key, key_gen, key_disc, key_q = random.split(key, 4)
 
         variables_gen = self.model_gen.init(key_gen, jnp.ones([64,74], jnp.float32))
-        variables_disc = self.model_disc.init(key_disc, jnp.ones([64,28,28,1], jnp.float32))
         
-        self.init_params_gen, self.init_batch_stats_gen = variables_gen['params'], variables_gen['batch_stats']
-        self.init_params_disc, self.init_batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
+        variables_shared = self.model_shared.init(key_disc, jnp.ones([64,28,28,1], jnp.float32))
 
+        variables_disc = self.model_disc.init(key_disc, jnp.ones([64,5,5,128], jnp.float32))
+        
+        variables_q = self.model_q.init(key_q, jnp.ones([64, 5, 5, 128], jnp.float32)) 
+        
+        self.init_params_gen = variables_gen['params']
+       
+        self.init_params_shared = variables_shared['params']
+
+        self.init_params_disc = variables_disc['params']
+        self.init_params_q = variables_q['params']
+         
         #jax.debug.print('batch stats gen shape : {}', self.init_batch_stats_gen.shape)
         self.latent_dim = 64
   
@@ -488,52 +598,74 @@ class GenPolicy(PolicyNetwork):
         format_single_params_gen_fn = get_single_params_format_fn(self.init_params_gen)
         self._format_single_params_gen_fn = format_single_params_gen_fn
         
+        format_single_params_shared_fn = get_single_params_format_fn(self.init_params_shared)
+        self._format_single_params_shared_fn = format_single_params_shared_fn
+
         format_single_params_disc_fn = get_single_params_format_fn(self.init_params_disc)
         self._format_single_params_disc_fn = format_single_params_disc_fn
+
+        format_single_params_q_fn = get_single_params_format_fn(self.init_params_q)
+        self._format_single_params_q_fn = format_single_params_q_fn
 
         self._logger.info(
             'GenPolicy.num_params = {}'.format(self.num_params))
         self._format_params_gen_fn = jax.vmap(format_params_gen_fn)
 
-        self.num_batch_stats, format_batch_stats_gen_fn = get_params_format_fn(self.init_batch_stats_gen)
-        self._logger.info(
-            'GenPolicy.num_batch_stats = {}'.format(self.num_batch_stats))
-        self._format_batch_stats_gen_fn = jax.vmap(format_batch_stats_gen_fn)
+        #self.num_batch_stats, format_batch_stats_gen_fn = get_params_format_fn(self.init_batch_stats_gen)
+        #self._logger.info(
+        #    'GenPolicy.num_batch_stats = {}'.format(self.num_batch_stats))
+        #self._format_batch_stats_gen_fn = jax.vmap(format_batch_stats_gen_fn)
 
         leaves_params, _ = jax.tree_util.tree_flatten(self.init_params_gen)
         
         self.flat_params_gen = jnp.concatenate([p.flatten() for p in leaves_params])
 
-        leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(self.init_batch_stats_gen)
+        #leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(self.init_batch_stats_gen)
 
-        self.flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+        #self.flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+
+        self.num_params_shared, format_params_shared_fn = get_params_format_fn(self.init_params_shared)
+        self._logger.info(
+            'SharedEncoder.num_params = {}'.format(self.num_params_shared))
+        self._format_params_shared_fn = jax.vmap(format_params_shared_fn)
 
         self.num_params_disc, format_params_disc_fn = get_params_format_fn(self.init_params_disc)
         self._logger.info(
             'DiscPolicy.num_params = {}'.format(self.num_params_disc))
         self._format_params_disc_fn = jax.vmap(format_params_disc_fn)
-        self.num_batch_stats_disc, format_batch_stats_disc_fn = get_params_format_fn(self.init_batch_stats_disc)
+        
+        self.num_params_q, format_params_q_fn = get_params_format_fn(self.init_params_q)
         self._logger.info(
-            'DiscPolicy.num_batch_stats = {}'.format(self.num_batch_stats_disc))
-        self._format_batch_stats_disc_fn = jax.vmap(format_batch_stats_disc_fn)
+            'QPolicy.num_params = {}'.format(self.num_params_q))
+        self._format_params_q_fn = jax.vmap(format_params_q_fn)
 
-        leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(self.init_batch_stats_disc)
-        self.flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
+        #self.num_batch_stats_disc, format_batch_stats_disc_fn = get_params_format_fn(self.init_batch_stats_disc)
+        #self._logger.info(
+        #    'DiscPolicy.num_batch_stats = {}'.format(self.num_batch_stats_disc))
+        #self._format_batch_stats_disc_fn = jax.vmap(format_batch_stats_disc_fn)
 
-        def forward_fn_gen(params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, latent_input):
+        #leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(self.init_batch_stats_disc)
+        #self.flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
+
+        def forward_fn_gen(params_g, params_e, params_d, params_q, latent_input):
           
             #(fake_data) = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input)
        
             #(preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
-            (fake_data), vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
-            preds, _, _, _ = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=False)
-            (_, q, mu, var), _ = self.model_q.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
+            #(fake_data), vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
+            fake_data = self.model_gen.apply({'params': params_g}, latent_input)
+            #preds, q, mu, var = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=False)
+            #preds, q, mu, var = self.model_disc.apply({'params': params_d}, fake_data)
+           
+            real_features = self.model_shared.apply({'params': params_e}, fake_data)
+            preds = self.model_disc.apply({'params': params_d}, real_features)
+            q, mu, var = self.model_q.apply({'params': params_q}, real_features)
             
             #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
 
-            leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
-            flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+            #leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
+            #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
 
             #leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(vars_d['batch_stats'])
             #flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
@@ -541,36 +673,38 @@ class GenPolicy(PolicyNetwork):
             #leaves_batch_stats_q, _ = jax.tree_util.tree_flatten(vars_q['batch_stats'])
             #flat_batch_stats_q = jnp.concatenate([p.flatten() for p in leaves_batch_stats_q])
             
-            return fake_data, flat_batch_stats_gen, preds, q, vars_d_batch_stats, mu, var
+            return fake_data, preds, q, mu, var
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
     def set_format_params_disc_fn(self, format_params_disc_fn):
         self._format_params_disc_fn = format_params_disc_fn
 
-    def set_format_batch_stats_disc_fn(self, format_batch_stats_disc_fn):
-        self._format_batch_stats_disc_fn = format_batch_stats_disc_fn
+    #def set_format_batch_stats_disc_fn(self, format_batch_stats_disc_fn):
+    #    self._format_batch_stats_disc_fn = format_batch_stats_disc_fn
 
     def get_actions(self,
                     t_states: TaskState,
                     params_gen: jnp.ndarray,
+                    params_enc: jnp.ndarray,
                     params_disc: jnp.ndarray,
-                    #params_q: jnp.ndarray,
+                    params_q: jnp.ndarray,
                     p_states: PolicyState) -> Tuple[jnp.ndarray, PolicyState]:
         
         params_gen = self._format_params_gen_fn(params_gen)
+        params_enc = self._format_params_shared_fn(params_enc)
         params_disc = self._format_params_disc_fn(params_disc)
-        #params_q = self._format_params_q_fn(params_q)
+        params_q = self._format_params_q_fn(params_q)
 
-        batch_stats_gen = self._format_batch_stats_gen_fn(t_states.batch_stats_gen)
-        batch_stats_disc = self._format_batch_stats_disc_fn(t_states.batch_stats_disc)
+        #batch_stats_gen = self._format_batch_stats_gen_fn(t_states.batch_stats_gen)
+        #batch_stats_disc = self._format_batch_stats_disc_fn(t_states.batch_stats_disc)
         #batch_stats_q = self._format_batch_stats_q_fn(t_states.batch_stats_q) 
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, batch_stats_g, preds, disc_logits, batch_stats_d, mu, var = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
+        fake_data, preds, q, mu, var = self._forward_fn_gen(params_gen, params_enc, params_disc, params_q, t_states.obs)
         
-        return fake_data, preds, disc_logits, batch_stats_g, batch_stats_d, mu, var, p_states
+        return fake_data, preds, q, mu, var, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
@@ -582,9 +716,9 @@ class DiscPolicy(PolicyNetwork):
         else:
             self._logger = logger
 
-        self.model_disc = Discriminator()
+        self.model_disc = Discriminator(training=False)
         
-        self.model_q = QNetwork()
+        self.model_q = QNetwork(training=False)
 
         self.model_gen = gen_policy.model_gen
 
