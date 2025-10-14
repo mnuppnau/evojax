@@ -104,47 +104,118 @@ class PixelNorm(nn.Module):
     def __call__(self, x):
         return x / jnp.sqrt(jnp.mean(x**2, axis=-1, keepdims=True) + self.eps)
 
-
-class GeneratorOld(nn.Module):
-  features: int = 64
-  training: bool = True
-  
-  @nn.compact
-  def __call__(self, z):
-    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
-    x = PixelNorm()(x)
-    x = nn.relu(x)
-    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = PixelNorm()(x)
-    x = nn.relu(x)
-    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = PixelNorm()(x)
-    x = nn.relu(x)
-    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.sigmoid(x)
-    return x
-
-
 class Generator(nn.Module):
-  features: int = 64
+  latent_dim: int = 74
   training: bool = True
   
   @nn.compact
   def __call__(self, z):
-    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
-    x = nn.GroupNorm(num_groups=16)(x)
-    x = nn.silu(x)
-    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.GroupNorm(num_groups=16)(x)
-    x = nn.silu(x)
-    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.GroupNorm(num_groups=16)(x)
-    x = nn.silu(x)
-    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.sigmoid(x)
+    # Project and reshape to 7x7x160 (reduced from 256)
+    x = nn.Dense(7 * 7 * 160, use_bias=False)(z)
+    x = x.reshape((z.shape[0], 7, 7, 160))
+    x = nn.GroupNorm(num_groups=20)(x)  # 160/20=8 channels per group
+    x = nn.relu(x)
+    
+    # 7x7x160 → 14x14x96
+    x = nn.ConvTranspose(64, kernel_size=(4, 4), strides=(2, 2), 
+                         padding='SAME', use_bias=False)(x)
+    x = nn.GroupNorm(num_groups=8)(x)  # 96/12=8 channels per group
+    x = nn.relu(x)
+    
+    # 14x14x96 → 28x28x48
+    x = nn.ConvTranspose(32, kernel_size=(4, 4), strides=(2, 2), 
+                         padding='SAME', use_bias=False)(x)
+    x = nn.GroupNorm(num_groups=4)(x)  # 48/8=6 channels per group
+    x = nn.relu(x)
+    
+    # 28x28x48 → 28x28x1
+    x = nn.ConvTranspose(1, kernel_size=(3, 3), strides=(1, 1), 
+                         padding='SAME', use_bias=True)(x)
+    x = jnp.tanh(x)
+    
     return x
+
+#class Generator(nn.Module):
+#  features: int = 72
+#  training: bool = True
+#  
+#  @nn.compact
+#  def __call__(self, z):
+#    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+#    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
+#    x = PixelNorm()(x)
+#    x = nn.relu(x)
+#    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
+#    x = PixelNorm()(x)
+#    x = nn.relu(x)
+#    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+#    x = PixelNorm()(x)
+#    x = nn.relu(x)
+#    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+#    x = nn.tanh(x)
+#    return x
+
+# final activation
+        #x = jnp.tanh(x)# if self.use_tanh else nn.sigmoid(x)
+        #return x
+
+
+#class Generator(nn.Module):
+#  features: int = 64
+#  training: bool = True
+#  
+#  @nn.compact
+#  def __call__(self, z):
+#    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+#    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
+#    x = nn.GroupNorm(num_groups=16)(x)
+#    x = nn.silu(x)
+#    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
+#    x = nn.GroupNorm(num_groups=16)(x)
+#    x = nn.silu(x)
+#    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+#    x = nn.GroupNorm(num_groups=16)(x)
+#    x = nn.silu(x)
+#    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+#    x = nn.sigmoid(x)
+#    return x
+
+#class Generator(nn.Module):
+#  features: int = 48  # Reduced from 64
+#  training: bool = True
+#  
+#  @nn.compact
+#  def __call__(self, z):
+#    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+#    
+#    # First block: 1x1 -> 3x3 (use 3x multiplier instead of 4x)
+#    x = nn.ConvTranspose(self.features*3, [3, 3], [2, 2], 'VALID', 
+#                         kernel_init=normal_init(0.02))(z)
+#    x = nn.GroupNorm(num_groups=12)(x)
+#    x = nn.silu(x)
+#    
+#    # Second block: 3x3 -> 6x6 (keep [4,4] kernel!)
+#    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', 
+#                         kernel_init=normal_init(0.02))(x)
+#    x = nn.GroupNorm(num_groups=16)(x)
+#    x = nn.silu(x)
+#    
+#    # Third block: 6x6 -> 13x13
+#    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', 
+#                         kernel_init=normal_init(0.02))(x)
+#    x = nn.GroupNorm(num_groups=8)(x)
+#    x = nn.silu(x)
+#    
+#    # Lighter smoothing: 1x1 conv instead of 3x3 (13x13 -> 13x13)
+#    x = nn.Conv(self.features, [1, 1], kernel_init=normal_init(0.02))(x)
+#    x = nn.silu(x)
+#    
+#    # Final block: 13x13 -> 28x28
+#    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', 
+#                         kernel_init=normal_init(0.02))(x)
+#    x = nn.sigmoid(x)
+#    
+#    return x
 
 #class Generator(nn.Module):
 #  features: int = 64
@@ -174,17 +245,17 @@ class SharedEncoder(nn.Module):
 
   @nn.compact
   def __call__(self, x):
-    x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     x = nn.GroupNorm(num_groups=16)(x)
     x = nn.leaky_relu(x, 0.2)
-    x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     x = nn.GroupNorm(num_groups=16)(x)
     x = nn.leaky_relu(x, 0.2)
     
     return x
 
 class Discriminator(nn.Module):
-  features: int = 64
+  features: int = 32
   training: bool = True
 
   q_cat: int = 10
@@ -192,8 +263,15 @@ class Discriminator(nn.Module):
   @nn.compact
   def __call__(self, features):
     # Discriminator output
-    d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(features)
-    d = d.reshape((d.shape[0], -1))
+    #d = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(features)
+    #d = nn.GroupNorm(num_groups=16)(d)
+    #d = nn.leaky_relu(d, 0.2)
+    d = nn.Conv(self.features, (4,4), (2,2), 'SAME',  kernel_init=normal_init(0.02))(features)
+    d = nn.leaky_relu(d, 0.2)
+    d = nn.Conv(1,             (4,4), (1,1), 'SAME',  kernel_init=normal_init(0.02))(d)
+    #d = d.reshape((d.shape[0], -1))
+    #d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(d)
+    #d = d.reshape((d.shape[0], -1))
 
     # Q outpiut
     #q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
@@ -227,7 +305,7 @@ class Q(nn.Module):
   def __call__(self, features):
     # Q outpiut
     q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(features)
-    q = nn.GroupNorm(num_groups=16)(q)
+    #q = nn.GroupNorm(num_groups=16)(q)
     q = nn.leaky_relu(q, 0.2)
 
     disc_logits = nn.Conv(self.q_cat, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02))(q)
@@ -470,7 +548,7 @@ class Q(nn.Module):
 #    batch_stats_g = vars_g['batch_stats']
 #    return fake_images, batch_stats_g
 
-#@partial(jax.jit, static_argnames=['solver_enc', 'solver_disc'])
+@partial(jax.jit, static_argnames=['solver_enc', 'solver_disc'])
 def train_step_disc(state, data, fake_imgs, solver_enc, solver_disc, key, iteration):
        
         params_e, params_d, opt_enc, opt_disc = state
@@ -494,7 +572,7 @@ def train_step_disc(state, data, fake_imgs, solver_enc, solver_disc, key, iterat
                   )
 
                   # use 0.9 as the label for real images instead of 1.0
-                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds))
+                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.9)
                   # use 0.1 as the label for fake images instead of 0.0
                   fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds))
 
@@ -510,7 +588,7 @@ def train_step_disc(state, data, fake_imgs, solver_enc, solver_disc, key, iterat
         loss, (grads_e, grads_d) = grad_fn_disc(params_e, params_d)
 
         # apply enc gradients
-        updates_enc, new_opt_state_enc = solver_enc.update(grads_e, opt_enc, params_d)
+        updates_enc, new_opt_state_enc = solver_enc.update(grads_e, opt_enc, params_e)
         params_e = optax.apply_updates(params_e, updates_enc)
        
         # apply disc gradients
@@ -520,11 +598,10 @@ def train_step_disc(state, data, fake_imgs, solver_enc, solver_disc, key, iterat
         return (params_e, params_d, new_opt_state_enc, new_opt_state_disc), loss
 
 
-
-@partial(jax.jit, static_argnames=['solver'])
-def train_step_q(state, fake_imgs, fake_cat_input, con_codes, solver, key, iteration):
+@partial(jax.jit, static_argnames=['solver_enc', 'solver_q'])
+def train_step_q(state, fake_imgs, fake_cat_input, con_codes, solver_enc, solver_q, key, iteration):
        
-        params_e, params_q, opt_q = state
+        params_e, params_q, opt_enc, opt_q = state
 
         def loss_mutual_information(code_cat, q_cat):
                   return -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
@@ -538,9 +615,9 @@ def train_step_q(state, fake_imgs, fake_cat_input, con_codes, solver, key, itera
             
             return mse + var_reg
 
-        def loss_q(params_q):
+        def loss_q(params_e, params_q):
                 
-                  fake_features = SharedEncoder(training=False).apply( 
+                  fake_features = SharedEncoder().apply( 
                       {'params': params_e}, fake_imgs
                   )
                   
@@ -557,17 +634,21 @@ def train_step_q(state, fake_imgs, fake_cat_input, con_codes, solver, key, itera
                   loss_con = continuous_loss(con_codes, mu, var)
                                 
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = loss_mi + loss_con*0.1
+                  loss = loss_mi + loss_con*0.2
                 
                   return loss
 
-        grad_fn_q = jax.value_and_grad(loss_q)
-        loss_q_val, grads_q = grad_fn_q(params_q)
+        grad_fn_q = jax.value_and_grad(loss_q, argnums=(0,1))
+        loss_q_val, (grads_e, grads_q) = grad_fn_q(params_e, params_q)
 
-        updates_q, new_opt_state_q = solver.update(grads_q, opt_q, params_q)
+        # apply enc gradients
+        updates_enc, new_opt_state_enc = solver_enc.update(grads_e, opt_enc, params_e)
+        params_e = optax.apply_updates(params_e, updates_enc)
+
+        updates_q, new_opt_state_q = solver_q.update(grads_q, opt_q, params_q)
         params_q = optax.apply_updates(params_q, updates_q)
 
-        return (params_q, new_opt_state_q), loss_q_val
+        return (params_e, params_q, new_opt_state_enc, new_opt_state_q), loss_q_val
 
 #class QNetwork(nn.Module):
 #    features: int = 64
@@ -733,23 +814,23 @@ class Trainer(object):
         self._key, subkey_enc, subkey_disc, subkey_q = jax.random.split(self._key, 4)
         
         dataset = datasets.MNIST('./data', train=True, download=True)
-        self.data = np.expand_dims(dataset.data.numpy() / 255.0, axis=-1)
+        self.data = np.expand_dims((dataset.data.numpy() / 255.0)*2-1, axis=-1)
         self.labels = dataset.targets.numpy()
 
         # initialize the shared encoder
         variables_enc = SharedEncoder().init(subkey_enc, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_enc = variables_enc['params']
 
-        self.solver_enc = optax.adam(learning_rate=0.0001, b1=0.5, b2=0.999)
+        self.solver_enc = optax.adam(learning_rate=0.00004, b1=0.5, b2=0.999)
 
         # initialize the discriminator
-        variables_disc = Discriminator().init(subkey_disc, jnp.ones((self.batch_size, 5, 5, 128), dtype=jnp.float32))
+        variables_disc = Discriminator().init(subkey_disc, jnp.ones((self.batch_size, 5, 5, 64), dtype=jnp.float32))
         self.params_disc = variables_disc['params']
 
-        self.solver_disc = optax.adam(learning_rate=0.0001, b1=0.5, b2=0.999)
+        self.solver_disc = optax.adam(learning_rate=0.00002, b1=0.5, b2=0.999)
 
         # initialize the Q network
-        variables_q = Q().init(subkey_q, jnp.ones((self.batch_size, 5, 5, 128), dtype=jnp.float32))
+        variables_q = Q().init(subkey_q, jnp.ones((self.batch_size, 5, 5, 64), dtype=jnp.float32))
         self.params_q = variables_q['params']
 
         self.solver_q = optax.adam(learning_rate=0.00004, b1=0.5, b2=0.999)
@@ -840,11 +921,16 @@ class Trainer(object):
             fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, 10), fixed_con], axis=-1)
 
             self._cat_code_noise_key, cat_code_subkey = jax.random.split(self._cat_code_noise_key)
- 
+                
+            d_loss = 0.26
+            skip_flag = False
+            skip_counter = 0
+            
             for i in range(self._max_iter):
                 
                 shape_noise = (self.mini_batch_size, self.latent_dim-self.n_con)
                 shape_cat = (self.mini_batch_size,)
+
 
                 #if i < 1:
                     #if len(self.batch_stats_gen.shape) == 1:
@@ -852,6 +938,7 @@ class Trainer(object):
                 
                     #batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(self.batch_stats_gen)
 
+                #if i % 2 == 0:     
                 for mini_batch in range(num_mini_batches):
                     # Sample batch of data.
 
@@ -863,7 +950,7 @@ class Trainer(object):
                     #data = np.expand_dims(data / 255.0, axis=-1)
 
                     latent, cat_codes, con_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
-                  
+                    
                     #if i > 600:
                     params_gen = self.solver_gen.best_params
                     params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
@@ -871,6 +958,7 @@ class Trainer(object):
                     
                     #fake_images = Generator(training=False).apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
                     fake_images = Generator(training=False).apply({'params': params_gen_formatted}, latent)
+                    #jax.debug.print('fake images shape: {}', fake_images.shape)
                     #batch_stats_gen = vars_g['batch_stats']
                     # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
                     fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
@@ -888,23 +976,22 @@ class Trainer(object):
                     )
 
                     
-                    #jax.debug.print('loss: {} ', loss)
-                    
                     params_enc, params_disc, opt_enc, opt_disc = state_d
 
-                    state_q = (params_enc, params_q, opt_q)
+                    state_q = (params_enc, params_q, opt_enc, opt_q)
 
                     state_q, q_loss = train_step_q(
                         state_q,
                         fake_images,
                         cat_codes,
                         con_codes,
+                        solver_enc,
                         solver_q,
                         cat_code_subkey,
                         iteration=i
                     )
 
-                    params_q, opt_q = state_q
+                    params_enc, params_q, opt_enc, opt_q = state_q
 
                 
                 leaves_params, _ = jax.tree_flatten(params_enc)
@@ -919,7 +1006,7 @@ class Trainer(object):
                 params_gen, belief_space = self.solver_gen.ask()
                 
                 scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, _ = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_enc=flat_params_enc, params_disc=flat_params_disc, params_q=flat_params_q, generator=True, test=False
+                params_gen=params_gen, params_enc=flat_params_enc, params_disc=flat_params_disc, params_q=flat_params_q, latent_input=latent, cat_codes=cat_codes, con_codes=con_codes, generator=True, test=False
                 )
 
                 if isinstance(self.solver_gen, QualityDiversityMethod):
@@ -958,16 +1045,16 @@ class Trainer(object):
                 #leaves_batch_stats_disc, _ = jax.tree_flatten(self.batch_stats_disc)
                 #flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
-                params_gen, belief_space = self.solver_gen.ask()
+                #params_gen, belief_space = self.solver_gen.ask()
 
-                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, _ = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_enc=flat_params_enc, params_disc=flat_params_disc, params_q=flat_params_q,  generator=True, test=False
-                )
+                #scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, _ = self.sim_mgr_gen.eval_params(
+                #params_gen=params_gen, params_enc=flat_params_enc, params_disc=flat_params_disc, params_q=flat_params_q,  generator=True, test=False
+                #)
 
-                if isinstance(self.solver_gen, QualityDiversityMethod):
-                    self.solver_gen.observe_bd(bds_gen)
+                #if isinstance(self.solver_gen, QualityDiversityMethod):
+                #    self.solver_gen.observe_bd(bds_gen)
                 
-                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, adv=True)
+                #self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, adv=True)
 
                 #best_params_gen = self.solver_gen.best_params
                 #best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
@@ -1031,12 +1118,12 @@ class Trainer(object):
 
                     self._key, noise_key, con_key = jax.random.split(self._key, 3)
 
-                    fixed_batch_latent = jax.random.normal(noise_key, (self.batch_size, self.latent_dim-self.n_con))
-                    fixed_c = jnp.tile(jnp.arange(10), 7)
-                    fixed_c = fixed_c[:self.batch_size]
-                    fixed_con = jax.random.uniform(con_key, (self.batch_size, 2), minval=-1, maxval=1) 
+                    #fixed_batch_latent = jax.random.normal(noise_key, (self.batch_size, self.latent_dim-self.n_con))
+                    #fixed_c = jnp.tile(jnp.arange(10), 7)
+                    #fixed_c = fixed_c[:self.batch_size]
+                    #fixed_con = jax.random.uniform(con_key, (self.batch_size, 2), minval=-1, maxval=1) 
                             
-                    fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, 10), fixed_con], axis=-1)
+                    #fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, 10), fixed_con], axis=-1)
 
 
                     #batch_stats_gen_leaves, _ = jax.tree_flatten(batch_stats_gen)

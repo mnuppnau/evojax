@@ -639,22 +639,22 @@ class PGPE(NEAlgorithm):
        
         # create empty array
         softmax_logits = jnp.zeros((10, 128))
-        self.belief_space = update_normative_ks(
-            self.belief_space,
-            best_fitness=best_fitness_adv,
-            best_fitness_mi=best_fitness_mi,
-            avg_fitness=avg_fitness_adv,
-            avg_fitness_mi=avg_fitness_mi,
-            best_adv=best_adv,
-            best_mi=best_mi,
-            rng_adv=rng_adv,
-            digit=None,#max_softmax_logits_idx,
-            best_tchebycheff_scores=best_tchebycheff_scores,
-            softmax_logits=softmax_logits,
-            missing_digit=first_missing_digit,
-            topographic_center=topographic_center,
-            topographic_stdev=topographic_stdev,
-        )
+        #self.belief_space = update_normative_ks(
+        #    self.belief_space,
+        #    best_fitness=best_fitness_adv,
+        #    best_fitness_mi=best_fitness_mi,
+        #    avg_fitness=avg_fitness_adv,
+        #    avg_fitness_mi=avg_fitness_mi,
+        #    best_adv=best_adv,
+        #    best_mi=best_mi,
+        #    rng_adv=rng_adv,
+        #    digit=None,#max_softmax_logits_idx,
+        #    best_tchebycheff_scores=best_tchebycheff_scores,
+        #    softmax_logits=softmax_logits,
+        #    missing_digit=first_missing_digit,
+        #    topographic_center=topographic_center,
+        #    topographic_stdev=topographic_stdev,
+        #)
 
         #ranks = jnp.log10(ranks + 2)
 
@@ -663,20 +663,41 @@ class PGPE(NEAlgorithm):
             #fitness_scores = -jnp.argsort(order+1)
         #else:
         #if adv:
-        #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*w_mi + fitness_con.flatten()*2
+        #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(10*w_mi) + fitness_con.flatten()
         #elif not adv and self._t > 6000:
         #    fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
-        fitness_scores = norm_fitness_adv.flatten()*(0.9*(1-w_mi)) + norm_fitness_mi.flatten()*(0.9*(w_mi)) + norm_fitness_con.flatten() * (0.2)
+        #fitness_scores = norm_fitness_adv.flatten()*(0.9*(1-w_mi)) + norm_fitness_mi.flatten()*(0.9*(w_mi)) + norm_fitness_con.flatten() * (0.2)
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()# + fitness_con.flatten()
             #closeness = compute_closeness(objectives)
             #fitness_scores = compute_fitness(closeness, ranks)
         #else:
-        #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(30*(w_mi)) + fitness_con.flatten()
+        #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(100*(w_mi)) + fitness_con.flatten()
         #fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten()*w_mi + norm_fitness_con.flatten() * 0.1
         #    fitness_scores = tchebycheff_scores
-            #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() + fitness_con.flatten() * 0.01
-        #fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten() + norm_fitness_con.flatten() * 0.1
-            #fitness_scores = -jnp.argsort(order+1)
+        #if self._t < 1000:
+        #    fitness_scores = fitness_mi.flatten()*4 + fitness_con.flatten()*8 + fitness_adv.flatten()
+        #elif self._t < 2000:
+        #    fitness_scores = fitness_mi.flatten()*4 + fitness_con.flatten()*10 + fitness_adv.flatten()
+        #elif self._t < 3000:
+        #    fitness_scores = fitness_mi.flatten()*4 + fitness_con.flatten()*4 + fitness_adv.flatten()
+        #elif self._t < 6000:
+        #    fitness_scores = fitness_mi.flatten()*4 + fitness_con.flatten()*2 + fitness_adv.flatten()
+        #elif self._t < 9000:
+        #    fitness_scores = fitness_mi.flatten() + fitness_con.flatten() + fitness_adv.flatten()
+        #elif self._t < 11000:
+        #    fitness_scores = fitness_mi.flatten()*4 + fitness_con.flatten()*4 + fitness_adv.flatten()
+        #elif self._t < 15000:
+        #    fitness_scores = fitness_mi.flatten()*10 + fitness_con.flatten()*6 + fitness_adv.flatten()
+        #elif self._t < 18000:
+        #    fitness_scores = fitness_mi.flatten()*20 + fitness_con.flatten()*6 + fitness_adv.flatten()
+        #elif self._t < 30000:
+        #    fitness_scores = fitness_mi.flatten()*50 + fitness_con.flatten()*10 + fitness_adv.flatten()
+        #else:
+        #    fitness_scores = fitness_mi.flatten()*100 + fitness_con.flatten()*20 + fitness_adv.flatten()
+
+        #fitness_scores = fitness_adv.flatten()*((1-w_mi)*4) + fitness_mi.flatten()*(10*w_mi) + fitness_con.flatten()
+        fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten() + norm_fitness_con.flatten() * 0.4
+        #fitness_scores = -jnp.argsort(order+1)
         #else:
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*50
             #closeness = compute_closeness(objectives)
@@ -694,7 +715,7 @@ class PGPE(NEAlgorithm):
             #fitness_scores = fitness_mi
         #jax.debug.print('weights : {} ', weights)
         #weights = -weights
-        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,False)
+        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
 
         grad_center, grad_stdev = compute_reinforce_update(
                 fitness_scores=fitness_scores,

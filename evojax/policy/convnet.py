@@ -100,28 +100,95 @@ class GeneratorOld(nn.Module):
     x = PixelNorm()(x)
     x = nn.relu(x)
     x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.sigmoid(x)
+    x = nn.tanh(x)
     return x
 
+#class Generator(nn.Module):
+#  features: int = 48  # Reduced from 64
+#  training: bool = True
+#  
+#  @nn.compact
+#  def __call__(self, z):
+#    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+#    
+#    # First block: 1x1 -> 3x3 (use 3x multiplier instead of 4x)
+#    x = nn.ConvTranspose(self.features*3, [3, 3], [2, 2], 'VALID', 
+#                         kernel_init=normal_init(0.02))(z)
+#    x = nn.GroupNorm(num_groups=12)(x)
+#    x = nn.silu(x)
+#    
+#    # Second block: 3x3 -> 6x6 (keep [4,4] kernel!)
+#    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', 
+#                         kernel_init=normal_init(0.02))(x)
+#    x = nn.GroupNorm(num_groups=16)(x)
+#    x = nn.silu(x)
+#    
+#    # Third block: 6x6 -> 13x13
+#    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', 
+#                         kernel_init=normal_init(0.02))(x)
+#    x = nn.GroupNorm(num_groups=8)(x)
+#    x = nn.silu(x)
+#    
+#    # Lighter smoothing: 1x1 conv instead of 3x3 (13x13 -> 13x13)
+#    x = nn.Conv(self.features, [1, 1], kernel_init=normal_init(0.02))(x)
+#    x = nn.silu(x)
+#    
+#    # Final block: 13x13 -> 28x28
+#    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', 
+#                         kernel_init=normal_init(0.02))(x)
+#    x = nn.sigmoid(x)
+#    
+#    return x
+
 class Generator(nn.Module):
-  features: int = 64
+  latent_dim: int = 74
   training: bool = True
   
   @nn.compact
   def __call__(self, z):
-    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
-    x = nn.GroupNorm(num_groups=16)(x)
-    x = nn.silu(x)
-    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.GroupNorm(num_groups=16)(x)
-    x = nn.silu(x)
-    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.GroupNorm(num_groups=16)(x)
-    x = nn.silu(x)
-    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.sigmoid(x)
+    # Project and reshape to 7x7x160 (reduced from 256)
+    x = nn.Dense(7 * 7 * 160, use_bias=False)(z)
+    x = x.reshape((z.shape[0], 7, 7, 160))
+    x = nn.GroupNorm(num_groups=20)(x)  # 160/20=8 channels per group
+    x = nn.relu(x)
+    
+    # 7x7x160 → 14x14x96
+    x = nn.ConvTranspose(64, kernel_size=(4, 4), strides=(2, 2), 
+                         padding='SAME', use_bias=False)(x)
+    x = nn.GroupNorm(num_groups=8)(x)  # 96/12=8 channels per group
+    x = nn.relu(x)
+    
+    # 14x14x96 → 28x28x48
+    x = nn.ConvTranspose(32, kernel_size=(4, 4), strides=(2, 2), 
+                         padding='SAME', use_bias=False)(x)
+    x = nn.GroupNorm(num_groups=4)(x)  # 48/8=6 channels per group
+    x = nn.relu(x)
+    
+    # 28x28x48 → 28x28x1
+    x = nn.ConvTranspose(1, kernel_size=(3, 3), strides=(1, 1), 
+                         padding='SAME', use_bias=True)(x)
+    x = jnp.tanh(x)
+    
     return x
+#class Generator(nn.Module):
+#  features: int = 80
+#  training: bool = True
+#  
+#  @nn.compact
+#  def __call__(self, z):
+#    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+#    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
+#    x = nn.GroupNorm(num_groups=16)(x)
+#    x = nn.silu(x)
+#    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
+#    x = nn.GroupNorm(num_groups=16)(x)
+#    x = nn.silu(x)
+#    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+#    x = nn.GroupNorm(num_groups=16)(x)
+#    x = nn.silu(x)
+#    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+#    x = nn.tanh(x)
+#    return x
 
 
 #class Generator(nn.Module):
@@ -152,17 +219,17 @@ class SharedEncoder(nn.Module):
 
   @nn.compact
   def __call__(self, x):
-    x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     x = nn.GroupNorm(num_groups=16)(x)
     x = nn.leaky_relu(x, 0.2)
-    x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     x = nn.GroupNorm(num_groups=16)(x)
     x = nn.leaky_relu(x, 0.2)
     
     return x 
 
 class Discriminator(nn.Module):
-  features: int = 64
+  features: int = 32
   training: bool = True
 
   q_cat: int = 10
@@ -171,8 +238,15 @@ class Discriminator(nn.Module):
   def __call__(self, features):
     
     # Discriminator output
-    d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(features)
-    d = d.reshape((d.shape[0], -1))
+    #d = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(features)
+    #d = nn.leaky_relu(d, 0.2)
+    d = nn.Conv(self.features, (4,4), (2,2), 'SAME',  kernel_init=normal_init(0.02))(features)
+    d = nn.leaky_relu(d, 0.2)
+    d = nn.Conv(1, (4,4), (1,1), 'SAME',  kernel_init=normal_init(0.02))(d)
+    #d = d.reshape((d.shape[0], -1))
+
+    #d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(d)
+    #d = d.reshape((d.shape[0], -1))
 
     # Q outpiut
     #q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
@@ -217,7 +291,7 @@ class Q(nn.Module):
 
     # Q outpiut
     q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(features)
-    q = nn.GroupNorm(num_groups=16)(q)
+    #q = nn.GroupNorm(num_groups=16)(q)
     q = nn.leaky_relu(q, 0.2)
 
     # ADD q bottleneck layer
@@ -579,9 +653,9 @@ class GenPolicy(PolicyNetwork):
         
         variables_shared = self.model_shared.init(key_disc, jnp.ones([64,28,28,1], jnp.float32))
 
-        variables_disc = self.model_disc.init(key_disc, jnp.ones([64,5,5,128], jnp.float32))
+        variables_disc = self.model_disc.init(key_disc, jnp.ones([64,5,5,64], jnp.float32))
         
-        variables_q = self.model_q.init(key_q, jnp.ones([64, 5, 5, 128], jnp.float32)) 
+        variables_q = self.model_q.init(key_q, jnp.ones([64, 5, 5, 64], jnp.float32)) 
         
         self.init_params_gen = variables_gen['params']
        
@@ -658,9 +732,9 @@ class GenPolicy(PolicyNetwork):
             #preds, q, mu, var = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=False)
             #preds, q, mu, var = self.model_disc.apply({'params': params_d}, fake_data)
            
-            real_features = self.model_shared.apply({'params': params_e}, fake_data)
-            preds = self.model_disc.apply({'params': params_d}, real_features)
-            q, mu, var = self.model_q.apply({'params': params_q}, real_features)
+            fake_features = self.model_shared.apply({'params': params_e}, fake_data)
+            preds = self.model_disc.apply({'params': params_d}, fake_features)
+            q, mu, var = self.model_q.apply({'params': params_q}, fake_features)
             
             #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
 
@@ -696,6 +770,8 @@ class GenPolicy(PolicyNetwork):
         params_disc = self._format_params_disc_fn(params_disc)
         params_q = self._format_params_q_fn(params_q)
 
+        #jax.debug.print('params gen shape : {} ', jax.tree_util.tree_map(lambda x: x.shape, params_gen))
+        #jax.debug.print('t_states.obs shape : {} ', t_states.obs.shape)
         #batch_stats_gen = self._format_batch_stats_gen_fn(t_states.batch_stats_gen)
         #batch_stats_disc = self._format_batch_stats_disc_fn(t_states.batch_stats_disc)
         #batch_stats_q = self._format_batch_stats_q_fn(t_states.batch_stats_q) 

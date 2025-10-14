@@ -402,6 +402,9 @@ class SimManager(object):
                     params_enc: jnp.ndarray,
                     params_disc: jnp.ndarray,
                     params_q: jnp.ndarray,
+                    latent_input: jnp.ndarray,
+                    cat_codes: jnp.ndarray,
+                    con_codes: jnp.ndarray,
                     #batch_stats_gen: dict,
                     #batch_stats_disc: dict,
                     #batch_stats_q: dict,
@@ -420,7 +423,7 @@ class SimManager(object):
         if self._use_for_loop:
             return self._for_loop_eval(params_gen, params_enc, params_disc, params_q, generator, test)
         else:
-            return self._scan_loop_eval(params_gen, params_enc, params_disc, params_q, generator, test)
+            return self._scan_loop_eval(params_gen, params_enc, params_disc, params_q, latent_input, cat_codes, con_codes, generator, test)
 
     def _for_loop_eval(self,
                        params: jnp.ndarray,
@@ -476,6 +479,9 @@ class SimManager(object):
                         params_enc: jnp.ndarray,
                         params_disc: jnp.ndarray,
                         params_q: jnp.ndarray,
+                        latent_input: jnp.ndarray,
+                        cat_codes: jnp.ndarray,
+                        con_codes: jnp.ndarray,
                         #batch_stats_gen: dict,
                         #batch_stats_disc: dict,
                         #batch_stats_q: dict,
@@ -494,8 +500,8 @@ class SimManager(object):
         #if len(batch_stats_gen.shape) == 1:
         #    batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
         
-        if params_gen is not None and params_gen.shape[0] != self._pop_size:
-            params_gen = jnp.repeat(params_gen[None, :], self._pop_size, axis=0)
+        #if params_gen is not None and params_gen.shape[0] != self._pop_size:
+        #    params_gen = jnp.repeat(params_gen[None, :], self._pop_size, axis=0)
             
         #self.batch_stats_gen = batch_stats_gen
 
@@ -505,6 +511,15 @@ class SimManager(object):
 
         #if len(batch_stats_disc.shape) == 1:
         #    batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
+
+        if latent_input is not None and latent_input.shape[0] != self._pop_size:
+            latent_input = jnp.repeat(latent_input[None, :], self._pop_size, axis=0)
+
+        if cat_codes is not None and cat_codes.shape[0] != self._pop_size:
+            cat_codes = jnp.repeat(cat_codes[None, :], self._pop_size, axis=0)
+
+        if con_codes is not None and con_codes.shape[0] != self._pop_size:
+            con_codes = jnp.repeat(con_codes[None, :], self._pop_size, axis=0)
 
         if params_enc is not None and params_enc.shape[0] != self._pop_size:
             params_enc = jnp.repeat(params_enc[None, :], self._pop_size, axis=0)
@@ -537,8 +552,16 @@ class SimManager(object):
         # Reset the tasks and the policy.
             #reset_keys_cat_code = disc_reset_keys_cat_code
         task_state = task_reset_func(reset_keys_latent, reset_keys_cat_code, reset_keys_con_code)
-    
-        #task_state = task_state.replace(var_con=var_con)
+        
+        #jax.debug.print('task_state obs shape before replace: {}', task_state.obs.shape)
+        
+        task_state = task_state.replace(obs=latent_input)
+        task_state = task_state.replace(cat_codes=cat_codes)
+        task_state = task_state.replace(con_codes=con_codes)
+       
+        #jax.debug.print('task_state obs shape : {}', task_state.obs.shape)
+        #jax.debug.print('task_state cat_codes shape : {}', task_state.cat_codes.shape)
+        #jax.debug.print('task_state con_codes shape : {}', task_state.con_codes.shape)
 
         #task_state = task_state.replace(batch_stats_gen=self.batch_stats_gen)
         #task_state = task_state.replace(batch_stats_disc=self.batch_stats_disc)
@@ -563,6 +586,7 @@ class SimManager(object):
             #params_q = split_params_for_pmap(params_q)
             policy_state = split_states_for_pmap(policy_state)
             #batch_stats_disc = split_params_for_pmap(batch_stats_disc)
+            #latent_input = split_params_for_pmap(latent_input)
             #batch_stats_q = split_params_for_pmap(batch_stats_q)
 
         #jax.debug.print('obs params : {}', self.obs_params)
