@@ -83,16 +83,16 @@ class Generator(nn.Module):
   @nn.compact
   def __call__(self, z):
     z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(z)
+    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=he_normal(), use_bias=False)(z)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=he_normal(), use_bias=False)(x)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=he_normal(), use_bias=False)(x)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.relu(x)
-    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.01))(x)
     x = jnp.tanh(x)
     return x
 
@@ -106,7 +106,7 @@ class Discriminator(nn.Module):
   @nn.compact
   def __call__(self, x):
     x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    #x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.leaky_relu(x, 0.2)
     x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
@@ -121,7 +121,7 @@ class Discriminator(nn.Module):
     q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
     q = nn.leaky_relu(q, 0.2)
 
-    disc_logits = nn.Conv(self.q_cat, [1, 1], [2, 2], 'VALID', kernel_init=normal_init(0.02))(q)
+    disc_logits = nn.Conv(self.q_cat, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02))(q)
     disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
       
     mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
@@ -526,10 +526,18 @@ class GenPolicy(PolicyNetwork):
             leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(vars_d['batch_stats'])
             flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
+            # calculate variance of fake data
+            var_fake = jnp.var(fake_data[:, 4:24, 4:24, :], axis=0)
+            
+            # take mean of variance
+            mean_var_fake = jnp.mean(var_fake)
+
+            #jax.debug.print('Mean variance of fake data: {}', mean_var_fake)
+
             #leaves_batch_stats_q, _ = jax.tree_util.tree_flatten(vars_q['batch_stats'])
             #flat_batch_stats_q = jnp.concatenate([p.flatten() for p in leaves_batch_stats_q])
             
-            return fake_data, flat_batch_stats_gen, preds, q, flat_batch_stats_disc, mu, var
+            return fake_data, flat_batch_stats_gen, preds, q, flat_batch_stats_disc, mu, var, mean_var_fake
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -556,9 +564,9 @@ class GenPolicy(PolicyNetwork):
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, batch_stats_g, preds, disc_logits, batch_stats_d, mu, var = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
+        fake_data, batch_stats_g, preds, disc_logits, batch_stats_d, mu, var, mean_var_fake = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
         
-        return fake_data, preds, disc_logits, batch_stats_g, batch_stats_d, mu, var, p_states
+        return fake_data, preds, disc_logits, batch_stats_g, batch_stats_d, mu, var, mean_var_fake, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
