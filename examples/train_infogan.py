@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument(
         '--batch-size', type=int, default=64, help='Batch size for training.')
     parser.add_argument(
-        '--max-iter', type=int, default=99000, help='Max training iterations.')
+        '--max-iter', type=int, default=80000, help='Max training iterations.')
     parser.add_argument(
         '--test-interval', type=int, default=1000, help='Test interval.')
     parser.add_argument(
@@ -48,7 +48,7 @@ def parse_args():
     parser.add_argument(
         '--seed', type=int, default=42, help='Random seed for training.')
     parser.add_argument(
-        '--center-lr-gen', type=float, default=0.005, help='Center learning rate.')
+        '--center-lr-gen', type=float, default=0.0058, help='Center learning rate.')
     parser.add_argument(
         '--std-lr-gen', type=float, default=0.069, help='Std learning rate.')
     parser.add_argument(

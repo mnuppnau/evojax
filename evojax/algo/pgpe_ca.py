@@ -261,6 +261,8 @@ class PGPE(NEAlgorithm):
             )
         self._num_directions = self.pop_size // 2
 
+        self.MIN_DIVERSITY = 0.005
+
         jax.debug.print('init params in PGPE before array {} : ', init_params)
         if init_params is None:
             self._center = np.zeros(abs(param_size))
@@ -281,7 +283,7 @@ class PGPE(NEAlgorithm):
             optimizer_config = {}
         decay_coef = optimizer_config.get("center_lr_decay_coef", 0.99)
         self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 10000
+            "center_lr_decay_steps", 30000
         )
 
         if optimizer == "adam":
@@ -386,14 +388,21 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
 
         # add a dimension to the fitness scores so that (256,) becomes (256, 1)
         fitness_adv = fitness_adv[:, None]
         fitness_mi = fitness_mi[:, None]
         fitness_con = fitness_con[:, None]
 
-        objectives = jnp.hstack([-fitness_mi, -fitness_adv, fitness_con])
+        penalty = jnp.where(
+             pop_var < self.MIN_DIVERSITY,
+             (self.MIN_DIVERSITY - pop_var) * 100,  # Heavy penalty if below threshold
+             0.0  # No penalty if above threshold
+        )
+        #jax.debug.print('fitness adv scores {} : ', fitness_adv.flatten())
+        
+        objectives = jnp.hstack([-fitness_mi, -fitness_adv, -fitness_con])
         #jax.debug.print('objectives {} : ', objectives)
         #jax.debug.print('objectives shape {} : ', objectives.shape)
         ranks = non_dominated_sort_lax(objectives)
@@ -474,7 +483,7 @@ class PGPE(NEAlgorithm):
         norm_fitness_con = (fitness_con - best_fitness_con) / rng_con
 
         w_adv = avg_fitness_adv / (avg_fitness_adv + avg_fitness_mi)
-        w_adv = jnp.clip(w_adv, 0.4, 0.6)
+        w_adv = jnp.clip(w_adv, 0.2, 0.8)
         #w_adv = w_adv*3
         #w_adv = jnp.clip(w_adv, 0.5, 0.9)
         w_mi = 1 - w_adv
@@ -649,22 +658,55 @@ class PGPE(NEAlgorithm):
         #ranks = jnp.log10(ranks + 2)
 
         # multiply each value in tchhebycheff_scores (axis 0, which is shape (128,1)) by the value in the same index in ranks (which is a scalar) 
-        if adv:
+        #if adv:
             #fitness_scores = -jnp.argsort(order+1)
         #else:
         #if adv:
         #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(30*(w_mi)) + fitness_con.flatten() * 0.1
         #elif not adv and self._t > 6000:
-            fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
+         #   fitness_scores = tchebycheff_scores #* ranks.reshape(ranks.shape[0], 1)
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()# + fitness_con.flatten()
             #closeness = compute_closeness(objectives)
             #fitness_scores = compute_fitness(closeness, ranks)
+        #else:
+        # create a weight that increases linearly from 0.1 to 0.7 over 20000 timesteps
+        #if self._t <= 20000:
+        #w_mi = 0.01 + ((1 + (self._t / 10000))**2)
+        if self._t < 5000:
+            w_adv = 12.0  # Scale up to match MI's natural magnitude
+            w_mi = 0.1   # Scale down MI heavily initially
+            w_con = 1.0  # Boost continuous
         else:
-            #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(10*(w_mi)) + fitness_con.flatten()
-         #fitness_scores = tchebycheff_scores
+            w_adv = 6.0
+            w_mi = 0.1 + (self._t - 5000) / 5000  # Ramp gradually
+            w_con = 2.0
+        #elif self._t < 40000:
+        #    w_mi = 0.3 + (0.4 * ((self._t - 20000) / 20000)) 
+        #else:
+        #    w_mi = 0.7
+        
+        #if self._t < 40000:
+        #    w_con = 0.05
+        #elif self._t < 80000:
+        #    w_con = 0.1
+        #else:
+        #    w_con = 0.2
+        #if self._t < 4000:
+            #fitness_scores = fitness_adv.flatten()*(1-w_mi) + fitness_mi.flatten()*w_mi + fitness_con.flatten()*0.1
+        #elif self._t < 8000:
+        fitness_scores = fitness_adv.flatten()*w_adv + fitness_mi.flatten()*w_mi + fitness_con.flatten()*w_con
+        #elif self._t < 11000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(60*(w_mi)) + fitness_con.flatten()*0.8
+        #elif self._t < 16000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(100*(w_mi)) + fitness_con.flatten()*1
+        #elif self._t < 24000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(160*(w_mi)) + fitness_con.flatten()*2
+        #else:
+            #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(1000*(w_mi)) + fitness_con.flatten()*8
+            #fitness_scores = tchebycheff_scores
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() + fitness_con.flatten() * 0.01
-        #fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten() + norm_fitness_con.flatten() * 0.1
-            fitness_scores = -jnp.argsort(order+1)
+        #fitness_scores = norm_fitness_adv.flatten()*(1-w_mi) + norm_fitness_mi.flatten()*w_mi + norm_fitness_con.flatten()*w_con
+            #fitness_scores = -jnp.argsort(order+1)
         #else:
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*50
             #closeness = compute_closeness(objectives)
@@ -682,7 +724,95 @@ class PGPE(NEAlgorithm):
             #fitness_scores = fitness_mi
         #jax.debug.print('weights : {} ', weights)
         #weights = -weights
-        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
+        avg_diversity = pop_var.mean()
+        std_diversity = pop_var.std()
+        avg_fitness_adv = fitness_adv.mean()
+        
+        ## Phase detection
+        #if avg_diversity < self.MIN_DIVERSITY * 0.8:
+        #    # Phase 1: Need diversity desperately
+        #    w_diversity = 50.0
+        #    w_adversarial = 1.0
+        #    phase = "BOOTSTRAPPING_DIVERSITY"
+        #    
+        #elif avg_diversity >= self.MIN_DIVERSITY and std_diversity > 0.002:
+        #    # Phase 2: Have diversity, need quality
+        #    w_diversity = 5.0  # Maintain but don't dominate
+        #    w_adversarial = 10.0  # Push for quality!
+        #    phase = "IMPROVING_QUALITY"
+        #    
+        #else:
+        #    # Phase 3: Balance both
+        #    w_diversity = 10.0
+        #    w_adversarial = 5.0
+        #    phase = "BALANCED"
+      
+        # Phase detection
+        if avg_diversity < self.MIN_DIVERSITY * 0.8:
+            # Phase 1: Need diversity desperately
+            w_diversity = 50.0
+            w_adversarial = 1.0
+            w_mi = 0.0  # Not yet
+            phase = "BOOTSTRAPPING_DIVERSITY"
+            
+        elif avg_diversity >= self.MIN_DIVERSITY and std_diversity > 0.002 and avg_fitness_adv < -0.85:
+            # Phase 2: Have diversity, need quality
+            w_diversity = 5.0
+            w_adversarial = 10.0
+            w_mi = 0.0  # Still not yet
+            phase = "IMPROVING_QUALITY"
+        
+        elif avg_diversity >= self.MIN_DIVERSITY and avg_fitness_adv >= -0.85:
+            # Phase 2b: Quality good, now add structure  
+            w_diversity = 5.0  # Maintain
+            w_adversarial = 5.0  # Maintain
+            w_mi = 2.0  # ADD MI NOW
+            phase = "ADDING_STRUCTURE"
+            
+        else:
+            # Phase 3: Refinement
+            w_diversity = 5.0
+            w_adversarial = 10.0
+            w_mi = 3.0
+            phase = "REFINEMENT"
+
+        if self._t < 16000:
+            w_diversity = 4.0
+            w_adversarial = 10.0
+            w_mi = 10.0
+            w_con = 1.0
+        elif self._t < 24000:
+            w_diversity = 2.0
+            w_adversarial = 10.0
+            w_mi = 200.0
+            w_con = 2.0
+        elif self._t < 40000:
+            w_diversity = 1.0
+            w_adversarial = 10.0
+            w_mi = 1000.0
+            w_con = 40.0
+        else:
+            w_diversity = 0.20
+            w_adversarial = 20.0
+            w_mi = 100.0
+            w_con = 200.0
+        # print('Current Phase: {} ', phase)
+        #w_adv = 6.0
+        #w_div = 1.0
+        #w_mi = 30.0
+        # Apply weights
+        #fitness_scores = fitness_adv.flatten() * w_adv + pop_var * w_div + fitness_mi.flatten() * w_mi + fitness_con.flatten() 
+        # Apply weights
+        if self._t < 200:
+            fitness_scores = fitness_mi.flatten()
+        #elif self._t < 10000
+        else:
+            fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con#- penalty
+        #else:
+        #    fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten() + norm_fitness_con.flatten()
+        #fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity - penalty
+        #fitness_scores = fitness_adv.flatten() + pop_var * 20 - penalty
+        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,False)
 
         grad_center, grad_stdev = compute_reinforce_update(
                 fitness_scores=fitness_scores,
