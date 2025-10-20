@@ -555,6 +555,14 @@ def train_step_disc(state, data, fake_imgs, solver_enc, solver_disc, key, iterat
                 
         def loss_discriminator(params_e, params_d):
                 
+                  fake_features = SharedEncoder().apply( 
+                      {'params': params_e}, fake_imgs
+                  )
+
+                  fake_preds = Discriminator().apply(
+                      {'params': params_d}, fake_features
+                  )      
+            
                   real_features = SharedEncoder().apply(
                       {'params': params_e}, data
                   )
@@ -563,13 +571,6 @@ def train_step_disc(state, data, fake_imgs, solver_enc, solver_disc, key, iterat
                       {'params': params_d}, real_features
                   )
                   
-                  fake_features = SharedEncoder().apply( 
-                      {'params': params_e}, fake_imgs
-                  )
-
-                  fake_preds = Discriminator().apply(
-                      {'params': params_d}, fake_features
-                  )
 
                   # use 0.9 as the label for real images instead of 1.0
                   real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.9)
@@ -821,7 +822,7 @@ class Trainer(object):
         variables_enc = SharedEncoder().init(subkey_enc, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_enc = variables_enc['params']
 
-        self.solver_enc = optax.adam(learning_rate=0.00004, b1=0.5, b2=0.999)
+        self.solver_enc = optax.adam(learning_rate=0.00008, b1=0.5, b2=0.999)
 
         # initialize the discriminator
         variables_disc = Discriminator().init(subkey_disc, jnp.ones((self.batch_size, 5, 5, 64), dtype=jnp.float32))
@@ -833,7 +834,7 @@ class Trainer(object):
         variables_q = Q().init(subkey_q, jnp.ones((self.batch_size, 5, 5, 64), dtype=jnp.float32))
         self.params_q = variables_q['params']
 
-        self.solver_q = optax.adam(learning_rate=0.00004, b1=0.5, b2=0.999)
+        self.solver_q = optax.adam(learning_rate=0.00008, b1=0.5, b2=0.999)
         
     def run(self, demo_mode: bool = False) -> float:
 
@@ -938,60 +939,60 @@ class Trainer(object):
                 
                     #batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(self.batch_stats_gen)
 
-                #if i % 2 == 0:     
-                for mini_batch in range(num_mini_batches):
-                    # Sample batch of data.
+                if i % 4 == 0:     
+                    for mini_batch in range(num_mini_batches):
+                        # Sample batch of data.
 
-                    self._key, subkey_latent, subkey_mnist = jax.random.split(self._key, 3)
-                    
+                        self._key, subkey_latent, subkey_mnist = jax.random.split(self._key, 3)
+                        
 
-                    data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
+                        data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
 
-                    #data = np.expand_dims(data / 255.0, axis=-1)
+                        #data = np.expand_dims(data / 255.0, axis=-1)
 
-                    latent, cat_codes, con_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
-                    
-                    #if i > 600:
-                    params_gen = self.solver_gen.best_params
-                    params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
-                    #else:
-                    
-                    #fake_images = Generator(training=False).apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
-                    fake_images = Generator(training=False).apply({'params': params_gen_formatted}, latent)
-                    #jax.debug.print('fake images shape: {}', fake_images.shape)
-                    #batch_stats_gen = vars_g['batch_stats']
-                    # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
-                    fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
-                    
-                    state_d = (params_enc, params_disc, opt_enc, opt_disc)
+                        latent, cat_codes, con_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
+                        
+                        #if i > 600:
+                        params_gen = self.solver_gen.best_params
+                        params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
+                        #else:
+                        
+                        #fake_images = Generator(training=False).apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
+                        fake_images = Generator(training=False).apply({'params': params_gen_formatted}, latent)
+                        #jax.debug.print('fake images shape: {}', fake_images.shape)
+                        #batch_stats_gen = vars_g['batch_stats']
+                        # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
+                        fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
+                        
+                        state_d = (params_enc, params_disc, opt_enc, opt_disc)
 
-                    state_d, d_loss = train_step_disc(
-                        state_d,
-                        data,
-                        fake_images,
-                        solver_enc,
-                        solver_disc,
-                        cat_code_subkey,
-                        iteration=i
-                    )
+                        state_d, d_loss = train_step_disc(
+                            state_d,
+                            data,
+                            fake_images,
+                            solver_enc,
+                            solver_disc,
+                            cat_code_subkey,
+                            iteration=i
+                        )
 
-                    
-                    params_enc, params_disc, opt_enc, opt_disc = state_d
+                        
+                        params_enc, params_disc, opt_enc, opt_disc = state_d
 
-                    state_q = (params_enc, params_q, opt_enc, opt_q)
+                        state_q = (params_enc, params_q, opt_enc, opt_q)
 
-                    state_q, q_loss = train_step_q(
-                        state_q,
-                        fake_images,
-                        cat_codes,
-                        con_codes,
-                        solver_enc,
-                        solver_q,
-                        cat_code_subkey,
-                        iteration=i
-                    )
+                        state_q, q_loss = train_step_q(
+                            state_q,
+                            fake_images,
+                            cat_codes,
+                            con_codes,
+                            solver_enc,
+                            solver_q,
+                            cat_code_subkey,
+                            iteration=i
+                        )
 
-                    params_enc, params_q, opt_enc, opt_q = state_q
+                        params_enc, params_q, opt_enc, opt_q = state_q
 
                 
                 leaves_params, _ = jax.tree_flatten(params_enc)
@@ -1004,9 +1005,24 @@ class Trainer(object):
                 flat_params_q = jnp.concatenate([p.flatten() for p in leaves_params])
                                 
                 params_gen, belief_space = self.solver_gen.ask()
+               
+                self._key, key_z, key_con = jax.random.split(self._key, 3)
                 
+                # 1) Balanced discrete codes across the batch
+                reps = (64 + 10 - 1) // 10
+                c = jnp.tile(jnp.arange(10), reps)[:64]        # shape [B]
+                c_onehot = jax.nn.one_hot(c, 10)                       # [B, n_disc]
+
+                # 2) Noise
+                z = jax.random.normal(key_z, (64, 62))          # [B, Z]
+
+                # 3) Continuous codes: stratified or grid-ish is best; random is fine to start
+                con = jax.random.uniform(key_con, (64, 2), minval=-1.0, maxval=1.0)  # [B, C]
+
+                latent = jnp.concatenate([z, c_onehot, con], axis=-1)      # [B, Z+disc+con] 
+
                 scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, _ = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_enc=flat_params_enc, params_disc=flat_params_disc, params_q=flat_params_q, latent_input=latent, cat_codes=cat_codes, con_codes=con_codes, generator=True, test=False
+                params_gen=params_gen, params_enc=flat_params_enc, params_disc=flat_params_disc, params_q=flat_params_q, latent_input=latent, cat_codes=c_onehot, con_codes=con, generator=True, test=False
                 )
 
                 if isinstance(self.solver_gen, QualityDiversityMethod):
