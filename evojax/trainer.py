@@ -431,8 +431,8 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
                   #jax.debug.print('Q accuracy: {} ', q_acc)
                   # Calculate Mutual Information loss
                   q_cat = nn.log_softmax(q, axis=-1)
-                  #loss_mi = loss_mutual_information(fake_cat_input, q_cat)
-                  loss_mi = cpc_mi_loss(fake_cat_input, q_cat, negative_samples=10)
+                  loss_mi = loss_mutual_information(fake_cat_input, q_cat)
+                  #loss_mi = cpc_mi_loss(fake_cat_input, q_cat, negative_samples=10)
                   #loss_con = normal_nll_loss(con_codes, mu, var)
                   loss_con = continuous_loss(con_codes, mu, var)
                   #predicted_cat = jnp.argmax(q, axis=-1)
@@ -452,7 +452,7 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
                   # use 0.9 as the label for real images instead of 1.0
                   real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.90)
                   # use 0.1 as the label for fake images instead of 0.0
-                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds)+0.00)
+                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds)+0.10)
 
                   real_loss = jnp.mean(real_loss)
                   fake_loss = jnp.mean(fake_loss)
@@ -723,7 +723,7 @@ class Trainer(object):
                 
                     batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
 
-                if i % 4 == 0:
+                if i % 5 == 0:
                     for mini_batch in range(num_mini_batches):
                         # Sample batch of data.
 
@@ -772,17 +772,36 @@ class Trainer(object):
 
                 params_gen, belief_space = self.solver_gen.ask()
                 
-                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, mean_var_fake = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, cat_codes=cat_codes, con_codes=con_codes, generator=True, test=False
+                self._key, key_z, key_con = jax.random.split(self._key, 3)
+                
+                # 1) Balanced discrete codes across the batch
+                reps = (64 + 10 - 1) // 10
+                c = jnp.tile(jnp.arange(10), reps)[:64]        # shape [B]
+                c_onehot = jax.nn.one_hot(c, 10)                       # [B, n_disc]
+
+                # 2) Noise
+                z = jax.random.normal(key_z, (64, 62))          # [B, Z]
+
+                # 3) Continuous codes: stratified or grid-ish is best; random is fine to start
+                con = jax.random.uniform(key_con, (64, 2), minval=-1.0, maxval=1.0)  # [B, C]
+
+                latent = jnp.concatenate([z, c_onehot, con], axis=-1)      # [B, Z+disc+con] 
+
+                topographic_ks = belief_space[4]
+
+                avg_per_code = topographic_ks[0]
+                
+                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, cat_codes=c_onehot, con_codes=con, features=avg_per_code, generator=True, test=False
                 )
 
                 #jax.debug.print('fake_imgs shape: {} ', fake_imgs.shape)
                 if isinstance(self.solver_gen, QualityDiversityMethod):
                     self.solver_gen.observe_bd(bds_gen)
                 
-                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, adv=False)
+                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, adv=False)
 
-                #params_gen, belief_space = self.solver_gen.ask()
+                params_gen, belief_space = self.solver_gen.ask()
 
                 #scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
                 #params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
@@ -873,6 +892,19 @@ class Trainer(object):
                             i, scores_con.size, scores_con.max(), scores_con.mean(),
                             scores_con.min(), scores_con.std()))
 
+                    r_cons = np.array(r_cons)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, r_cons.size, r_cons.max(), r_cons.mean(),
+                            r_cons.min(), r_cons.std()))
+                    
+                    r_sense = np.array(r_sense)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, r_sense.size, r_sense.max(), r_sense.mean(),
+                            r_sense.min(), r_sense.std()))
                     self._logger.info(
                         'Iter={0}, d_loss={1:.4f}'.format(
                             i, d_loss))

@@ -19,13 +19,15 @@ def initialize_belief_space(
     key: int,
     num_iterations: int = 40,
     max_individuals: int = 6,
+    features: int = 128,
+    num_codes: int = 10,
 ):
     belief_space = (
         jnp.array([population_size]),
         initialize_domain_ks(param_size),
         initialize_situational_ks(param_size),
         initialize_history_ks(param_size,num_iterations),
-        initialize_topographic_ks(param_size, max_individuals),
+        initialize_topographic_ks(features, num_codes),
         initialize_normative_ks(param_size)
     )
     return belief_space

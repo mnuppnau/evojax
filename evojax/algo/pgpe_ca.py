@@ -35,7 +35,7 @@ from evojax.algo.cultural.belief_space import (
 )
 
 from evojax.algo.cultural.knowledge_sources import (
-    update_topographic_ks_idx_zero,
+    update_topographic_ks,
     update_topographic_ks_idx_one,
     update_topographic_ks_idx_two,
     update_topographic_ks_idx_three,
@@ -388,8 +388,10 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
 
+        
+        
         # add a dimension to the fitness scores so that (256,) becomes (256, 1)
         fitness_adv = fitness_adv[:, None]
         fitness_mi = fitness_mi[:, None]
@@ -444,43 +446,43 @@ class PGPE(NEAlgorithm):
         best_fitness_mi = jnp.max(fitness_mi)
         best_fitness_con = jnp.max(fitness_con)
 
-        best_prev_fitness_adv = self.belief_space[5][8]
-        best_prev_fitness_mi = self.belief_space[5][9]
+        #best_prev_fitness_adv = self.belief_space[5][8]
+        #best_prev_fitness_mi = self.belief_space[5][9]
 
-        best_prev_fitness_adv = best_prev_fitness_adv.item()
-        best_prev_fitness_mi = best_prev_fitness_mi.item()
+        #best_prev_fitness_adv = best_prev_fitness_adv.item()
+        #best_prev_fitness_mi = best_prev_fitness_mi.item()
 
         # take the max between the current and previous best
-        if self._t < 2:
-            best_adv = best_fitness_adv
-            best_mi = best_fitness_mi
-        else:
-            best_adv = jnp.max(jnp.array([best_fitness_adv, best_prev_fitness_adv]))
-            best_mi = jnp.max(jnp.array([best_fitness_mi, best_prev_fitness_mi]))
+        #if self._t < 2:
+        #    best_adv = best_fitness_adv
+        #    best_mi = best_fitness_mi
+        #else:
+        #    best_adv = jnp.max(jnp.array([best_fitness_adv, best_prev_fitness_adv]))
+        #    best_mi = jnp.max(jnp.array([best_fitness_mi, best_prev_fitness_mi]))
 
         avg_fitness_adv = jnp.mean(fitness_adv)
         avg_fitness_mi = jnp.mean(fitness_mi)
 
-        rolling_window_avg_adv = self.belief_space[5][2]
-        rolling_window_avg_mi = self.belief_space[5][3]
+        #rolling_window_avg_adv = self.belief_space[5][2]
+        #rolling_window_avg_mi = self.belief_space[5][3]
 
-        mu_adv = jnp.mean(rolling_window_avg_adv)
-        mu_mi = jnp.mean(rolling_window_avg_mi)
+        #mu_adv = jnp.mean(rolling_window_avg_adv)
+        #mu_mi = jnp.mean(rolling_window_avg_mi)
 
-        sigma_adv = jnp.std(rolling_window_avg_adv) + 1e-8
-        sigma_mi = jnp.std(rolling_window_avg_mi) + 1e-8
+        #sigma_adv = jnp.std(rolling_window_avg_adv) + 1e-8
+        #sigma_mi = jnp.std(rolling_window_avg_mi) + 1e-8
 
-        L_adv_norm = (fitness_adv.flatten() - mu_adv) / sigma_adv
-        L_mi_norm = (fitness_mi.flatten() - mu_mi) / sigma_mi
+        #L_adv_norm = (fitness_adv.flatten() - mu_adv) / sigma_adv
+        #L_mi_norm = (fitness_mi.flatten() - mu_mi) / sigma_mi
 
 
-        rng_adv = jnp.max(fitness_adv) - jnp.min(fitness_adv)
-        rng_mi = jnp.max(fitness_mi) - jnp.min(fitness_mi)
-        rng_con = jnp.max(fitness_con) - jnp.min(fitness_con)
+        #rng_adv = jnp.max(fitness_adv) - jnp.min(fitness_adv)
+        #rng_mi = jnp.max(fitness_mi) - jnp.min(fitness_mi)
+        #rng_con = jnp.max(fitness_con) - jnp.min(fitness_con)
 
-        norm_fitness_adv = (fitness_adv - best_adv) / rng_adv
-        norm_fitness_mi = (fitness_mi - best_mi) / rng_mi
-        norm_fitness_con = (fitness_con - best_fitness_con) / rng_con
+        #norm_fitness_adv = (fitness_adv - best_adv) / rng_adv
+        #norm_fitness_mi = (fitness_mi - best_mi) / rng_mi
+        #norm_fitness_con = (fitness_con - best_fitness_con) / rng_con
 
         w_adv = avg_fitness_adv / (avg_fitness_adv + avg_fitness_mi)
         w_adv = jnp.clip(w_adv, 0.2, 0.8)
@@ -490,12 +492,12 @@ class PGPE(NEAlgorithm):
 
         #jax.debug.print('w_adv : {} ', w_adv)
         #jax.debug.print('w_con : {} ', w_con)
-        best_adv_window = self.belief_space[5][0]
-        best_mi_window = self.belief_space[5][1]
+        #best_adv_window = self.belief_space[5][0]
+        #best_mi_window = self.belief_space[5][1]
 
-        adv_window_var = jnp.var(best_adv_window)
-        mi_window_var = jnp.var(best_mi_window)
-        total_var = adv_window_var + mi_window_var
+        #adv_window_var = jnp.var(best_adv_window)
+        #mi_window_var = jnp.var(best_mi_window)
+        #total_var = adv_window_var + mi_window_var
 
         #if self._t < 60000:
         #    lambda_mi = 0.1 + self._t // 100000
@@ -508,7 +510,7 @@ class PGPE(NEAlgorithm):
         #if self._t < 100:
         #tchebycheff_scores = norm_fitness_adv.flatten()*(1-w_mi) + norm_fitness_mi.flatten()*w_mi #+ norm_fitness_con.flatten()*0.01
         #elif self._t < 8000:
-        tchebycheff_scores = L_adv_norm + L_mi_norm 
+        #tchebycheff_scores = L_adv_norm + L_mi_norm 
         #elif self._t < 16000:
         #    tchebycheff_scores = L_adv_norm + L_mi_norm * 0.2
         #elif self._t < 24000:
@@ -520,8 +522,8 @@ class PGPE(NEAlgorithm):
         #tchebycheff_scores =  lambda_adv * norm_fitness_adv.flatten() + lambda_mi * norm_fitness_mi.flatten() 
         #top_tchebycheff = tchebycheff_scores[top_index]
 
-        best_tchebycheff_scores = jnp.max(tchebycheff_scores)
-        avg_tchebycheff_scores = jnp.mean(tchebycheff_scores)
+        #best_tchebycheff_scores = jnp.max(tchebycheff_scores)
+        #avg_tchebycheff_scores = jnp.mean(tchebycheff_scores)
 
         #self._subkey, norm_entropy = calculate_entropy_sampling(self._subkey, self._solutions)
         
@@ -580,6 +582,9 @@ class PGPE(NEAlgorithm):
        
         #oldest_idx = self._arr[-1]
 
+        self.belief_space = update_topographic_ks(
+            self.belief_space, avg_per_code
+        )
         #jax.debug.print('max softmax idx {} : ', max_softmax_logits_idx)
         #if max_softmax_logits_idx == 0:
         #    self.belief_space = update_topographic_ks_idx_zero(
@@ -622,38 +627,38 @@ class PGPE(NEAlgorithm):
         #        self.belief_space, top_solution, self._stdev, top_scaled_noise, top_fitness_adv, top_fitness_mi, softmax_logits
         #    )
 
-        rolling_digits = self.belief_space[5][5]
-        unique_digits = jnp.unique(rolling_digits)
+        #rolling_digits = self.belief_space[5][5]
+        #unique_digits = jnp.unique(rolling_digits)
 
-        missing_digits = jnp.setdiff1d(jnp.arange(10), unique_digits)
+        #missing_digits = jnp.setdiff1d(jnp.arange(10), unique_digits)
         
-        if len(missing_digits) > 0:
-            first_missing_digit = missing_digits[0]
-        else:
-            first_missing_digit = 1
+        #if len(missing_digits) > 0:
+        #    first_missing_digit = missing_digits[0]
+        #else:
+        #    first_missing_digit = 1
 
-        topographic_center_idx = (first_missing_digit+1)*6-6
-        topographic_center = self.belief_space[4][topographic_center_idx][0]
-        topographic_stdev = self.belief_space[4][topographic_center_idx+1][0]
+        #topographic_center_idx = (first_missing_digit+1)*6-6
+        #topographic_center = self.belief_space[4][topographic_center_idx][0]
+        #topographic_stdev = self.belief_space[4][topographic_center_idx+1][0]
        
-        # create empty array
-        softmax_logits = jnp.zeros((10, 128))
-        self.belief_space = update_normative_ks(
-            self.belief_space,
-            best_fitness=best_fitness_adv,
-            best_fitness_mi=best_fitness_mi,
-            avg_fitness=avg_fitness_adv,
-            avg_fitness_mi=avg_fitness_mi,
-            best_adv=best_adv,
-            best_mi=best_mi,
-            rng_adv=rng_adv,
-            digit=None,#max_softmax_logits_idx,
-            best_tchebycheff_scores=best_tchebycheff_scores,
-            softmax_logits=softmax_logits,
-            missing_digit=first_missing_digit,
-            topographic_center=topographic_center,
-            topographic_stdev=topographic_stdev,
-        )
+        ## create empty array
+        #softmax_logits = jnp.zeros((10, 128))
+        #self.belief_space = update_normative_ks(
+        #    self.belief_space,
+        #    best_fitness=best_fitness_adv,
+        #    best_fitness_mi=best_fitness_mi,
+        #    avg_fitness=avg_fitness_adv,
+        #    avg_fitness_mi=avg_fitness_mi,
+        #    best_adv=best_adv,
+        #    best_mi=best_mi,
+        #    rng_adv=rng_adv,
+        #    digit=None,#max_softmax_logits_idx,
+        #    best_tchebycheff_scores=best_tchebycheff_scores,
+        #    softmax_logits=softmax_logits,
+        #    missing_digit=first_missing_digit,
+        #    topographic_center=topographic_center,
+        #    topographic_stdev=topographic_stdev,
+        #)
 
         #ranks = jnp.log10(ranks + 2)
 
@@ -694,7 +699,7 @@ class PGPE(NEAlgorithm):
         #if self._t < 4000:
             #fitness_scores = fitness_adv.flatten()*(1-w_mi) + fitness_mi.flatten()*w_mi + fitness_con.flatten()*0.1
         #elif self._t < 8000:
-        fitness_scores = fitness_adv.flatten()*w_adv + fitness_mi.flatten()*w_mi + fitness_con.flatten()*w_con
+        #fitness_scores = fitness_adv.flatten()*w_adv + fitness_mi.flatten()*w_mi + fitness_con.flatten()*w_con
         #elif self._t < 11000:
         #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*(60*(w_mi)) + fitness_con.flatten()*0.8
         #elif self._t < 16000:
@@ -776,26 +781,41 @@ class PGPE(NEAlgorithm):
             w_mi = 3.0
             phase = "REFINEMENT"
 
-        if self._t < 16000:
+        if self._t < 400:
+            w_diversity = 2.0
+            w_adversarial = 1.0
+            w_mi = 1.0
+            w_con = 1.0
+            w_r_cons = 2.0
+            w_r_sense = 1.0
+        elif self._t < 10000:
             w_diversity = 4.0
             w_adversarial = 10.0
-            w_mi = 10.0
+            w_mi = 1.0
             w_con = 1.0
-        elif self._t < 24000:
+            w_r_cons = 2.0
+            w_r_sense = 2.0
+        elif self._t < 18000:
             w_diversity = 2.0
             w_adversarial = 10.0
-            w_mi = 200.0
+            w_mi = 1.0
             w_con = 2.0
-        elif self._t < 40000:
+            w_r_cons = 2.0
+            w_r_sense = 2.0
+        elif self._t < 30000:
             w_diversity = 1.0
             w_adversarial = 10.0
-            w_mi = 1000.0
-            w_con = 40.0
+            w_mi = 1.0
+            w_con = 1.0
+            w_r_cons = 2.0
+            w_r_sense = 2.0
         else:
-            w_diversity = 0.20
+            w_diversity = 1.0
             w_adversarial = 20.0
-            w_mi = 100.0
-            w_con = 200.0
+            w_mi = 1.0
+            w_con = 2.0
+            w_r_cons = 4.0
+            w_r_sense = 4.0
         # print('Current Phase: {} ', phase)
         #w_adv = 6.0
         #w_div = 1.0
@@ -803,16 +823,16 @@ class PGPE(NEAlgorithm):
         # Apply weights
         #fitness_scores = fitness_adv.flatten() * w_adv + pop_var * w_div + fitness_mi.flatten() * w_mi + fitness_con.flatten() 
         # Apply weights
-        if self._t < 200:
-            fitness_scores = fitness_mi.flatten()
+        #if self._t < 200:
+        #    fitness_scores = fitness_mi.flatten()
         #elif self._t < 10000
-        else:
-            fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con#- penalty
         #else:
-        #    fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten() + norm_fitness_con.flatten()
+        fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense#- penalty
+        #else:
+        #fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten() + norm_fitness_con.flatten()*0.2
         #fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity - penalty
         #fitness_scores = fitness_adv.flatten() + pop_var * 20 - penalty
-        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,False)
+        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
 
         grad_center, grad_stdev = compute_reinforce_update(
                 fitness_scores=fitness_scores,
