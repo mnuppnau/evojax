@@ -121,6 +121,8 @@ class Discriminator(nn.Module):
     q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
     q = nn.leaky_relu(q, 0.2)
 
+    q_flat = q.reshape((q.shape[0], -1))
+    
     disc_logits = nn.Conv(self.q_cat, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02))(q)
     disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
       
@@ -130,7 +132,7 @@ class Discriminator(nn.Module):
     #print('log var shape : ', log_var.shape)
     var = jnp.squeeze(log_var)
     
-    return d, disc_logits, mu.squeeze(), jnp.exp(var)
+    return d, disc_logits, mu.squeeze(), jnp.exp(var), q_flat
 
 #class Generator(nn.Module):
 #    """
@@ -463,12 +465,16 @@ class GenPolicy(PolicyNetwork):
        
         self.model_disc = Discriminator()
 
+        self.model_q = Discriminator(training=False)
+        
         key = random.PRNGKey(122)
 
         key, key_gen, key_disc, key_bin = random.split(key, 4)
 
         variables_gen = self.model_gen.init(key_gen, jnp.ones([64,74], jnp.float32))
         variables_disc = self.model_disc.init(key_disc, jnp.ones([64,28,28,1], jnp.float32))
+        
+        variables_q = self.model_q.init(key_bin, jnp.ones([64,5,5,128], jnp.float32))
         
         self.init_params_gen, self.init_batch_stats_gen = variables_gen['params'], variables_gen['batch_stats']
         self.init_params_disc, self.init_batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
@@ -517,7 +523,10 @@ class GenPolicy(PolicyNetwork):
             #(preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
             (fake_data), vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
-            (preds, q, mu, var), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
+            
+            (preds, q, mu, var, _), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
+
+            _, _, _, _, q_flat = self.model_q.apply({'params': params_d, 'batch_stats': vars_d['batch_stats']}, fake_data, mutable=False)
             #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
 
             leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
@@ -528,7 +537,8 @@ class GenPolicy(PolicyNetwork):
 
             # calculate variance of fake data
             var_fake = jnp.var(fake_data[:, 4:24, 4:24, :], axis=0)
-            
+           
+            #jax.debug.print('q_flat shape: {}', q_flat.shape)
             # take mean of variance
             mean_var_fake = jnp.mean(var_fake)
 
@@ -537,7 +547,7 @@ class GenPolicy(PolicyNetwork):
             #leaves_batch_stats_q, _ = jax.tree_util.tree_flatten(vars_q['batch_stats'])
             #flat_batch_stats_q = jnp.concatenate([p.flatten() for p in leaves_batch_stats_q])
             
-            return fake_data, flat_batch_stats_gen, preds, q, flat_batch_stats_disc, mu, var, mean_var_fake
+            return fake_data, flat_batch_stats_gen, preds, q, flat_batch_stats_disc, mu, var, mean_var_fake, q_flat
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -564,9 +574,9 @@ class GenPolicy(PolicyNetwork):
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, batch_stats_g, preds, disc_logits, batch_stats_d, mu, var, mean_var_fake = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
+        fake_data, batch_stats_g, preds, disc_logits, batch_stats_d, mu, var, mean_var_fake, q_flat = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
         
-        return fake_data, preds, disc_logits, batch_stats_g, batch_stats_d, mu, var, mean_var_fake, p_states
+        return fake_data, preds, disc_logits, batch_stats_g, batch_stats_d, mu, var, mean_var_fake, q_flat, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):

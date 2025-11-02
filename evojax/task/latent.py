@@ -158,15 +158,15 @@ class Latent_Points(VectorizedTask):
 
                 #batch_cat = random.randint(cat_key, (self.batch_size,), 0, self.n_classes)
                 
-                c = jnp.tile(jnp.arange(10),7)
+                #c = jnp.tile(jnp.arange(10),7)
                 # remove the last 4 elements to make it 256
-                c = c[:self.batch_size]
-                batch_cat_one_hot = jax.nn.one_hot(c, 10)
+                #c = c[:self.batch_size]
+                #batch_cat_one_hot = jax.nn.one_hot(c, 10)
                 
                 #batch_cat_one_hot = jax.nn.one_hot(batch_cat, self.n_classes)
                 # FIXED categorical code (same for all 64 images in this evaluation)
-                #c_cat_idx = random.randint(cat_key, (), 0, self.n_classes)
-                #batch_cat_one_hot = jax.nn.one_hot(jnp.full((self.batch_size,), c_cat_idx), self.n_classes)
+                c_cat_idx = random.randint(cat_key, (), 0, self.n_classes)
+                batch_cat_one_hot = jax.nn.one_hot(jnp.full((self.batch_size,), c_cat_idx), self.n_classes)
                 
 
                 c_cont_value = random.uniform(con_key, (2,), minval=-1.0, maxval=1.0)
@@ -187,13 +187,52 @@ class Latent_Points(VectorizedTask):
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
-        def step_fn(state, action, q, mu, var):
+        def step_fn(state, action, q, mu, var, q_flat, topographic_ks):
            
-            q_cat = jax.nn.log_softmax(q, axis=-1)
-            
-            #loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
+            B, F = q_flat.shape # B=batch size, F=features
+            K = topographic_ks.shape[0]  # K=number of topographic codes
 
-            loss_q_disc = cpc_mi_loss(state.cat_codes, q_cat, negative_samples=10)
+            c = jnp.tile(jnp.arange(self.n_classes), (64 + 10 - 1) // 10 )[ :64]
+            topo_for_sample = topographic_ks[c]  # (B, F)
+
+            sq = jnp.sum((q_flat - topo_for_sample) ** 2, axis=-1)
+
+                # Aggregate per code (handles any imbalance safely)
+            sums_per_code   = jnp.bincount(c, weights=sq, length=K)         # [K]
+            counts_per_code = jnp.bincount(c, length=K).astype(q_flat.dtype)  # [K]
+
+            means_per_code = jnp.where(counts_per_code > 0,
+                                       sums_per_code / (counts_per_code + 1e-8),
+                                       0.0)                                     # [K]
+            num_present = jnp.maximum(1.0, jnp.sum((counts_per_code > 0).astype(q_flat.dtype)))
+            compact = jnp.sum(means_per_code) / num_present   
+
+            diffs = topographic_ks[:, None, :] - topographic_ks[None, :, :]  # [K, K, F] 
+
+            dists = jnp.linalg.norm(diffs, axis=-1)  # [K, K]
+            iu = jnp.triu_indices(K, k=1)
+            sep = jnp.mean(jnp.exp(-dists[iu] / 2.0))  # scalar
+
+            r_cons = (-compact) + sep * 0.5
+       
+            # r_sense, keep first 60 samples from q_flat batch
+            q_flat60 = q_flat[:60]
+
+            grouped = q_flat60.reshape((6, 10, F))
+            rolled = jnp.roll(grouped, shift=1, axis=1)
+            diffs = jnp.linalg.norm(grouped - rolled, axis=-1)
+
+            r_sense = jnp.mean(diffs)
+            #jax.debug.print('r_cons: {r}', r=r_cons)
+            sum_per_cat_code = state.cat_codes.T @ q_flat
+
+            count_per_code = state.cat_codes.sum(axis=0)
+            
+            q_cat = jax.nn.log_softmax(q, axis=-1)
+
+            loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
+            loss_q_disc = -loss_q_disc
+            #loss_q_disc = cpc_mi_loss(state.cat_codes, q_cat, negative_samples=10)
 
             loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
            
@@ -206,7 +245,7 @@ class Latent_Points(VectorizedTask):
             #loss_con = -loss_con
             loss_g = -loss_g#*0.1 + loss_q_disc# + loss_q_cont*0.005
             
-            return state, loss_q_disc, loss_g, loss_con, jnp.ones(())
+            return state, loss_q_disc, loss_g, loss_con, sum_per_cat_code, count_per_code, r_cons, r_sense, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
@@ -218,5 +257,7 @@ class Latent_Points(VectorizedTask):
              action: jnp.ndarray,
              disc_logits: jnp.ndarray,
              mu: jnp.ndarray,
-             var: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
-        return self._step_fn(state, action, disc_logits, mu, var)
+             var: jnp.ndarray,
+             q_flat: jnp.ndarray,
+             topographic_ks: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
+        return self._step_fn(state, action, disc_logits, mu, var, q_flat,topographic_ks)

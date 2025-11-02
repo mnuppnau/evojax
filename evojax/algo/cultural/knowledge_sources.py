@@ -66,80 +66,11 @@ def initialize_history_ks(
 
 
 def initialize_topographic_ks(
-    param_size: int, max_individuals: int = 2
+    features: int, num_codes: int = 10
 ):
     return (
-        jnp.zeros((max_individuals, param_size)),  # best solutions for 0
-        jnp.zeros((max_individuals, param_size)),  # best stdev for 0
-        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 0
-        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 0
-        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 0
-        jnp.full((max_individuals,),1000),  # q value for 0
-
-        jnp.zeros((max_individuals, param_size)), # best solutions for 1
-        jnp.zeros((max_individuals, param_size)),  # best stdev for 1
-        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 1
-        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 1
-        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 1
-        jnp.full((max_individuals,),1000),  # q value for 1
-
-        jnp.zeros((max_individuals, param_size)), # best solutions for 2
-        jnp.zeros((max_individuals, param_size)),  # best stdev for 2
-        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 2
-        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 2
-        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 2
-        jnp.full((max_individuals,),1000),  # q value for 2
-
-        jnp.zeros((max_individuals, param_size)), # best solutions for 3
-        jnp.zeros((max_individuals, param_size)),  # best stdev for 3
-        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 3
-        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 3
-        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 3
-        jnp.full((max_individuals,),1000),  # q value for 3
-
-        jnp.zeros((max_individuals, param_size)), # best solutions for 4
-        jnp.zeros((max_individuals, param_size)),  # best stdev for 4
-        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 4
-        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 4
-        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 4
-        jnp.full((max_individuals,),1000),  # q value for 4
-        
-        jnp.zeros((max_individuals, param_size)), # best solutions for 5
-        jnp.zeros((max_individuals, param_size)),  # best stdev for 5
-        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 5
-        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 5
-        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 5
-        jnp.full((max_individuals,),1000),  # q value for 5
-
-        jnp.zeros((max_individuals, param_size)), # best solutions for 6
-        jnp.zeros((max_individuals, param_size)),  # best stdev for 6
-        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 6
-        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 6
-        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 6
-        jnp.full((max_individuals,),1000),  # q value for 6
-
-        jnp.zeros((max_individuals, param_size)), # best solutions for 7
-        jnp.zeros((max_individuals, param_size)),  # best stdev for 7
-        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 7
-        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 7
-        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 7
-        jnp.full((max_individuals,),1000),  # q value for 7
-
-        jnp.zeros((max_individuals, param_size)), # best solutions for 8
-        jnp.zeros((max_individuals, param_size)),  # best stdev for 8
-        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 8
-        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 8
-        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 8
-        jnp.full((max_individuals,),1000),  # q value for 8
-
-        jnp.zeros((max_individuals, param_size)), # best solutions for 9
-        jnp.zeros((max_individuals, param_size)),  # best stdev for 9
-        jnp.zeros((max_individuals, param_size)),  # best scaled noise for 9
-        jnp.full((max_individuals,),1000),  # fitness values, adversarial for 9
-        jnp.full((max_individuals,),1000),  # fitness values, mutual information for 9
-        jnp.full((max_individuals,),1000),  # q value for 9
-
-    )
+        jnp.zeros((num_codes, features)),  # best solutions for 0
+            )
 
 
 def initialize_normative_ks(param_size: int, pop_size: int = 64):
@@ -384,6 +315,27 @@ def update_history_ks(
     )
 
     return updated_belief_space_history
+
+@jax.jit
+def update_topographic_ks(
+    belief_space, avg_per_code
+):
+    topographic_ks = belief_space[4]
+    
+    hist_avg_per_code = topographic_ks[0]    
+
+    # use .70 of previous history and .30 of new average per code
+    updated_hist_avg_per_code = 0.7 * hist_avg_per_code + 0.3 * avg_per_code
+
+    updated_topographic_ks = (
+        updated_hist_avg_per_code,
+    )
+
+    updated_belief_space_topographic = (
+        belief_space[:4] + (updated_topographic_ks,) + belief_space[5:]
+    )
+
+    return updated_belief_space_topographic
 
 @jax.jit
 def update_topographic_ks_idx_zero(
