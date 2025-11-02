@@ -774,18 +774,39 @@ class Trainer(object):
                 
                 self._key, key_z, key_con = jax.random.split(self._key, 3)
                 
+                z_base = jax.random.normal(key_z, (7, 62))  # 6 different z vectors
+
+                # Expand: each z paired with all 10 codes
+                z_batch = jnp.repeat(z_base, 10, axis=0)  # Shape: (60, 64)
+                z_batch = z_batch[:64]
+
+                # Result: [z0, z0, z0, ...(10x), z1, z1, z1, ...(10x), ..., z5, z5, z5, ...(10x)]
+                
+                # Categorical codes: cycle through 0-9 for each z
+                #c_cat_indices = jnp.tile(jnp.arange(10), 6)  # Shape: (60,)
+                # Result: [0,1,2,3,4,5,6,7,8,9, 0,1,2,3,4,5,6,7,8,9, ..., 0,1,2,3,4,5,6,7,8,9]
+                #c_onehot = jax.nn.one_hot(c_cat_indices, 10)  # Shape: (60, 10)
+                
+                # Continuous codes: FIXED across batch
+                #c_cont_value = jax.random.uniform(key_con, (2,), -1.0, 1.0)
+                #con = jnp.tile(c_cont_value, (60, 1))  # Shape: (60, 2)
+                
                 # 1) Balanced discrete codes across the batch
                 reps = (64 + 10 - 1) // 10
                 c = jnp.tile(jnp.arange(10), reps)[:64]        # shape [B]
                 c_onehot = jax.nn.one_hot(c, 10)                       # [B, n_disc]
-
-                # 2) Noise
-                z = jax.random.normal(key_z, (64, 62))          # [B, Z]
-
-                # 3) Continuous codes: stratified or grid-ish is best; random is fine to start
                 con = jax.random.uniform(key_con, (64, 2), minval=-1.0, maxval=1.0)  # [B, C]
 
-                latent = jnp.concatenate([z, c_onehot, con], axis=-1)      # [B, Z+disc+con] 
+
+                latent = jnp.concatenate([z_batch, c_onehot, con], axis=-1)      # [B, Z+disc+con]
+                #jax.debug.print('latent shape: {} ', latent.shape)
+                # 2) Noise
+                #z = jax.random.normal(key_z, (64, 62))          # [B, Z]
+
+                # 3) Continuous codes: stratified or grid-ish is best; random is fine to start
+                #con = jax.random.uniform(key_con, (64, 2), minval=-1.0, maxval=1.0)  # [B, C]
+
+                #latent = jnp.concatenate([z, c_onehot, con], axis=-1)      # [B, Z+disc+con] 
 
                 topographic_ks = belief_space[4]
 
