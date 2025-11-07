@@ -388,7 +388,7 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
 
         
         
@@ -397,14 +397,28 @@ class PGPE(NEAlgorithm):
         fitness_mi = fitness_mi[:, None]
         fitness_con = fitness_con[:, None]
 
+        r_cons2 = r_cons[:, None]
+        r_sense2 = r_sense[:, None]
+        r_intra2 = r_intra[:, None]
+        pop_var2 = pop_var[:, None]
+
         penalty = jnp.where(
              pop_var < self.MIN_DIVERSITY,
              (self.MIN_DIVERSITY - pop_var) * 100,  # Heavy penalty if below threshold
              0.0  # No penalty if above threshold
         )
         #jax.debug.print('fitness adv scores {} : ', fitness_adv.flatten())
-        
-        objectives = jnp.hstack([-fitness_mi, -fitness_adv, -fitness_con])
+       
+        if self._t < 20000:
+            objectives = jnp.hstack([-fitness_adv, -fitness_mi, -fitness_con])
+        elif self._t < 30000:
+            objectives = jnp.hstack([-fitness_adv, -r_cons2,  -fitness_mi])
+        elif self._t < 40000:
+            objectives = jnp.hstack([-r_cons2, -r_sense2, -fitness_adv])
+        else: 
+            objectives = jnp.hstack([-r_cons2, -r_intra2, -fitness_adv])
+
+        #objectives = jnp.hstack([-fitness_adv, -fitness_mi, -pop_var2 , r_cons2, -r_sense2, -r_intra2, -fitness_con])
         #jax.debug.print('objectives {} : ', objectives)
         #jax.debug.print('objectives shape {} : ', objectives.shape)
         ranks = non_dominated_sort_lax(objectives)
@@ -418,7 +432,7 @@ class PGPE(NEAlgorithm):
         #cdist = compute_crowding_distance(objectives, ranks)
 
         #if adv:
-        order = jnp.lexsort((-fitness_mi.flatten(), ranks))
+        order = jnp.lexsort((-fitness_adv.flatten(), ranks))
         #else:
         #order = jnp.lexsort((-fitness_adv.flatten(), ranks))
 
@@ -711,7 +725,7 @@ class PGPE(NEAlgorithm):
             #fitness_scores = tchebycheff_scores
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() + fitness_con.flatten() * 0.01
         #fitness_scores = norm_fitness_adv.flatten()*(1-w_mi) + norm_fitness_mi.flatten()*w_mi + norm_fitness_con.flatten()*w_con
-            #fitness_scores = -jnp.argsort(order+1)
+        #fitness_scores = -jnp.argsort(order+1)
         #else:
             #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*50
             #closeness = compute_closeness(objectives)
@@ -788,34 +802,39 @@ class PGPE(NEAlgorithm):
             w_con = 1.0
             w_r_cons = 2.0
             w_r_sense = 1.0
+            w_r_intra = 0.5
         elif self._t < 10000:
             w_diversity = 4.0
             w_adversarial = 10.0
-            w_mi = 1.0
+            w_mi = 0.1
             w_con = 1.0
             w_r_cons = 2.0
-            w_r_sense = 2.0
+            w_r_sense = 1.4
+            w_r_intra = 0.6
         elif self._t < 18000:
+            w_diversity = 3.0
+            w_adversarial = 10.0
+            w_mi = 0.1
+            w_con = 2.0
+            w_r_cons = 1.4
+            w_r_sense = 2.0
+            w_r_intra = 0.4
+        elif self._t < 30000:
             w_diversity = 2.0
             w_adversarial = 10.0
-            w_mi = 1.0
+            w_mi = 0.1
             w_con = 2.0
-            w_r_cons = 2.0
-            w_r_sense = 2.0
-        elif self._t < 30000:
-            w_diversity = 1.0
-            w_adversarial = 10.0
-            w_mi = 1.0
-            w_con = 1.0
-            w_r_cons = 2.0
-            w_r_sense = 2.0
+            w_r_cons = 1.0
+            w_r_sense = 1.6
+            w_r_intra = 1.0
         else:
             w_diversity = 1.0
             w_adversarial = 20.0
             w_mi = 1.0
-            w_con = 2.0
-            w_r_cons = 4.0
-            w_r_sense = 4.0
+            w_con = 6.0
+            w_r_cons = 1.4
+            w_r_sense = 2.0
+            w_r_intra = 1.0
         # print('Current Phase: {} ', phase)
         #w_adv = 6.0
         #w_div = 1.0
@@ -827,11 +846,21 @@ class PGPE(NEAlgorithm):
         #    fitness_scores = fitness_mi.flatten()
         #elif self._t < 10000
         #else:
-        fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense#- penalty
+        #if self._t < 30000:
+        #    fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense #+ r_intra*w_r_intra#- penalty
+        #elif self._t < 40000:
+        #    fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten() + norm_fitness_con.flatten()*0.2
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() + fitness_con.flatten()
         #else:
-        #fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten() + norm_fitness_con.flatten()*0.2
-        #fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity - penalty
+        #    fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense
+
         #fitness_scores = fitness_adv.flatten() + pop_var * 20 - penalty
+        if self._t > 18000:
+            fitness_scores = -jnp.argsort(order+1)
+        else:
+            fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense #+ r_intra*w_r_intra#- penalty
+            
+
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
 
         grad_center, grad_stdev = compute_reinforce_update(
