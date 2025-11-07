@@ -452,7 +452,7 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
                   # use 0.9 as the label for real images instead of 1.0
                   real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.90)
                   # use 0.1 as the label for fake images instead of 0.0
-                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds)+0.10)
+                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds)+0.05)
 
                   real_loss = jnp.mean(real_loss)
                   fake_loss = jnp.mean(fake_loss)
@@ -462,7 +462,7 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
 
                   #jax.debug.print('mi loss: {} ', loss_mi)
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = (real_loss + fake_loss) / 2.0 + loss_mi + loss_con*0.1
+                  loss = (real_loss + fake_loss) / 2.0 + loss_mi + loss_con*0.2
                 
                   return loss, vars_d
 
@@ -646,7 +646,7 @@ class Trainer(object):
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.solver_disc = optax.adam(learning_rate=0.00008, b1=0.5, b2=0.999)
+        self.solver_disc = optax.adam(learning_rate=0.0001, b1=0.5, b2=0.999)
 
     def run(self, demo_mode: bool = False) -> float:
 
@@ -723,7 +723,7 @@ class Trainer(object):
                 
                     batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
 
-                if i % 5 == 0:
+                if i % 4 == 0:
                     for mini_batch in range(num_mini_batches):
                         # Sample batch of data.
 
@@ -774,53 +774,31 @@ class Trainer(object):
                 
                 self._key, key_z, key_con = jax.random.split(self._key, 3)
                 
-                z_base = jax.random.normal(key_z, (7, 62))  # 6 different z vectors
-
-                # Expand: each z paired with all 10 codes
-                z_batch = jnp.repeat(z_base, 10, axis=0)  # Shape: (60, 64)
-                z_batch = z_batch[:64]
-
-                # Result: [z0, z0, z0, ...(10x), z1, z1, z1, ...(10x), ..., z5, z5, z5, ...(10x)]
+                z_base = jax.random.normal(key_z, (6, 62))  # 6 different z vectors
+                con_base = jax.random.uniform(key_con, (6, 2), minval=-1, maxval=1)  # 6 different continuous codes
+                z_block = jnp.repeat(z_base, 10, axis=0)  # Repeat each z 10 times for each categorical code
+                con_block = jnp.repeat(con_base, 10, axis=0)  # Repeat each con code 10 times
+                codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 6)  # Categorical codes from 0 to 9, repeated 6 times
+                onehot60 = jax.nn.one_hot(codes60, 10)
                 
-                # Categorical codes: cycle through 0-9 for each z
-                #c_cat_indices = jnp.tile(jnp.arange(10), 6)  # Shape: (60,)
-                # Result: [0,1,2,3,4,5,6,7,8,9, 0,1,2,3,4,5,6,7,8,9, ..., 0,1,2,3,4,5,6,7,8,9]
-                #c_onehot = jax.nn.one_hot(c_cat_indices, 10)  # Shape: (60, 10)
-                
-                # Continuous codes: FIXED across batch
-                #c_cont_value = jax.random.uniform(key_con, (2,), -1.0, 1.0)
-                #con = jnp.tile(c_cont_value, (60, 1))  # Shape: (60, 2)
-                
-                # 1) Balanced discrete codes across the batch
-                reps = (64 + 10 - 1) // 10
-                c = jnp.tile(jnp.arange(10), reps)[:64]        # shape [B]
-                c_onehot = jax.nn.one_hot(c, 10)                       # [B, n_disc]
-                con = jax.random.uniform(key_con, (64, 2), minval=-1.0, maxval=1.0)  # [B, C]
+                latent60 = jnp.concatenate([z_block, onehot60, con_block], axis=-1)
 
-
-                latent = jnp.concatenate([z_batch, c_onehot, con], axis=-1)      # [B, Z+disc+con]
-                #jax.debug.print('latent shape: {} ', latent.shape)
-                # 2) Noise
-                #z = jax.random.normal(key_z, (64, 62))          # [B, Z]
-
-                # 3) Continuous codes: stratified or grid-ish is best; random is fine to start
-                #con = jax.random.uniform(key_con, (64, 2), minval=-1.0, maxval=1.0)  # [B, C]
-
-                #latent = jnp.concatenate([z, c_onehot, con], axis=-1)      # [B, Z+disc+con] 
-
+                latent = jnp.concat([latent60, latent60[:4]], axis=0)
+                c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
+                con_full_block = jnp.concat([con_block, con_block[:4]], axis=0)
                 topographic_ks = belief_space[4]
 
                 avg_per_code = topographic_ks[0]
                 
-                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, cat_codes=c_onehot, con_codes=con, features=avg_per_code, generator=True, test=False
+                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, cat_codes=c_onehot, codes60=codes60, con_codes=con_full_block, features=avg_per_code, generator=True, test=False
                 )
 
                 #jax.debug.print('fake_imgs shape: {} ', fake_imgs.shape)
                 if isinstance(self.solver_gen, QualityDiversityMethod):
                     self.solver_gen.observe_bd(bds_gen)
                 
-                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, adv=False)
+                self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, adv=False)
 
                 params_gen, belief_space = self.solver_gen.ask()
 
@@ -926,6 +904,14 @@ class Trainer(object):
                         'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
                             i, r_sense.size, r_sense.max(), r_sense.mean(),
                             r_sense.min(), r_sense.std()))
+                    
+                    r_intra = np.array(r_intra)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, r_intra.size, r_intra.max(), r_intra.mean(),
+                            r_intra.min(), r_intra.std()))
+
                     self._logger.info(
                         'Iter={0}, d_loss={1:.4f}'.format(
                             i, d_loss))

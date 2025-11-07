@@ -31,6 +31,7 @@ class State(TaskState):
     obs: jnp.ndarray
     #latent_input: jnp.ndarray
     cat_codes: jnp.ndarray
+    codes60: jnp.ndarray
     con_codes: jnp.ndarray
     batch_stats_gen: any
     batch_stats_disc: any
@@ -183,47 +184,93 @@ class Latent_Points(VectorizedTask):
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot, batch_con], axis=-1)
                 #batch_latent_concat = jnp.concatenate([batch_latent, c_cat_batch, c_cont_batch], axis=-1)
             
-            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, con_codes=batch_con, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q)
+            return State(obs=batch_latent_concat, cat_codes=batch_cat_one_hot, codes60=batch_cat_one_hot, con_codes=batch_con, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q)
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
         def step_fn(state, action, q, mu, var, q_flat, topographic_ks):
            
+            # normalize q_flat and topographic_ks
+            q_flat_norm = jnp.linalg.norm(q_flat, axis=-1, keepdims=True)
+            q_flat = q_flat / jnp.maximum(q_flat_norm, 1e-8)
+
+            topographic_ks_norm = jnp.linalg.norm(topographic_ks, axis=-1, keepdims=True)
+            topographic_ks = topographic_ks / jnp.maximum(topographic_ks_norm, 1e-8)
+
             B, F = q_flat.shape # B=batch size, F=features
             K = topographic_ks.shape[0]  # K=number of topographic codes
 
-            c = jnp.tile(jnp.arange(self.n_classes), (64 + 10 - 1) // 10 )[ :64]
-            topo_for_sample = topographic_ks[c]  # (B, F)
+            #c = jnp.tile(jnp.arange(self.n_classes), (64 + 10 - 1) // 10 )[ :64]
+            q_flat60 = q_flat[:60]
+            codes_full = jnp.concatenate([state.codes60, state.codes60[:4]], axis=0)
+            topo_for_sample = topographic_ks[state.codes60]  # (B, F)
 
-            sq = jnp.sum((q_flat - topo_for_sample) ** 2, axis=-1)
+            #sq = jnp.sum((q_flat60 - topo_for_sample) ** 2, axis=-1)
+            cos_sim = jnp.sum(q_flat60 * topo_for_sample, axis=-1)
+            compact = jnp.mean(1.0 - cos_sim)
+            S = topographic_ks @ topographic_ks.T  # [K, K]
 
-                # Aggregate per code (handles any imbalance safely)
-            sums_per_code   = jnp.bincount(c, weights=sq, length=K)         # [K]
-            counts_per_code = jnp.bincount(c, length=K).astype(q_flat.dtype)  # [K]
+            cos_dist = 1.0 - S
+            mask = jnp.triu(jnp.ones((K, K), dtype=cos_dist.dtype), k=1)
+            sep = jnp.sum(cos_dist * mask) / jnp.maximum(jnp.sum(mask), 1.0)
 
-            means_per_code = jnp.where(counts_per_code > 0,
-                                       sums_per_code / (counts_per_code + 1e-8),
-                                       0.0)                                     # [K]
-            num_present = jnp.maximum(1.0, jnp.sum((counts_per_code > 0).astype(q_flat.dtype)))
-            compact = jnp.sum(means_per_code) / num_present   
 
-            diffs = topographic_ks[:, None, :] - topographic_ks[None, :, :]  # [K, K, F] 
+            # Aggregate per code (handles any imbalance safely)
+            #sums_per_code   = jnp.bincount(state.codes60, weights=sq, length=K)         # [K]
+            #counts_per_code = jnp.bincount(state.codes60, length=K).astype(q_flat.dtype)  # [K]
 
-            dists = jnp.linalg.norm(diffs, axis=-1)  # [K, K]
-            iu = jnp.triu_indices(K, k=1)
-            sep = jnp.mean(jnp.exp(-dists[iu] / 2.0))  # scalar
+            #means_per_code = jnp.where(counts_per_code > 0,
+            #                           sums_per_code / (counts_per_code + 1e-8),
+            #                           0.0)                                     # [K]
+            #num_present = jnp.maximum(1.0, jnp.sum((counts_per_code > 0).astype(q_flat.dtype)))
+            #compact = jnp.sum(means_per_code) / num_present   
 
+            #diffs = topographic_ks[:, None, :] - topographic_ks[None, :, :]  # [K, K, F] 
+
+            #dists = jnp.linalg.norm(diffs, axis=-1)  # [K, K]
+            #iu = jnp.triu_indices(K, k=1)
+            #sep = jnp.mean(jnp.exp(-dists[iu] / 2.0))  # scalar
+            
+            # JIT-safe sep (pick one)
+            #mask = jnp.triu(jnp.ones((K, K), dtype=dists.dtype), k=1)
+            #sep = jnp.sum(dists * mask) / jnp.maximum(jnp.sum(mask), 1.0)
+            
             r_cons = (-compact) + sep * 0.5
        
             # r_sense, keep first 60 samples from q_flat batch
-            q_flat60 = q_flat[:60]
+            #q_flat60 = q_flat[:60]
 
             grouped = q_flat60.reshape((6, 10, F))
-            rolled = jnp.roll(grouped, shift=1, axis=1)
-            diffs = jnp.linalg.norm(grouped - rolled, axis=-1)
+            n_sense = jnp.linalg.norm(grouped, axis=-1, keepdims=True)
+            grouped = grouped / jnp.maximum(n_sense, 1e-8)
 
-            r_sense = jnp.mean(diffs)
+            rolled = jnp.roll(grouped, shift=1, axis=1)
+            
+            #diffs = jnp.linalg.norm(grouped - rolled, axis=-1)
+
+            cos_sim = jnp.sum(grouped * rolled, axis=-1)
+            cos_dist = 1.0 - cos_sim
+
+            cos_dist = jnp.minimum(cos_dist, 0.5)
+
+            r_sense = jnp.mean(cos_dist)
             #jax.debug.print('r_cons: {r}', r=r_cons)
+            grouped_intra = q_flat60.reshape(6, 10, F).transpose(1,0,2)  # (10, 6, F)
+
+            n_intra = jnp.linalg.norm(grouped_intra, axis=-1, keepdims=True)
+            grouped_intra_cosine = grouped_intra / jnp.maximum(n_intra, 1e-8)
+
+            mean_k = jnp.mean(grouped_intra_cosine, axis=1, keepdims=True)  # (10, 1, F)
+            sq_dev = jnp.sum((grouped_intra_cosine - mean_k) ** 2, axis=-1)  # (10, 6)
+
+            spread_k = jnp.mean(sq_dev, axis=1)  # (10,)
+
+            below = jnp.clip((spread_k / jnp.maximum(0.05, 1e-8)),0.0,1.0)
+            above = 1 - jnp.clip((spread_k - 0.2) / jnp.maximum(0.2, 1e-8),0.0,1.0)
+
+            reward_k = jnp.minimum(below, above)
+            r_intra = jnp.mean(reward_k)
+
             sum_per_cat_code = state.cat_codes.T @ q_flat
 
             count_per_code = state.cat_codes.sum(axis=0)
@@ -245,7 +292,7 @@ class Latent_Points(VectorizedTask):
             #loss_con = -loss_con
             loss_g = -loss_g#*0.1 + loss_q_disc# + loss_q_cont*0.005
             
-            return state, loss_q_disc, loss_g, loss_con, sum_per_cat_code, count_per_code, r_cons, r_sense, jnp.ones(())
+            return state, loss_q_disc, loss_g, loss_con, sum_per_cat_code, count_per_code, r_cons, r_sense, r_intra, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
