@@ -409,14 +409,16 @@ class PGPE(NEAlgorithm):
         )
         #jax.debug.print('fitness adv scores {} : ', fitness_adv.flatten())
        
-        if self._t < 20000:
-            objectives = jnp.hstack([-fitness_adv, -fitness_mi, -fitness_con])
+        if self._t < 10000:
+            objectives = jnp.hstack([-fitness_adv, -fitness_mi])
         elif self._t < 30000:
             objectives = jnp.hstack([-fitness_adv, -r_cons2,  -fitness_mi])
-        elif self._t < 40000:
-            objectives = jnp.hstack([-r_cons2, -r_sense2, -fitness_adv])
+        elif self._t < 54000:
+            objectives = jnp.hstack([r_cons2, -r_sense2, -fitness_adv])
+        elif self._t < 70000:
+            objectives = jnp.hstack([-r_sense2, r_cons2, -fitness_adv])
         else: 
-            objectives = jnp.hstack([-r_cons2, -r_intra2, -fitness_adv])
+            objectives = jnp.hstack([r_cons2, -r_intra2, -fitness_adv])
 
         #objectives = jnp.hstack([-fitness_adv, -fitness_mi, -pop_var2 , r_cons2, -r_sense2, -r_intra2, -fitness_con])
         #jax.debug.print('objectives {} : ', objectives)
@@ -767,74 +769,82 @@ class PGPE(NEAlgorithm):
         #    phase = "BALANCED"
       
         # Phase detection
-        if avg_diversity < self.MIN_DIVERSITY * 0.8:
-            # Phase 1: Need diversity desperately
-            w_diversity = 50.0
-            w_adversarial = 1.0
-            w_mi = 0.0  # Not yet
-            phase = "BOOTSTRAPPING_DIVERSITY"
-            
-        elif avg_diversity >= self.MIN_DIVERSITY and std_diversity > 0.002 and avg_fitness_adv < -0.85:
-            # Phase 2: Have diversity, need quality
-            w_diversity = 5.0
-            w_adversarial = 10.0
-            w_mi = 0.0  # Still not yet
-            phase = "IMPROVING_QUALITY"
-        
-        elif avg_diversity >= self.MIN_DIVERSITY and avg_fitness_adv >= -0.85:
-            # Phase 2b: Quality good, now add structure  
-            w_diversity = 5.0  # Maintain
-            w_adversarial = 5.0  # Maintain
-            w_mi = 2.0  # ADD MI NOW
-            phase = "ADDING_STRUCTURE"
-            
-        else:
-            # Phase 3: Refinement
-            w_diversity = 5.0
-            w_adversarial = 10.0
-            w_mi = 3.0
-            phase = "REFINEMENT"
+        #if avg_diversity < self.MIN_DIVERSITY * 0.8:
+        #    # Phase 1: Need diversity desperately
+        #    w_diversity = 50.0
+        #    w_adversarial = 1.0
+        #    w_mi = 0.0  # Not yet
+        #    phase = "BOOTSTRAPPING_DIVERSITY"
+        #    
+        #elif avg_diversity >= self.MIN_DIVERSITY and std_diversity > 0.002 and avg_fitness_adv < -0.85:
+        #    # Phase 2: Have diversity, need quality
+        #    w_diversity = 5.0
+        #    w_adversarial = 10.0
+        #    w_mi = 0.0  # Still not yet
+        #    phase = "IMPROVING_QUALITY"
+        #
+        #elif avg_diversity >= self.MIN_DIVERSITY and avg_fitness_adv >= -0.85:
+        #    # Phase 2b: Quality good, now add structure  
+        #    w_diversity = 5.0  # Maintain
+        #    w_adversarial = 5.0  # Maintain
+        #    w_mi = 2.0  # ADD MI NOW
+        #    phase = "ADDING_STRUCTURE"
+        #    
+        #else:
+        #    # Phase 3: Refinement
+        #    w_diversity = 5.0
+        #    w_adversarial = 10.0
+        #    w_mi = 3.0
+        #    phase = "REFINEMENT"
 
         if self._t < 400:
             w_diversity = 2.0
             w_adversarial = 1.0
-            w_mi = 1.0
+            w_mi = 4.0
             w_con = 1.0
-            w_r_cons = 2.0
+            w_r_cons = 0.2
             w_r_sense = 1.0
-            w_r_intra = 0.5
-        elif self._t < 10000:
-            w_diversity = 4.0
-            w_adversarial = 10.0
-            w_mi = 0.1
+            w_r_intra = 0.1
+        elif self._t < 12000:
+            w_diversity = 2.0
+            w_adversarial = 2.0
+            w_mi = 4.0
             w_con = 1.0
             w_r_cons = 2.0
-            w_r_sense = 1.4
-            w_r_intra = 0.6
-        elif self._t < 18000:
-            w_diversity = 3.0
-            w_adversarial = 10.0
-            w_mi = 0.1
-            w_con = 2.0
-            w_r_cons = 1.4
-            w_r_sense = 2.0
-            w_r_intra = 0.4
-        elif self._t < 30000:
-            w_diversity = 2.0
-            w_adversarial = 10.0
-            w_mi = 0.1
-            w_con = 2.0
-            w_r_cons = 1.0
-            w_r_sense = 1.6
-            w_r_intra = 1.0
-        else:
+            w_r_sense = 6.0
+            w_r_intra = 0.1
+        elif self._t < 20000:
             w_diversity = 1.0
-            w_adversarial = 20.0
-            w_mi = 1.0
-            w_con = 6.0
-            w_r_cons = 1.4
-            w_r_sense = 2.0
+            w_adversarial = 2.0
+            w_mi = 10.0
+            w_con = 1.0
+            w_r_cons = 6.0
+            w_r_sense = 10.0
+            w_r_intra = 0.1
+        elif self._t < 36000:
+            w_diversity = 1.0
+            w_adversarial = 2.0
+            w_mi = 20.0
+            w_con = 1.0
+            w_r_cons = 10.0
+            w_r_sense = 4.0
             w_r_intra = 1.0
+        elif self._t < 70000:
+            w_diversity = 0.1
+            w_adversarial = 0.6
+            w_mi = 10.0
+            w_con = 1.0
+            w_r_cons = 2.0
+            w_r_sense = 10.0
+            w_r_intra = 4.0
+        else:
+            w_diversity = 0.02
+            w_adversarial = 0.1
+            w_mi = 2.0
+            w_con = 4.0
+            w_r_cons = 2.0
+            w_r_sense = 2.0
+            w_r_intra = 2.0
         # print('Current Phase: {} ', phase)
         #w_adv = 6.0
         #w_div = 1.0
@@ -846,8 +856,12 @@ class PGPE(NEAlgorithm):
         #    fitness_scores = fitness_mi.flatten()
         #elif self._t < 10000
         #else:
-        #if self._t < 30000:
-        #    fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense #+ r_intra*w_r_intra#- penalty
+        if self._t < 48000:
+            fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity - penalty + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con - r_cons*w_r_cons + r_sense*w_r_sense + r_intra*w_r_intra
+        elif self._t < 70000:
+             fitness_scores = fitness_con.flatten()*w_con + r_sense*w_r_sense - r_cons*w_r_cons + fitness_adv.flatten() * w_adversarial
+        else:
+            fitness_scores = fitness_adv.flatten() * w_adversarial + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con - r_cons*w_r_cons + r_sense*w_r_sense + r_intra*w_r_intra
         #elif self._t < 40000:
         #    fitness_scores = norm_fitness_adv.flatten() + norm_fitness_mi.flatten() + norm_fitness_con.flatten()*0.2
         #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() + fitness_con.flatten()
@@ -855,11 +869,13 @@ class PGPE(NEAlgorithm):
         #    fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense
 
         #fitness_scores = fitness_adv.flatten() + pop_var * 20 - penalty
-        if self._t > 18000:
-            fitness_scores = -jnp.argsort(order+1)
-        else:
-            fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense #+ r_intra*w_r_intra#- penalty
+        #if self._t > 18000:
+           # fitness_scores = -jnp.argsort(order+1)
+        #else:
+        #    fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense #+ r_intra*w_r_intra#- penalty
             
+
+        #fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense - penalty
 
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
 

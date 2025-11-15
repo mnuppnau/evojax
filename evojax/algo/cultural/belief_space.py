@@ -19,7 +19,7 @@ def initialize_belief_space(
     key: int,
     num_iterations: int = 40,
     max_individuals: int = 6,
-    features: int = 128,
+    features: int = 112,
     num_codes: int = 10,
 ):
     belief_space = (
