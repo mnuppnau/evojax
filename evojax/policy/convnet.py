@@ -77,7 +77,7 @@ def load_model(state, path):
     return restored_state
 
 class Generator(nn.Module):
-  features: int = 64
+  features: int = 56
   training: bool = True
 
   @nn.compact
@@ -85,20 +85,19 @@ class Generator(nn.Module):
     z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
     x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=he_normal(), use_bias=False)(z)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.relu(x)
+    x = nn.leaky_relu(x,0.2)
     x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=he_normal(), use_bias=False)(x)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.relu(x)
+    x = nn.leaky_relu(x,0.2)
     x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=he_normal(), use_bias=False)(x)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.relu(x)
+    x = nn.leaky_relu(x,0.2)
     x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.01))(x)
     x = jnp.tanh(x)
     return x
 
-
 class Discriminator(nn.Module):
-  features: int = 64
+  features: int = 56
   training: bool = True
 
   q_cat: int = 10

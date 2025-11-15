@@ -240,20 +240,39 @@ class Latent_Points(VectorizedTask):
             # r_sense, keep first 60 samples from q_flat batch
             #q_flat60 = q_flat[:60]
 
-            grouped = q_flat60.reshape((6, 10, F))
-            n_sense = jnp.linalg.norm(grouped, axis=-1, keepdims=True)
-            grouped = grouped / jnp.maximum(n_sense, 1e-8)
-
-            rolled = jnp.roll(grouped, shift=1, axis=1)
+            # q_flat60: (60, F)
+            grouped = q_flat60.reshape((6, 10, F))        # (instances, codes, F)
             
-            #diffs = jnp.linalg.norm(grouped - rolled, axis=-1)
-
-            cos_sim = jnp.sum(grouped * rolled, axis=-1)
-            cos_dist = 1.0 - cos_sim
-
+            # Optional: normalize individual features first (like your original code)
+            n_sense = jnp.linalg.norm(grouped, axis=-1, keepdims=True)
+            grouped = grouped / jnp.maximum(n_sense, 1e-8)   # (6, 10, F)
+            
+            # ---- per-code centroids ----
+            # Average over the 6 instances for each of the 10 codes
+            centroids = jnp.mean(grouped, axis=0)            # (10, F)
+            
+            # Normalize centroids so cosine is well-behaved
+            c_norm = jnp.linalg.norm(centroids, axis=-1, keepdims=True)
+            centroids = centroids / jnp.maximum(c_norm, 1e-8)   # (10, F)
+            
+            # ---- all-pairs cosine distances between codes ----
+            # Gram matrix of cosine similarities between centroids
+            cos_sim_mat = centroids @ centroids.T             # (10, 10)
+            
+            # Convert to cosine distance
+            cos_dist_mat = 1.0 - cos_sim_mat                  # (10, 10)
+            
+            # Take only the 45 unique pairs (upper triangle, no diagonal)
+            num_codes = centroids.shape[0]                    # 10
+            i, j = jnp.triu_indices(num_codes, k=1)
+            cos_dist = cos_dist_mat[i, j]                     # (45,)
+            
+            # Clip like before
             cos_dist = jnp.minimum(cos_dist, 0.5)
-
+            
+            # Final scalar regularizer
             r_sense = jnp.mean(cos_dist)
+
             #jax.debug.print('r_cons: {r}', r=r_cons)
             grouped_intra = q_flat60.reshape(6, 10, F).transpose(1,0,2)  # (10, 6, F)
 
