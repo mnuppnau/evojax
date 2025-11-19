@@ -291,9 +291,9 @@ class SimManager(object):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_con = jnp.zeros(params_gen.shape[0])
-            disc_logits = jnp.zeros((384,64,10))
+            disc_logits = jnp.zeros((256,60,10))
             mean_var_fake = jnp.zeros(self._pop_size//2) #//2
-            sum_per_cat_code = jnp.zeros((self._pop_size//2,10, 112))
+            sum_per_cat_code = jnp.zeros((self._pop_size//2,10, 144))
             count_per_cat_code = jnp.zeros((self._pop_size//2,10))
             r_cons = jnp.zeros(self._pop_size//2)
             r_sense = jnp.zeros(self._pop_size//2)
@@ -351,7 +351,7 @@ class SimManager(object):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_con = jnp.zeros(params_gen.shape[0])
-            fake_imgs = jnp.zeros((384,64,28, 28, 1))
+            fake_imgs = jnp.zeros((256,60,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params,
               accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, fake_imgs, valid_masks),

@@ -268,11 +268,12 @@ class Latent_Points(VectorizedTask):
             cos_dist = cos_dist_mat[i, j]                     # (45,)
             
             # Clip like before
-            cos_dist = jnp.minimum(cos_dist, 0.5)
-            
+            #cos_dist = jnp.minimum(cos_dist, 0.5)
+            # take the lowest of the 45 distances
+            cos_dist = jnp.min(cos_dist)
             # Final scalar regularizer
-            r_sense = jnp.mean(cos_dist)
-
+            #r_sense = jnp.mean(cos_dist)
+            r_sense = cos_dist
             #jax.debug.print('r_cons: {r}', r=r_cons)
             grouped_intra = q_flat60.reshape(6, 10, F).transpose(1,0,2)  # (10, 6, F)
 

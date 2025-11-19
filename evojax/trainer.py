@@ -70,7 +70,7 @@ from typing import Tuple
 #        return x
 
 class Generator(nn.Module):
-  features: int = 56
+  features: int = 72
   training: bool = True
 
   @nn.compact
@@ -90,39 +90,42 @@ class Generator(nn.Module):
     return x
 
 class Discriminator(nn.Module):
-  features: int = 56
+  features: int = 72
   training: bool = True
-
   q_cat: int = 10
 
   @nn.compact
   def __call__(self, x):
     x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    #x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.leaky_relu(x, 0.2)
+
     x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.leaky_relu(x, 0.2)
-    
+
     # Discriminator output
     d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     d = d.reshape((d.shape[0], -1))
 
-    # Q outpiut
-    q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
-    q = nn.leaky_relu(q, 0.2)
+    # Q network
+    q_feat = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    q_feat = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q_feat)
+    q_feat = nn.leaky_relu(q_feat, 0.2)
 
-    disc_logits = nn.Conv(self.q_cat, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02))(q)
-    disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
-      
-    mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
+    # Global average pool spatial dims
+    q_feat_avg = jnp.mean(q_feat, axis=(1, 2))      # (B, C)
+
+    # Map to logits over 10 categories
+    q_logits = nn.Dense(self.q_cat, kernel_init=normal_init(0.02))(q_feat_avg)  # (B, 10)
+
+    mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q_feat)
     #print('mu shape : ', mu.shape)
-    log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
+    log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q_feat)
     #print('log var shape : ', log_var.shape)
     var = jnp.squeeze(log_var)
     
-    return d, disc_logits, mu.squeeze(), jnp.exp(var)
+    return d, q_logits, mu.squeeze(), jnp.exp(var)
 
 #class Generator(nn.Module):
 #    """
@@ -449,9 +452,9 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
                   #fake_loss = bce_logits(fake_preds, jnp.zeros((32,), dtype=jnp.int32))
               
                   # use 0.9 as the label for real images instead of 1.0
-                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.90)
+                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.9)
                   # use 0.1 as the label for fake images instead of 0.0
-                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds)+0.05)
+                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds))
 
                   real_loss = jnp.mean(real_loss)
                   fake_loss = jnp.mean(fake_loss)
@@ -461,7 +464,7 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
 
                   #jax.debug.print('mi loss: {} ', loss_mi)
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = (real_loss + fake_loss) / 2.0 + loss_mi + loss_con
+                  loss = (real_loss + fake_loss) / 2.0 + loss_mi + loss_con*0.1
                 
                   return loss, vars_d
 
@@ -511,7 +514,7 @@ def sample_latent(key, shape_noise, shape_cat):
   #code_cat = jax.nn.one_hot(c, 10)  # One-hot encoding for categorical code
   #code_cat = jax.nn.one_hot(c, 10)
 
-  con = jax.random.uniform(con_key, (64, 2), minval=-1, maxval=1)
+  con = jax.random.uniform(con_key, (shape_cat[0], 2), minval=-1, maxval=1)
   
   latent = jnp.concatenate([noise, code_cat, con], axis=-1)
 
@@ -722,7 +725,7 @@ class Trainer(object):
                 
                     batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
 
-                #if i % 1 == 0:
+                #if i % 4 == 0:
                 for mini_batch in range(num_mini_batches):
                     # Sample batch of data.
 
@@ -774,27 +777,27 @@ class Trainer(object):
                 self._key, key_z, key_con = jax.random.split(self._key, 3)
                 
                 z_base = jax.random.normal(key_z, (6, 62))  # 6 different z vectors
-                #con_base = jax.random.uniform(key_con, (6, 2), minval=-1, maxval=1)  # 6 different continuous codes
+                con_base = jax.random.uniform(key_con, (6, 2), minval=-1, maxval=1)  # 6 different continuous codes
                 z_block = jnp.repeat(z_base, 10, axis=0)  # Repeat each z 10 times for each categorical code
-                #con_block = jnp.repeat(con_base, 10, axis=0)  # Repeat each con code 10 times
+                con_block = jnp.repeat(con_base, 10, axis=0)  # Repeat each con code 10 times
                 codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 6)  # Categorical codes from 0 to 9, repeated 6 times
                 onehot60 = jax.nn.one_hot(codes60, 10)
                 
-                con_block = jax.random.uniform(key_con, (60, 2), minval=-1, maxval=1)
+                #con_block = jax.random.uniform(key_con, (60, 2), minval=-1, maxval=1)
   
                 latent60 = jnp.concatenate([z_block, onehot60, con_block], axis=-1)
 
-                latent = jnp.concat([latent60, latent60[:4]], axis=0)
-                c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
+                #latent = jnp.concat([latent60, latent60[:4]], axis=0)
+                #c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
                 #con_full_block = jnp.concat([con_block, con_block[:4]], axis=0)
-                con_full_block = jnp.concatenate([con_block, jax.random.uniform(key_con, (4, 2), minval=-1, maxval=1)], axis=0)
+                #con_full_block = jnp.concatenate([con_block, jax.random.uniform(key_con, (4, 2), minval=-1, maxval=1)], axis=0)
 
                 topographic_ks = belief_space[4]
 
                 avg_per_code = topographic_ks[0]
                 
                 scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, cat_codes=c_onehot, codes60=codes60, con_codes=con_full_block, features=avg_per_code, generator=True, test=False
+                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent60, cat_codes=onehot60, codes60=codes60, con_codes=con_block, features=avg_per_code, generator=True, test=False
                 )
 
                 #jax.debug.print('fake_imgs shape: {} ', fake_imgs.shape)
