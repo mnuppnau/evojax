@@ -77,7 +77,7 @@ def load_model(state, path):
     return restored_state
 
 class Generator(nn.Module):
-  features: int = 56
+  features: int = 72
   training: bool = True
 
   @nn.compact
@@ -97,41 +97,44 @@ class Generator(nn.Module):
     return x
 
 class Discriminator(nn.Module):
-  features: int = 56
+  features: int = 72
   training: bool = True
-
   q_cat: int = 10
 
   @nn.compact
   def __call__(self, x):
     x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    #x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
+    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.leaky_relu(x, 0.2)
+
     x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
     x = nn.leaky_relu(x, 0.2)
-    
+
     # Discriminator output
     d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
     d = d.reshape((d.shape[0], -1))
 
-    # Q outpiut
-    q = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    q = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q)
-    q = nn.leaky_relu(q, 0.2)
+    # Q network
+    q_feat = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
+    q_feat = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q_feat)
+    q_feat = nn.leaky_relu(q_feat, 0.2)
 
-    q_flat = q.reshape((q.shape[0], -1))
+    q_flat = q_feat.reshape((q_feat.shape[0], -1))
     
-    disc_logits = nn.Conv(self.q_cat, [1, 1], [1, 1], 'VALID', kernel_init=normal_init(0.02))(q)
-    disc_logits = disc_logits.reshape((disc_logits.shape[0], -1))
-      
-    mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
+    # Global average pool spatial dims
+    q_feat_avg = jnp.mean(q_feat, axis=(1, 2))      # (B, C)
+
+    # Map to logits over 10 categories
+    q_logits = nn.Dense(self.q_cat, kernel_init=normal_init(0.02))(q_feat_avg)  # (B, 10)
+
+    mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q_feat)
     #print('mu shape : ', mu.shape)
-    log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q)
+    log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q_feat)
     #print('log var shape : ', log_var.shape)
     var = jnp.squeeze(log_var)
     
-    return d, disc_logits, mu.squeeze(), jnp.exp(var), q_flat
+    return d, q_logits, mu.squeeze(), jnp.exp(var), q_flat
 
 #class Generator(nn.Module):
 #    """
@@ -470,10 +473,10 @@ class GenPolicy(PolicyNetwork):
 
         key, key_gen, key_disc, key_bin = random.split(key, 4)
 
-        variables_gen = self.model_gen.init(key_gen, jnp.ones([64,74], jnp.float32))
-        variables_disc = self.model_disc.init(key_disc, jnp.ones([64,28,28,1], jnp.float32))
+        variables_gen = self.model_gen.init(key_gen, jnp.ones([60,74], jnp.float32))
+        variables_disc = self.model_disc.init(key_disc, jnp.ones([60,28,28,1], jnp.float32))
         
-        variables_q = self.model_q.init(key_bin, jnp.ones([64,5,5,128], jnp.float32))
+        variables_q = self.model_q.init(key_bin, jnp.ones([60,5,5,128], jnp.float32))
         
         self.init_params_gen, self.init_batch_stats_gen = variables_gen['params'], variables_gen['batch_stats']
         self.init_params_disc, self.init_batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
