@@ -66,11 +66,17 @@ def initialize_history_ks(
 
 
 def initialize_topographic_ks(
-    features: int, num_codes: int = 10
+    features: int, key: jax.Array, num_codes: int = 10
 ):
-    return (
-        jnp.zeros((num_codes, features)),  # best solutions for 0
-            )
+        random_matrix = jax.random.normal(key, (features, num_codes))
+        q_matrix, _ = jnp.linalg.qr(random_matrix)
+
+        orthogonal_ks = q_matrix.T
+
+        norms = jnp.linalg.norm(orthogonal_ks, axis=1, keepdims=True)
+        normalized_ks = orthogonal_ks / norms
+    
+        return (normalized_ks,)
 
 
 def initialize_normative_ks(param_size: int, pop_size: int = 64):

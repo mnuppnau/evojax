@@ -69,63 +69,184 @@ from typing import Tuple
 #        x = jnp.tanh(x)
 #        return x
 
-class Generator(nn.Module):
-  features: int = 72
-  training: bool = True
+# Assuming you have something like:
+# normal_init = nn.initializers.normal
 
-  @nn.compact
-  def __call__(self, z):
-    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=he_normal(), use_bias=False)(z)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.leaky_relu(x, 0.2)
-    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=he_normal(), use_bias=False)(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.leaky_relu(x, 0.2)
-    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=he_normal(), use_bias=False)(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.leaky_relu(x, 0.2)
-    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.01))(x)
-    x = jnp.tanh(x)
-    return x
+
+class Generator(nn.Module):
+    """InfoGAN generator for MNIST, based on your simple ConvTranspose stack."""
+    features: int = 64
+    training: bool = True
+
+    @nn.compact
+    def __call__(self, z):
+        """
+        Args:
+            z:      (B, z_dim)
+            c_cat:  (B, n_cat)    one-hot
+            c_cont: (B, n_cont)   e.g. 2 dims in [-1, 1]
+
+        Returns:
+            x: (B, 28, 28, 1) in [-1, 1]
+        """
+
+        z_full = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+
+        x = nn.ConvTranspose(
+            self.features * 4,
+            kernel_size=(3, 3),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(z_full)
+        x = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(x)
+        x = nn.relu(x)
+
+        x = nn.ConvTranspose(
+            self.features * 2,
+            kernel_size=(4, 4),
+            strides=(1, 1),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(x)
+        x = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(x)
+        x = nn.relu(x)
+
+        x = nn.ConvTranspose(
+            self.features,
+            kernel_size=(3, 3),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(x)
+        x = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(x)
+        x = nn.relu(x)
+
+        x = nn.ConvTranspose(
+            1,
+            kernel_size=(4, 4),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(x)
+        x = jnp.tanh(x)
+        return x
 
 class Discriminator(nn.Module):
-  features: int = 72
-  training: bool = True
-  q_cat: int = 10
+    """Discriminator with attached Q-network, built on your architecture."""
+    features: int = 64
+    training: bool = True
+    q_cat: int = 10
+    q_cont: int = 2   # set to 0 if you only want categorical codes
 
-  @nn.compact
-  def __call__(self, x):
-    x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.leaky_relu(x, 0.2)
+    @nn.compact
+    def __call__(self, x):
+        """
+        Args:
+            x: (B, 28, 28, 1) in [-1, 1]
 
-    x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.leaky_relu(x, 0.2)
+        Returns:
+            d_logits:        (B, 1)         real/fake logits
+            q_cat_logits:    (B, q_cat)
+            q_cont_mu:       (B, q_cont) or None
+            q_cont_logsigma: (B, q_cont) or None
+        """
+        # ----- shared backbone -----
+        h = nn.Conv(
+            self.features,
+            kernel_size=(4, 4),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(x)
+        h = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(h)
+        h = nn.leaky_relu(h, 0.2)
 
-    # Discriminator output
-    d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    d = d.reshape((d.shape[0], -1))
+        h = nn.Conv(
+            self.features * 2,
+            kernel_size=(4, 4),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(h)
+        h = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(h)
+        h = nn.leaky_relu(h, 0.2)
 
-    # Q network
-    q_feat = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    q_feat = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q_feat)
-    q_feat = nn.leaky_relu(q_feat, 0.2)
+        # At this point the spatial size is 5x5; next heads go from there.
 
-    # Global average pool spatial dims
-    q_feat_avg = jnp.mean(q_feat, axis=(1, 2))      # (B, C)
+        # ----- D head -----
+        d = nn.Conv(
+            1,
+            kernel_size=(4, 4),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(h)        # -> (B, 1, 1, 1)
+        d = d.reshape((d.shape[0], -1))  # (B, 1)
+        d_logits = d  # treat as logits; apply sigmoid in loss if desired
 
-    # Map to logits over 10 categories
-    q_logits = nn.Dense(self.q_cat, kernel_init=normal_init(0.02))(q_feat_avg)  # (B, 10)
+        # ----- Q trunk -----
+        q = nn.Conv(
+            self.features * 2,
+            kernel_size=(4, 4),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(h)        # -> (B, 1, 1, 2*features)
+        q = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(q)
+        q = nn.leaky_relu(q, 0.2)
+        q = q.reshape((q.shape[0], -1))  # (B, 2*features)
 
-    mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q_feat)
-    #print('mu shape : ', mu.shape)
-    log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q_feat)
-    #print('log var shape : ', log_var.shape)
-    var = jnp.squeeze(log_var)
-    
-    return d, q_logits, mu.squeeze(), jnp.exp(var)
+        q_flat = q.reshape((q.shape[0], -1))
+
+        # ----- Q categorical head -----
+        q_cat_logits = nn.Dense(
+            self.q_cat,
+            kernel_init=normal_init(0.02),
+        )(q)
+
+        # ----- Q continuous head -----
+        q_cont_mu = nn.Dense(
+                self.q_cont,
+                kernel_init=normal_init(0.02),
+                )(q)
+        q_cont_logsigma = nn.Dense(
+                self.q_cont,
+                kernel_init=normal_init(0.02),
+                )(q)
+
+        return d_logits, q_cat_logits, q_cont_mu, q_cont_logsigma
+
 
 #class Generator(nn.Module):
 #    """
@@ -464,7 +585,7 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
 
                   #jax.debug.print('mi loss: {} ', loss_mi)
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = (real_loss + fake_loss) / 2.0 + loss_mi + loss_con*0.1
+                  loss = (real_loss + fake_loss) / 2.0 + loss_mi * 0.2 + loss_con*0.04
                 
                   return loss, vars_d
 
@@ -713,6 +834,10 @@ class Trainer(object):
                     
             fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, 10), fixed_con], axis=-1)
 
+            self._key, noise_key, con_key = jax.random.split(self._key, 3)
+
+            fixed_z_subset = jax.random.normal(noise_key, (1, 62))
+            fixed_con_subset = jax.random.uniform(con_key, (1, 2), minval=-1, maxval=1)
  
             for i in range(self._max_iter):
                 
@@ -725,43 +850,43 @@ class Trainer(object):
                 
                     batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
 
-                #if i % 4 == 0:
-                for mini_batch in range(num_mini_batches):
-                    # Sample batch of data.
+                if i % 2 == 0:
+                    for mini_batch in range(num_mini_batches):
+                        # Sample batch of data.
 
-                    self._key, subkey_latent, subkey_mnist = jax.random.split(self._key, 3)
-                    
+                        self._key, subkey_latent, subkey_mnist = jax.random.split(self._key, 3)
+                        
 
-                    data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
-                    #data = np.expand_dims(data / 255.0, axis=-1)
+                        data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
+                        #data = np.expand_dims(data / 255.0, axis=-1)
 
-                    latent, cat_codes, con_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
-                  
-                    #if i > 600:
-                    params_gen = self.solver_gen.best_params
-                    params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
-                    #else:
-                    
-                    (fake_images), vars_g = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
-                    batch_stats_gen = vars_g['batch_stats']
-                    # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
-                    fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
-                    
-                    state = (params_disc, self.batch_stats_disc, opt_disc)
+                        latent, cat_codes, con_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
+                      
+                        #if i > 600:
+                        params_gen = self.solver_gen.best_params
+                        params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
+                        #else:
+                        
+                        (fake_images), vars_g = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                        batch_stats_gen = vars_g['batch_stats']
+                        # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
+                        fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
+                        
+                        state = (params_disc, self.batch_stats_disc, opt_disc)
 
-                    state, d_loss = train_step_disc(
-                        state,
-                        data,
-                        labels,
-                        fake_images,
-                        cat_codes,
-                        con_codes,
-                        solver_disc,
-                    )
+                        state, d_loss = train_step_disc(
+                            state,
+                            data,
+                            labels,
+                            fake_images,
+                            cat_codes,
+                            con_codes,
+                            solver_disc,
+                        )
 
-                    #jax.debug.print('loss: {} ', loss)
-                    
-                    params_disc, self.batch_stats_disc, opt_disc = state 
+                        #jax.debug.print('loss: {} ', loss)
+                        
+                        params_disc, self.batch_stats_disc, opt_disc = state 
 
                 leaves_params, _ = jax.tree_flatten(params_disc) 
                 flat_params_disc = jnp.concatenate([p.flatten() for p in leaves_params])
@@ -777,27 +902,31 @@ class Trainer(object):
                 self._key, key_z, key_con = jax.random.split(self._key, 3)
                 
                 z_base = jax.random.normal(key_z, (6, 62))  # 6 different z vectors
-                con_base = jax.random.uniform(key_con, (6, 2), minval=-1, maxval=1)  # 6 different continuous codes
+                #con_base = jax.random.uniform(key_con, (6, 2), minval=-1, maxval=1)  # 6 different continuous codes
+                #z_base_concat = jnp.concatenate([z_base, fixed_z_subset], axis=0) 
                 z_block = jnp.repeat(z_base, 10, axis=0)  # Repeat each z 10 times for each categorical code
-                con_block = jnp.repeat(con_base, 10, axis=0)  # Repeat each con code 10 times
+                
+                #con_base_concat = jnp.concatenate([con_base, fixed_con_subset], axis=0)
+                #con_block = jnp.repeat(con_base_concat, 10, axis=0)  # Repeat each con code 10 times
                 codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 6)  # Categorical codes from 0 to 9, repeated 6 times
                 onehot60 = jax.nn.one_hot(codes60, 10)
                 
-                #con_block = jax.random.uniform(key_con, (60, 2), minval=-1, maxval=1)
+                con_block = jax.random.uniform(key_con, (60, 2), minval=-1, maxval=1)
   
                 latent60 = jnp.concatenate([z_block, onehot60, con_block], axis=-1)
 
-                #latent = jnp.concat([latent60, latent60[:4]], axis=0)
-                #c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
-                #con_full_block = jnp.concat([con_block, con_block[:4]], axis=0)
+                latent = jnp.concat([latent60, latent60[:4]], axis=0)
+                c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
+                con_full_block = jnp.concat([con_block, con_block[:4]], axis=0)
                 #con_full_block = jnp.concatenate([con_block, jax.random.uniform(key_con, (4, 2), minval=-1, maxval=1)], axis=0)
 
                 topographic_ks = belief_space[4]
 
+                #jax.debug.print('topographic_ks shape: {} ', topographic_ks.shape)
                 avg_per_code = topographic_ks[0]
                 
                 scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent60, cat_codes=onehot60, codes60=codes60, con_codes=con_block, features=avg_per_code, generator=True, test=False
+                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, cat_codes=c_onehot, codes60=codes60, con_codes=con_full_block, features=avg_per_code, generator=True, test=False
                 )
 
                 #jax.debug.print('fake_imgs shape: {} ', fake_imgs.shape)
