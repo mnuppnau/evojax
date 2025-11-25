@@ -317,8 +317,9 @@ class PGPE(NEAlgorithm):
         self._solutions = None
         self._scaled_noises = None
 
+        self._key, subkey = random.split(self._key)
         self.belief_space = belief_space if belief_space is not None else initialize_belief_space(
-            population_size=self.pop_size, param_size=abs(param_size), key=self._key)
+            population_size=self.pop_size, param_size=abs(param_size), key=subkey)
 
     def get_top_idx(self) -> jnp.ndarray:
         """Get the index of the top solution."""
@@ -442,19 +443,43 @@ class PGPE(NEAlgorithm):
         #    fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense
 
         #fitness_scores = fitness_adv.flatten() + pop_var * 20 - penalty
-        if self._t < 5000:
-            fitness_scores = fitness_adv.flatten()#-jnp.argsort(order+1)
-        elif self._t < 36000:
-            fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 10 + r_sense
-        elif self._t < 44000:
-            fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 4 - r_cons
-        elif self._t < 60000:
-            fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 40 + r_sense
-        elif self._t < 80000:
-            fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 100 + r_sense
+        #if self._t < 800:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 100#-jnp.argsort(order+1)
+        #elif self._t < 2000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 60
+        #elif self._t < 7000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()
+        #elif self._t < 9000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 200 + r_sense * 10
+        #elif self._t < 12000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 10
+        #elif self._t < 16000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 400 + r_sense * 10 - r_cons * 8
+        #elif self._t < 22000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 400 + r_sense * 20 - r_cons * 10
+        #elif self._t < 44000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 1000 - r_cons * 20 + fitness_con.flatten()*10 
+        #elif self._t < 60000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 1000 + r_sense * 20 + fitness_con.flatten()*20
+        #elif self._t < 80000:
+        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 1000 + r_sense * 40 + fitness_con.flatten()*100
+        #else:
+        #    fitness_scores = fitness_adv.flatten()*0.1 + fitness_mi.flatten() * 1000 - r_cons * 20 + r_sense * 10 + r_intra
+        #    
+        fitness_adv = fitness_adv.flatten()
+
+        # 2. MI is a constraint. If MI loss is high, it dominates fitness.
+        # If MI loss is low (good), its gradient contribution diminishes.
+        fitness_mi = 5 * fitness_mi.flatten()
+
+        r_sense = 4 * jnp.minimum(r_sense, 0.5)
+        r_cons = -2 * jnp.maximum(r_cons, 0.1)
+       
+        if self._t < 3000:
+            fitness_scores = fitness_adv + fitness_mi * 3
         else:
-            fitness_scores = fitness_adv.flatten()*0.1 + fitness_mi.flatten() - r_cons + r_sense + r_intra
-            
+            fitness_scores = fitness_adv + fitness_mi + r_sense + fitness_con.flatten()*0.5 + r_intra + r_cons
+
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
 
         grad_center, grad_stdev = compute_reinforce_update(

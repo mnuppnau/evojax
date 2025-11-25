@@ -76,65 +76,186 @@ def load_model(state, path):
     restored_state = checkpointer.restore(path, item=state)
     return restored_state
 
-class Generator(nn.Module):
-  features: int = 72
-  training: bool = True
+# Assuming you have something like:
+# normal_init = nn.initializers.normal
 
-  @nn.compact
-  def __call__(self, z):
-    z = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-    x = nn.ConvTranspose(self.features*4, [3, 3], [2, 2], 'VALID', kernel_init=he_normal(), use_bias=False)(z)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.leaky_relu(x,0.2)
-    x = nn.ConvTranspose(self.features*2, [4, 4], [1, 1], 'VALID', kernel_init=he_normal(), use_bias=False)(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.leaky_relu(x,0.2)
-    x = nn.ConvTranspose(self.features, [3, 3], [2, 2], 'VALID', kernel_init=he_normal(), use_bias=False)(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.leaky_relu(x,0.2)
-    x = nn.ConvTranspose(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.01))(x)
-    x = jnp.tanh(x)
-    return x
+
+class Generator(nn.Module):
+    """InfoGAN generator for MNIST, based on your simple ConvTranspose stack."""
+    features: int = 64
+    training: bool = True
+
+    @nn.compact
+    def __call__(self, z):
+        """
+        Args:
+            z:      (B, z_dim)
+            c_cat:  (B, n_cat)    one-hot
+            c_cont: (B, n_cont)   e.g. 2 dims in [-1, 1]
+
+        Returns:
+            x: (B, 28, 28, 1) in [-1, 1]
+        """
+        # reshape to (B, 1, 1, C) for conv-transpose
+        z_full = z.reshape((z.shape[0], 1, 1, z.shape[1]))
+
+        x = nn.ConvTranspose(
+            self.features * 4,
+            kernel_size=(3, 3),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(z_full)
+        x = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(x)
+        x = nn.relu(x)
+
+        x = nn.ConvTranspose(
+            self.features * 2,
+            kernel_size=(4, 4),
+            strides=(1, 1),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(x)
+        x = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(x)
+        x = nn.relu(x)
+
+        x = nn.ConvTranspose(
+            self.features,
+            kernel_size=(3, 3),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(x)
+        x = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(x)
+        x = nn.relu(x)
+
+        x = nn.ConvTranspose(
+            1,
+            kernel_size=(4, 4),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(x)
+        x = jnp.tanh(x)
+        return x
+
 
 class Discriminator(nn.Module):
-  features: int = 72
-  training: bool = True
-  q_cat: int = 10
+    """Discriminator with attached Q-network, built on your architecture."""
+    features: int = 64
+    training: bool = True
+    q_cat: int = 10
+    q_cont: int = 2   # set to 0 if you only want categorical codes
 
-  @nn.compact
-  def __call__(self, x):
-    x = nn.Conv(self.features, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.leaky_relu(x, 0.2)
+    @nn.compact
+    def __call__(self, x):
+        """
+        Args:
+            x: (B, 28, 28, 1) in [-1, 1]
 
-    x = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    x = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(x)
-    x = nn.leaky_relu(x, 0.2)
+        Returns:
+            d_logits:        (B, 1)         real/fake logits
+            q_cat_logits:    (B, q_cat)
+            q_cont_mu:       (B, q_cont) or None
+            q_cont_logsigma: (B, q_cont) or None
+        """
+        # ----- shared backbone -----
+        h = nn.Conv(
+            self.features,
+            kernel_size=(4, 4),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(x)
+        h = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(h)
+        h = nn.leaky_relu(h, 0.2)
 
-    # Discriminator output
-    d = nn.Conv(1, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    d = d.reshape((d.shape[0], -1))
+        h = nn.Conv(
+            self.features * 2,
+            kernel_size=(4, 4),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(h)
+        h = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(h)
+        h = nn.leaky_relu(h, 0.2)
 
-    # Q network
-    q_feat = nn.Conv(self.features*2, [4, 4], [2, 2], 'VALID', kernel_init=normal_init(0.02))(x)
-    q_feat = nn.BatchNorm(not self.training, -1, 0.1, scale_init=normal_init(0.02))(q_feat)
-    q_feat = nn.leaky_relu(q_feat, 0.2)
+        # At this point the spatial size is 5x5; next heads go from there.
 
-    q_flat = q_feat.reshape((q_feat.shape[0], -1))
-    
-    # Global average pool spatial dims
-    q_feat_avg = jnp.mean(q_feat, axis=(1, 2))      # (B, C)
+        # ----- D head -----
+        d = nn.Conv(
+            1,
+            kernel_size=(4, 4),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(h)        # -> (B, 1, 1, 1)
+        d = d.reshape((d.shape[0], -1))  # (B, 1)
+        d_logits = d  # treat as logits; apply sigmoid in loss if desired
 
-    # Map to logits over 10 categories
-    q_logits = nn.Dense(self.q_cat, kernel_init=normal_init(0.02))(q_feat_avg)  # (B, 10)
+        # ----- Q trunk -----
+        q = nn.Conv(
+            self.features * 2,
+            kernel_size=(4, 4),
+            strides=(2, 2),
+            padding='VALID',
+            kernel_init=normal_init(0.02),
+        )(h)        # -> (B, 1, 1, 2*features)
+        q = nn.BatchNorm(
+            use_running_average=not self.training,
+            axis=-1,
+            momentum=0.1,
+            scale_init=normal_init(0.02),
+        )(q)
+        q = nn.leaky_relu(q, 0.2)
+        
+        q_feat_avg = jnp.mean(q, axis=(1, 2))  # (B, 2*features)
 
-    mu = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q_feat)
-    #print('mu shape : ', mu.shape)
-    log_var = nn.Conv(features=2, kernel_size=(1, 1), strides=(1, 1))(q_feat)
-    #print('log var shape : ', log_var.shape)
-    var = jnp.squeeze(log_var)
-    
-    return d, q_logits, mu.squeeze(), jnp.exp(var), q_flat
+        q = q.reshape((q.shape[0], -1))  # (B, 2*features)
+
+        #q_flat = q.reshape((q.shape[0], -1))
+        # ----- Q categorical head -----
+        q_cat_logits = nn.Dense(
+            self.q_cat,
+            kernel_init=normal_init(0.02),
+        )(q)
+
+        q_cont_mu = nn.Dense(
+                self.q_cont,
+                kernel_init=normal_init(0.02),
+            )(q)
+        q_cont_logsigma = nn.Dense(
+                self.q_cont,
+                kernel_init=normal_init(0.02),
+            )(q)
+
+        return d_logits, q_cat_logits, q_cont_mu, q_cont_logsigma, q_feat_avg
+
 
 #class Generator(nn.Module):
 #    """
@@ -473,10 +594,10 @@ class GenPolicy(PolicyNetwork):
 
         key, key_gen, key_disc, key_bin = random.split(key, 4)
 
-        variables_gen = self.model_gen.init(key_gen, jnp.ones([60,74], jnp.float32))
+        variables_gen = self.model_gen.init(key_gen, jnp.ones([64,74], jnp.float32))
         variables_disc = self.model_disc.init(key_disc, jnp.ones([60,28,28,1], jnp.float32))
         
-        variables_q = self.model_q.init(key_bin, jnp.ones([60,5,5,128], jnp.float32))
+        variables_q = self.model_q.init(key_bin, jnp.ones([64,5,5,128], jnp.float32))
         
         self.init_params_gen, self.init_batch_stats_gen = variables_gen['params'], variables_gen['batch_stats']
         self.init_params_disc, self.init_batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']

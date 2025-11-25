@@ -207,12 +207,12 @@ class Latent_Points(VectorizedTask):
 
             #sq = jnp.sum((q_flat60 - topo_for_sample) ** 2, axis=-1)
             cos_sim = jnp.sum(q_flat60 * topo_for_sample, axis=-1)
-            compact = jnp.mean(1.0 - cos_sim)
-            S = topographic_ks @ topographic_ks.T  # [K, K]
-
-            cos_dist = 1.0 - S
-            mask = jnp.triu(jnp.ones((K, K), dtype=cos_dist.dtype), k=1)
-            sep = jnp.sum(cos_dist * mask) / jnp.maximum(jnp.sum(mask), 1.0)
+            #compact = jnp.mean(1.0 - cos_sim)
+            #S = topographic_ks @ topographic_ks.T  # [K, K]
+            r_cons = jnp.mean(1.0 - cos_sim)
+            #cos_dist = 1.0 - S
+            #mask = jnp.triu(jnp.ones((K, K), dtype=cos_dist.dtype), k=1)
+            #sep = jnp.sum(cos_dist * mask) / jnp.maximum(jnp.sum(mask), 1.0)
 
 
             # Aggregate per code (handles any imbalance safely)
@@ -235,7 +235,7 @@ class Latent_Points(VectorizedTask):
             #mask = jnp.triu(jnp.ones((K, K), dtype=dists.dtype), k=1)
             #sep = jnp.sum(dists * mask) / jnp.maximum(jnp.sum(mask), 1.0)
             
-            r_cons = (-compact) + sep * 0.5
+            #r_cons = (-compact) + sep * 0.5
        
             # r_sense, keep first 60 samples from q_flat batch
             #q_flat60 = q_flat[:60]
