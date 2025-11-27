@@ -585,7 +585,7 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
 
                   #jax.debug.print('mi loss: {} ', loss_mi)
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = (real_loss + fake_loss) / 2.0 + loss_mi * 0.2 + loss_con*0.04
+                  loss = (real_loss + fake_loss) / 2.0 + loss_mi * 0.4 + loss_con*0.1
                 
                   return loss, vars_d
 
@@ -836,9 +836,6 @@ class Trainer(object):
 
             self._key, noise_key, con_key = jax.random.split(self._key, 3)
 
-            fixed_z_subset = jax.random.normal(noise_key, (1, 62))
-            fixed_con_subset = jax.random.uniform(con_key, (1, 2), minval=-1, maxval=1)
- 
             for i in range(self._max_iter):
                 
                 shape_noise = (self.mini_batch_size, self.latent_dim-self.n_con)
@@ -899,13 +896,15 @@ class Trainer(object):
 
                 params_gen, belief_space = self.solver_gen.ask()
                 
-                self._key, key_z, key_con = jax.random.split(self._key, 3)
+                self._key, key_z_fixed, key_z, key_con = jax.random.split(self._key, 4)
                 
-                z_base = jax.random.normal(key_z, (6, 62))  # 6 different z vectors
+                z_base_fixed = jax.random.normal(key_z_fixed, (3, 62))  # 6 different z vectors
+               
+                z_base = jax.random.normal(key_z, (30, 62)) 
                 #con_base = jax.random.uniform(key_con, (6, 2), minval=-1, maxval=1)  # 6 different continuous codes
                 #z_base_concat = jnp.concatenate([z_base, fixed_z_subset], axis=0) 
-                z_block = jnp.repeat(z_base, 10, axis=0)  # Repeat each z 10 times for each categorical code
-                
+                z_block = jnp.repeat(z_base_fixed, 10, axis=0)  # Repeat each z 10 times for each categorical code
+                z_block = jnp.concatenate([z_base, z_block], axis=0)
                 #con_base_concat = jnp.concatenate([con_base, fixed_con_subset], axis=0)
                 #con_block = jnp.repeat(con_base_concat, 10, axis=0)  # Repeat each con code 10 times
                 codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 6)  # Categorical codes from 0 to 9, repeated 6 times
@@ -915,9 +914,18 @@ class Trainer(object):
   
                 latent60 = jnp.concatenate([z_block, onehot60, con_block], axis=-1)
 
-                latent = jnp.concat([latent60, latent60[:4]], axis=0)
+                self._key, key_z, key_con = jax.random.split(self._key, 3)
+
+                z_block4 = jax.random.normal(key_z, (4, 62))  # 4 different z vectors
+                con_block4 = jax.random.uniform(key_con, (4, 2), minval=-1, maxval=1)
+
+                z_block_full = jnp.concatenate([z_block, z_block4], axis=0)
+                con_block_full = jnp.concatenate([con_block, con_block4], axis=0)
+                
+                #latent = jnp.concat([latent60, latent60[:4]], axis=0)
                 c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
-                con_full_block = jnp.concat([con_block, con_block[:4]], axis=0)
+                latent = jnp.concat([z_block_full, c_onehot, con_block_full], axis=1)
+                #con_full_block = jnp.concat([con_block, con_block[:4]], axis=0)
                 #con_full_block = jnp.concatenate([con_block, jax.random.uniform(key_con, (4, 2), minval=-1, maxval=1)], axis=0)
 
                 topographic_ks = belief_space[4]
@@ -926,7 +934,7 @@ class Trainer(object):
                 avg_per_code = topographic_ks[0]
                 
                 scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, cat_codes=c_onehot, codes60=codes60, con_codes=con_full_block, features=avg_per_code, generator=True, test=False
+                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, cat_codes=c_onehot, codes60=codes60, con_codes=con_block_full, features=avg_per_code, generator=True, test=False
                 )
 
                 #jax.debug.print('fake_imgs shape: {} ', fake_imgs.shape)
