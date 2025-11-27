@@ -34,11 +34,11 @@ from evojax import util
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--pop-size', type=int, default=512, help='NE population size.')
+        '--pop-size', type=int, default=256, help='NE population size.')
     parser.add_argument(
         '--batch-size', type=int, default=64, help='Batch size for training.')
     parser.add_argument(
-        '--max-iter', type=int, default=90000, help='Max training iterations.')
+        '--max-iter', type=int, default=140000, help='Max training iterations.')
     parser.add_argument(
         '--test-interval', type=int, default=1000, help='Test interval.')
     parser.add_argument(

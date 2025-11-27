@@ -468,17 +468,28 @@ class PGPE(NEAlgorithm):
         #    
         fitness_adv = fitness_adv.flatten()
 
+        realism_gate = jax.nn.sigmoid(fitness_adv + 2.0)
         # 2. MI is a constraint. If MI loss is high, it dominates fitness.
         # If MI loss is low (good), its gradient contribution diminishes.
-        fitness_mi = 5 * fitness_mi.flatten()
+        mi_target = -0.1
+        mi_gap = jnp.minimum(fitness_mi.flatten() - mi_target, 0.0)
+        fitness_mi = 5 * mi_gap
+        #fitness_mi = 5 * fitness_mi.flatten()
 
-        r_sense = 4 * jnp.minimum(r_sense, 0.5)
-        r_cons = -2 * jnp.maximum(r_cons, 0.1)
-       
-        if self._t < 3000:
-            fitness_scores = fitness_adv + fitness_mi * 3
-        else:
-            fitness_scores = fitness_adv + fitness_mi + r_sense + fitness_con.flatten()*0.5 + r_intra + r_cons
+        r_sense = 3 * jnp.minimum(r_sense, 0.6)
+
+        r_cons_weight = jnp.clip( (self._t - 3000) / 3000 , 0.0, 1.0)
+
+        r_cons_penalty = 2 * jnp.maximum(r_cons, 0.1)
+      
+        r_cons = -1.0 * r_cons_weight * r_cons_penalty
+        
+        #if self._t < 3000:
+        #    fitness_scores = fitness_adv + fitness_mi * 3
+        #else:
+        cultural_score = r_sense + r_cons + r_intra + fitness_con.flatten()*2
+        fitness_scores = fitness_adv + fitness_mi + realism_gate * cultural_score
+        #fitness_scores = fitness_adv + fitness_mi + r_sense + fitness_con.flatten()*0.6 + r_intra + r_cons
 
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
 
