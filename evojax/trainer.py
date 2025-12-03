@@ -21,6 +21,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
+from jax import lax
 from functools import partial
 from evojax.task.base import VectorizedTask
 from evojax.policy import PolicyNetwork
@@ -573,7 +574,7 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
                   #fake_loss = bce_logits(fake_preds, jnp.zeros((32,), dtype=jnp.int32))
               
                   # use 0.9 as the label for real images instead of 1.0
-                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.9)
+                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.95)
                   # use 0.1 as the label for fake images instead of 0.0
                   fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds))
 
@@ -585,7 +586,7 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
 
                   #jax.debug.print('mi loss: {} ', loss_mi)
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = (real_loss + fake_loss) / 2.0 + loss_mi * 0.4 + loss_con*0.1
+                  loss = (real_loss + fake_loss) / 2.0 + loss_mi*0.6 + loss_con*0.1
                 
                   return loss, vars_d
 
@@ -616,6 +617,55 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
 #        disc_logits = disc_logits.reshape((disc_logits.shape[0], -1)) 
 #
 #        return disc_logits
+def build_big_latents(key, total_size, z_dim, n_disc, n_con):
+    k_z, k_c, k_perm = jax.random.split(key, 3)
+    z = jax.random.normal(k_z, (total_size, z_dim))
+    reps = (total_size + n_disc - 1) // n_disc
+    codes = jnp.tile(jnp.arange(n_disc), reps)[:total_size]
+    c_onehot = jax.nn.one_hot(codes, n_disc)
+    c_cont = jax.random.uniform(k_c, (total_size, n_con), minval=-1., maxval=1.)
+    latent = jnp.concatenate([z, c_onehot, c_cont], axis=-1)
+    return latent[jax.random.permutation(k_perm, total_size)]
+
+def build_recal_latents(key, batch_size, z_dim, n_disc, n_con):
+    k_z, k_con, k_perm = jax.random.split(key, 3)
+    # z: standard normal (or whatever you use at train time)
+    z = jax.random.normal(k_z, (batch_size, z_dim))
+    # categorical: balanced 0..n_disc-1 repeated
+    reps = (batch_size + n_disc - 1) // n_disc
+    c = jnp.tile(jnp.arange(n_disc), reps)[:batch_size]
+    c_onehot = jax.nn.one_hot(c, n_disc)
+    # continuous: same range you use at train time
+    c_cont = jax.random.uniform(k_con, (batch_size, n_con), minval=-1.0, maxval=1.0)
+    # concatenate
+    latent = jnp.concatenate([z, c_onehot, c_cont], axis=-1)
+    # (optional) small permutation to avoid repeating same order every batch
+    perm = jax.random.permutation(k_perm, batch_size)
+    return latent[perm]
+
+# --- BN standing-stats pass ---
+def recalibrate_bn_stats(gen_module, params, batch_stats, key,
+                         steps=12, batch_size=64,
+                         z_dim=62, n_disc=10, n_con=2):
+    """
+    gen_module: e.g., Generator(training=True) or Generator(use_running_average=False)
+    params: generator params pytree
+    batch_stats: current running stats collection
+    key: PRNGKey
+    """
+    def body(i, carry):
+        bs, k = carry
+        k, k_lat = jax.random.split(k)
+        lat = build_recal_latents(k_lat, batch_size, z_dim, n_disc, n_con)
+        # train-mode apply: mutate batch_stats only
+        _, vars_out = gen_module.apply({'params': params, 'batch_stats': bs},
+                                       lat,
+                                       mutable=['batch_stats'])
+        return (vars_out['batch_stats'], k)
+
+    # run steps times; jit the whole loop
+    (batch_stats_new, key_new) = lax.fori_loop(0, steps, body, (batch_stats, key))
+    return batch_stats_new, key_new
 
 def sample_latent(key, shape_noise, shape_cat):
   noise_key, cat_key, con_key = jax.random.split(key, 3)
@@ -847,7 +897,7 @@ class Trainer(object):
                 
                     batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
 
-                if i % 2 == 0:
+                if i % 1 == 0:
                     for mini_batch in range(num_mini_batches):
                         # Sample batch of data.
 
@@ -859,13 +909,13 @@ class Trainer(object):
 
                         latent, cat_codes, con_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
                       
-                        #if i > 600:
-                        params_gen = self.solver_gen.best_params
-                        params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
+                        if i < 2:
+                            params_gen = self.solver_gen.best_params
+                            best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
                         #else:
                         
-                        (fake_images), vars_g = Generator().apply({'params': params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
-                        batch_stats_gen = vars_g['batch_stats']
+                        (fake_images) = Generator(training=False).apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
+                        #batch_stats_gen = vars_g['batch_stats']
                         # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
                         fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
                         
@@ -891,17 +941,31 @@ class Trainer(object):
                 leaves_batch_stats_disc, _ = jax.tree_flatten(self.batch_stats_disc)
                 flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
+                params_gen, belief_space = self.solver_gen.ask()
+                
+                self._key, subkey_recal = jax.random.split(self._key)
+                # During recal:
+                big_bs   = 64 * 8            # e.g. 512; use what fits memory
+                lat_big  = build_big_latents(subkey_recal, big_bs, (self.latent_dim - self.n_con), 10, self.n_con)
+                
+                # IMPORTANT: construct the generator with BN in train-mode AND momentum=0.0 just for this call.
+                gen_recal = Generator(training=True)  # add bn_momentum arg in your Module if needed
+                
+                # One forward that updates only batch_stats
+                _, vars_out = gen_recal.apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},
+                                              lat_big, mutable=['batch_stats'])
+                batch_stats_gen = vars_out['batch_stats']  # <- frozen for next gen scoring               
+
                 leaves_batch_stats_gen, _ = jax.tree_flatten(batch_stats_gen)
                 flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
 
-                params_gen, belief_space = self.solver_gen.ask()
-                
-                self._key, key_z_fixed, key_z, key_con = jax.random.split(self._key, 4)
+
+                self._key, key_z_fixed, key_z, key_con_fixed, key_con = jax.random.split(self._key, 5)
                 
                 z_base_fixed = jax.random.normal(key_z_fixed, (3, 62))  # 6 different z vectors
-               
                 z_base = jax.random.normal(key_z, (30, 62)) 
-                #con_base = jax.random.uniform(key_con, (6, 2), minval=-1, maxval=1)  # 6 different continuous codes
+                
+                con_base_fixed = jax.random.uniform(key_con_fixed, (3, 2), minval=-1, maxval=1)  # 6 different continuous codes
                 #z_base_concat = jnp.concatenate([z_base, fixed_z_subset], axis=0) 
                 z_block = jnp.repeat(z_base_fixed, 10, axis=0)  # Repeat each z 10 times for each categorical code
                 z_block = jnp.concatenate([z_base, z_block], axis=0)
@@ -910,8 +974,12 @@ class Trainer(object):
                 codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 6)  # Categorical codes from 0 to 9, repeated 6 times
                 onehot60 = jax.nn.one_hot(codes60, 10)
                 
-                con_block = jax.random.uniform(key_con, (60, 2), minval=-1, maxval=1)
+                con_base = jax.random.uniform(key_con, (30, 2), minval=-1, maxval=1)
   
+                con_block = jnp.repeat(con_base_fixed, 10, axis=0)  # Repeat each con code 10 times
+
+                con_block = jnp.concatenate([con_base, con_block], axis=0)
+
                 latent60 = jnp.concatenate([z_block, onehot60, con_block], axis=-1)
 
                 self._key, key_z, key_con = jax.random.split(self._key, 3)
@@ -943,7 +1011,7 @@ class Trainer(object):
                 
                 self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, adv=False)
 
-                params_gen, belief_space = self.solver_gen.ask()
+                #params_gen, belief_space = self.solver_gen.ask()
 
                 #scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
                 #params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False
@@ -957,13 +1025,39 @@ class Trainer(object):
                 best_params_gen = self.solver_gen.best_params
                 best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(best_params_gen)
 
-                self._key, subkey = jax.random.split(self._key)
-                shape_noise = (self.batch_size, self.latent_dim-self.n_con)
-                shape_cat = (self.batch_size,)
-                latent, cat_codes, con_codes = sample_latent(subkey, shape_noise, shape_cat)
+                #self._key, subkey = jax.random.split(self._key)
+                #shape_noise = (self.batch_size, self.latent_dim-self.n_con)
+                #shape_cat = (self.batch_size,)
+                #latent, cat_codes, con_codes = sample_latent(subkey, shape_noise, shape_cat)
 
-                (fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
-                batch_stats_gen = vars_g['batch_stats'] 
+                #(fake_images), vars_g = Generator().apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=['batch_stats'])
+                #batch_stats_gen = vars_g['batch_stats'] 
+
+                #gen_train = Generator(training=True)
+                #batch_stats_gen, self._key = recalibrate_bn_stats(
+                #    gen_train,
+                #    best_params_gen_formatted,
+                #    batch_stats_gen,
+                #    self._key,
+                #    steps=12,
+                #    batch_size=self.batch_size,
+                #    z_dim=self.latent_dim - self.n_con,
+                #    n_disc=10,
+                #    n_con=self.n_con,
+                #)
+              
+                self._key, subkey_recal = jax.random.split(self._key)
+                # During recal:
+                big_bs   = 64 * 8            # e.g. 512; use what fits memory
+                lat_big  = build_big_latents(subkey_recal, big_bs, (self.latent_dim - self.n_con), 10, self.n_con)
+                
+                # IMPORTANT: construct the generator with BN in train-mode AND momentum=0.0 just for this call.
+                gen_recal = Generator(training=True)  # add bn_momentum arg in your Module if needed
+                
+                # One forward that updates only batch_stats
+                _, vars_out = gen_recal.apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},
+                                              lat_big, mutable=['batch_stats'])
+                batch_stats_gen = vars_out['batch_stats']  # <- frozen for next gen scoring               
 
                 #(_, _, _, _), vars_d = Discriminator().apply({'params': params_disc, 'batch_stats': self.batch_stats_disc}, fake_images, mutable=['batch_stats'])
                 #self.batch_stats_disc = vars_d['batch_stats']

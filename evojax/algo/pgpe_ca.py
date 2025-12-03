@@ -283,7 +283,7 @@ class PGPE(NEAlgorithm):
             optimizer_config = {}
         decay_coef = optimizer_config.get("center_lr_decay_coef", 0.99)
         self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 30000
+            "center_lr_decay_steps", 20000
         )
 
         if optimizer == "adam":
@@ -296,8 +296,8 @@ class PGPE(NEAlgorithm):
         elif optimizer == "clipup":
             opt_init, opt_update, get_params = clipup(
                 step_size=lambda x: self._center_lr * jnp.power(decay_coef, x),
-                momentum=optimizer_config.get("momentum", 0.99),
-                max_speed=optimizer_config.get("max_speed", 0.55),
+                momentum=optimizer_config.get("momentum", 0.9),
+                max_speed=optimizer_config.get("max_speed", 0.08),
                 fix_gradient_size=optimizer_config.get(
                     "fix_gradient_size", True
                 ),
@@ -471,12 +471,12 @@ class PGPE(NEAlgorithm):
         realism_gate = jax.nn.sigmoid(fitness_adv + 2.0)
         # 2. MI is a constraint. If MI loss is high, it dominates fitness.
         # If MI loss is low (good), its gradient contribution diminishes.
-        mi_target = -0.1
+        mi_target = -0.06
         mi_gap = jnp.minimum(fitness_mi.flatten() - mi_target, 0.0)
-        fitness_mi = 5 * mi_gap
+        fitness_mi = 8 * mi_gap
         #fitness_mi = 5 * fitness_mi.flatten()
 
-        r_sense = 3 * jnp.minimum(r_sense, 0.6)
+        r_sense = 4 * jnp.minimum(r_sense, 0.4)
 
         r_cons_weight = jnp.clip( (self._t - 3000) / 3000 , 0.0, 1.0)
 
@@ -487,8 +487,8 @@ class PGPE(NEAlgorithm):
         #if self._t < 3000:
         #    fitness_scores = fitness_adv + fitness_mi * 3
         #else:
-        cultural_score = r_sense + r_cons + r_intra + fitness_con.flatten()*2
-        fitness_scores = fitness_adv + fitness_mi + realism_gate * cultural_score
+        cultural_score = r_sense + r_cons + r_intra + fitness_con.flatten()*0.6
+        fitness_scores = fitness_adv + fitness_mi + realism_gate * cultural_score + pop_var  * 0.1
         #fitness_scores = fitness_adv + fitness_mi + r_sense + fitness_con.flatten()*0.6 + r_intra + r_cons
 
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
