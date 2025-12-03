@@ -331,7 +331,7 @@ def update_topographic_ks(
     hist_avg_per_code = topographic_ks[0]    
 
     # use .70 of previous history and .30 of new average per code
-    updated_hist_avg_per_code = 0.7 * hist_avg_per_code + 0.3 * avg_per_code
+    updated_hist_avg_per_code = 0.6 * hist_avg_per_code + 0.4 * avg_per_code
 
     updated_topographic_ks = (
         updated_hist_avg_per_code,

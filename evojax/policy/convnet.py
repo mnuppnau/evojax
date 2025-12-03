@@ -584,9 +584,9 @@ class GenPolicy(PolicyNetwork):
         else:
             self._logger = logger
 
-        self.model_gen = Generator()
+        self.model_gen = Generator(training=False)
        
-        self.model_disc = Discriminator()
+        self.model_disc = Discriminator(training=False)
 
         self.model_q = Discriminator(training=False)
         
@@ -645,18 +645,18 @@ class GenPolicy(PolicyNetwork):
        
             #(preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
-            (fake_data), vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
+            (fake_data) = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=False)
             
-            (preds, q, mu, var, _), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
+            (preds, q, mu, var, q_flat) = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=False)
 
-            _, _, _, _, q_flat = self.model_q.apply({'params': params_d, 'batch_stats': vars_d['batch_stats']}, fake_data, mutable=False)
+            #_, _, _, _, q_flat = self.model_q.apply({'params': params_d, 'batch_stats': vars_d['batch_stats']}, fake_data, mutable=False)
             #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
 
-            leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
-            flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+            #leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
+            #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
 
-            leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(vars_d['batch_stats'])
-            flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
+            #leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(vars_d['batch_stats'])
+            #flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
             # calculate variance of fake data
             var_fake = jnp.var(fake_data[:, 4:24, 4:24, :], axis=0)
@@ -670,7 +670,7 @@ class GenPolicy(PolicyNetwork):
             #leaves_batch_stats_q, _ = jax.tree_util.tree_flatten(vars_q['batch_stats'])
             #flat_batch_stats_q = jnp.concatenate([p.flatten() for p in leaves_batch_stats_q])
             
-            return fake_data, flat_batch_stats_gen, preds, q, flat_batch_stats_disc, mu, var, mean_var_fake, q_flat
+            return fake_data, preds, q, mu, var, mean_var_fake, q_flat
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -697,9 +697,9 @@ class GenPolicy(PolicyNetwork):
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, batch_stats_g, preds, disc_logits, batch_stats_d, mu, var, mean_var_fake, q_flat = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
+        fake_data, preds, disc_logits, mu, var, mean_var_fake, q_flat = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
         
-        return fake_data, preds, disc_logits, batch_stats_g, batch_stats_d, mu, var, mean_var_fake, q_flat, p_states
+        return fake_data, preds, disc_logits, mu, var, mean_var_fake, q_flat, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):

@@ -252,10 +252,10 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            fake_imgs, actions, disc_logits, batch_stats_gen, batch_stats_disc, mu, var, mean_var_fake, q_flat, policy_state = policy_net.get_actions(
+            fake_imgs, actions, disc_logits, mu, var, mean_var_fake, q_flat, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
             
-            task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
+            #task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
 
             if task.multi_agent_training:
                 task_state = task_state.replace(
@@ -291,7 +291,7 @@ class SimManager(object):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_con = jnp.zeros(params_gen.shape[0])
-            disc_logits = jnp.zeros((128,64,10))
+            disc_logits = jnp.zeros((256,64,10))
             mean_var_fake = jnp.zeros(self._pop_size//2) #//2
             sum_per_cat_code = jnp.zeros((self._pop_size//2,10, 128))
             count_per_cat_code = jnp.zeros((self._pop_size//2,10))
@@ -318,9 +318,9 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            fake_imgs, actions, disc_logits, batch_stats_gen, batch_stats_disc, policy_state = policy_net.get_actions(
+            fake_imgs, actions, disc_logits, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
-            task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
+            #task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
 
             if task.multi_agent_training:
                 task_state = task_state.replace(
@@ -351,7 +351,7 @@ class SimManager(object):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_con = jnp.zeros(params_gen.shape[0])
-            fake_imgs = jnp.zeros((128,64,28, 28, 1))
+            fake_imgs = jnp.zeros((256,64,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params,
               accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, fake_imgs, valid_masks),
