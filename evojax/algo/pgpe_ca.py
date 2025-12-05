@@ -484,7 +484,7 @@ class PGPE(NEAlgorithm):
       
         r_cons = -1.0 * r_cons_weight * r_cons_penalty
         
-        #if self._t < 3000:
+        #if self._t < 10000:
         #    fitness_scores = fitness_adv + fitness_mi * 3
         #else:
         cultural_score = r_sense + r_cons + r_intra + fitness_con.flatten()*0.6

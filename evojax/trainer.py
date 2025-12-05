@@ -73,6 +73,13 @@ from typing import Tuple
 # Assuming you have something like:
 # normal_init = nn.initializers.normal
 
+class PixelNorm(nn.Module):
+    epsilon: float = 1e-8
+    
+    @nn.compact
+    def __call__(self, x):
+        # x: (B, H, W, C)
+        return x / jnp.sqrt(jnp.mean(x ** 2, axis=-1, keepdims=True) + self.epsilon)
 
 class Generator(nn.Module):
     """InfoGAN generator for MNIST, based on your simple ConvTranspose stack."""
@@ -99,13 +106,13 @@ class Generator(nn.Module):
             strides=(2, 2),
             padding='VALID',
             kernel_init=normal_init(0.02),
+            use_bias=False,
         )(z_full)
-        x = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(x)
+        #x = nn.GroupNorm(
+        #    num_groups=1,
+        #    scale_init=normal_init(0.02),
+        #)(x)
+        x = PixelNorm()(x)
         x = nn.relu(x)
 
         x = nn.ConvTranspose(
@@ -114,13 +121,13 @@ class Generator(nn.Module):
             strides=(1, 1),
             padding='VALID',
             kernel_init=normal_init(0.02),
+            use_bias=False,
         )(x)
-        x = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(x)
+        #x = nn.GroupNorm(
+        #    num_groups=8,
+        #    scale_init=normal_init(0.02),
+        #)(x)
+        x = PixelNorm()(x)
         x = nn.relu(x)
 
         x = nn.ConvTranspose(
@@ -129,13 +136,13 @@ class Generator(nn.Module):
             strides=(2, 2),
             padding='VALID',
             kernel_init=normal_init(0.02),
+            use_bias=False,
         )(x)
-        x = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(x)
+        #x = nn.GroupNorm(
+        #    num_groups=16,
+        #    scale_init=normal_init(0.02),
+        #)(x)
+        x = PixelNorm()(x)
         x = nn.relu(x)
 
         x = nn.ConvTranspose(
@@ -144,6 +151,7 @@ class Generator(nn.Module):
             strides=(2, 2),
             padding='VALID',
             kernel_init=normal_init(0.02),
+            use_bias=False,
         )(x)
         x = jnp.tanh(x)
         return x
@@ -168,34 +176,30 @@ class Discriminator(nn.Module):
             q_cont_logsigma: (B, q_cont) or None
         """
         # ----- shared backbone -----
-        h = nn.Conv(
+        h = nn.SpectralNorm(
+            nn.Conv(
             self.features,
             kernel_size=(4, 4),
             strides=(2, 2),
             padding='VALID',
             kernel_init=normal_init(0.02),
-        )(x)
-        h = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(h)
+            )
+        )(x, update_stats=self.training)
         h = nn.leaky_relu(h, 0.2)
 
-        h = nn.Conv(
+        h = nn.SpectralNorm(
+            nn.Conv(
             self.features * 2,
             kernel_size=(4, 4),
             strides=(2, 2),
             padding='VALID',
             kernel_init=normal_init(0.02),
-        )(h)
-        h = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(h)
+            )
+        )(h, update_stats=self.training)
+        #h = nn.BatchNorm(
+        #    use_running_average=not self.training,
+        #    scale_init=normal_init(0.02),
+        #)(h)
         h = nn.leaky_relu(h, 0.2)
 
         # At this point the spatial size is 5x5; next heads go from there.
@@ -212,19 +216,19 @@ class Discriminator(nn.Module):
         d_logits = d  # treat as logits; apply sigmoid in loss if desired
 
         # ----- Q trunk -----
-        q = nn.Conv(
+        q = nn.SpectralNorm(
+            nn.Conv(
             self.features * 2,
             kernel_size=(4, 4),
             strides=(2, 2),
             padding='VALID',
             kernel_init=normal_init(0.02),
-        )(h)        # -> (B, 1, 1, 2*features)
-        q = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(q)
+            )
+        )(h, update_stats=self.training)        # -> (B, 1, 1, 2*features)
+        #q = nn.BatchNorm(        
+        #    use_running_average=not self.training,
+        #    scale_init=normal_init(0.02),
+        #)(q)
         q = nn.leaky_relu(q, 0.2)
         q = q.reshape((q.shape[0], -1))  # (B, 2*features)
 
@@ -540,11 +544,11 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
                   #    {'params': params_g, 'batch_stats': batch_stats_g},
                   #    latent, mutable=['batch_stats']
                   #)
-                  (fake_preds, q, mu, var), vars_d = Discriminator().apply(
+                  (fake_preds, q, mu, var), vars_d = Discriminator(training=True).apply(
                       {'params': params_d, 'batch_stats': vars_d_batch_stats},
                       fake_imgs, mutable=['batch_stats']
                   )
-                  (real_preds, _, _, _), vars_d = Discriminator().apply(
+                  (real_preds, _, _, _), vars_d = Discriminator(training=True).apply(
                       {'params': params_d, 'batch_stats': vars_d['batch_stats']},
                       data, mutable=['batch_stats']
                   )
@@ -576,7 +580,7 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
                   # use 0.9 as the label for real images instead of 1.0
                   real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.95)
                   # use 0.1 as the label for fake images instead of 0.0
-                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds))
+                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds)+0.05)
 
                   real_loss = jnp.mean(real_loss)
                   fake_loss = jnp.mean(fake_loss)
@@ -596,7 +600,6 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
         # apply gradients
         updates, new_opt_state = solver.update(grads, opt_disc, params_d)
         params_d = optax.apply_updates(params_d, updates)
-        #batch_stats_g = vars_g['batch_stats']
         # update batch stats
         batch_stats_d = vars_d['batch_stats']
         return (params_d, batch_stats_d, new_opt_state), loss
@@ -756,8 +759,8 @@ class Trainer(object):
         else:
             self._logger = logger
 
-        self.batch_stats_gen = policy_gen.flat_batch_stats_gen
-        self.batch_stats_disc = policy_gen.flat_batch_stats_disc
+        #self.batch_stats_gen = policy_gen.flat_batch_stats_gen
+        self.batch_stats_disc = policy_gen.init_batch_stats_disc
 
         self.batch_size = batch_size
         self.mini_batch_size = 64
@@ -816,7 +819,7 @@ class Trainer(object):
         self.labels = dataset.targets.numpy()
 
         # initialize the discriminator
-        variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
+        variables_disc = Discriminator(training=True).init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
         self.solver_disc = optax.adam(learning_rate=0.0001, b1=0.5, b2=0.999)
@@ -838,8 +841,8 @@ class Trainer(object):
         """Start the training / test process."""
 
         if self.model_dir is not None:
-            params_gen, self.batch_stats_gen = load_model_gen(model_dir=self.model_dir)
-            params_disc, self.batch_stats_disc = load_model_disc(model_dir=self.model_dir)
+            params_gen = load_model_gen(model_dir=self.model_dir)
+            params_disc = load_model_disc(model_dir=self.model_dir)
             #self.sim_mgr.obs_params = obs_params
             self._logger.info(
                 'Loaded model parameters from {}.'.format(self.model_dir))
@@ -891,13 +894,13 @@ class Trainer(object):
                 shape_noise = (self.mini_batch_size, self.latent_dim-self.n_con)
                 shape_cat = (self.mini_batch_size,)
 
-                if i < 1:
-                    if len(self.batch_stats_gen.shape) == 1:
-                        batch_stats_gen = jnp.expand_dims(self.batch_stats_gen, axis=0)
+                #if i < 1:
+                    #if len(self.batch_stats_gen.shape) == 1:
+                    #    batch_stats_gen = jnp.expand_dims(self.batch_stats_gen, axis=0)
                 
-                    batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
+                    #batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
 
-                if i % 1 == 0:
+                if i % 3 == 0:
                     for mini_batch in range(num_mini_batches):
                         # Sample batch of data.
 
@@ -914,7 +917,7 @@ class Trainer(object):
                             best_params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen)
                         #else:
                         
-                        (fake_images) = Generator(training=False).apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
+                        (fake_images) = Generator(training=False).apply({'params': best_params_gen_formatted}, latent)
                         #batch_stats_gen = vars_g['batch_stats']
                         # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
                         fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
@@ -935,29 +938,37 @@ class Trainer(object):
                         
                         params_disc, self.batch_stats_disc, opt_disc = state 
 
+                self._key, subkey_recal, subkey_mnist = jax.random.split(self._key,3)
+                                
+                params_gen, belief_space = self.solver_gen.ask()
+               
+                params_gen_best = self.solver_gen.best_params
+                params_gen_formatted = self.policy_gen._format_single_params_gen_fn(params_gen_best)
+                
+                big_bs   = 64 * 8 
+                lat_big  = build_big_latents(subkey_recal, big_bs, 62, 10, 2)
+                
+                gen_recal = Generator()
+                
+                fake_batch_large = gen_recal.apply({'params': params_gen_formatted},lat_big)
+              
+                # sample large mnist batch
+                real_batch_large = sample_batch(subkey_mnist, self.data, self.labels, big_bs)[0] 
+                
+                large_batch_concatenated = jnp.concatenate([real_batch_large, fake_batch_large], axis=0)
+
+                # run fake images through discriminator to recalibrate batch stats
+                #(_, vars_out) = Discriminator().apply(
+                #      {'params': params_disc, 'batch_stats': self.batch_stats_disc},
+                #      large_batch_concatenated, mutable=['batch_stats']
+                #  )
+                #self.batch_stats_disc = vars_out['batch_stats']  
+
                 leaves_params, _ = jax.tree_flatten(params_disc) 
                 flat_params_disc = jnp.concatenate([p.flatten() for p in leaves_params])
 
-                leaves_batch_stats_disc, _ = jax.tree_flatten(self.batch_stats_disc)
-                flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
-
-                params_gen, belief_space = self.solver_gen.ask()
-                
-                self._key, subkey_recal = jax.random.split(self._key)
-                # During recal:
-                big_bs   = 64 * 8            # e.g. 512; use what fits memory
-                lat_big  = build_big_latents(subkey_recal, big_bs, (self.latent_dim - self.n_con), 10, self.n_con)
-                
-                # IMPORTANT: construct the generator with BN in train-mode AND momentum=0.0 just for this call.
-                gen_recal = Generator(training=True)  # add bn_momentum arg in your Module if needed
-                
-                # One forward that updates only batch_stats
-                _, vars_out = gen_recal.apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},
-                                              lat_big, mutable=['batch_stats'])
-                batch_stats_gen = vars_out['batch_stats']  # <- frozen for next gen scoring               
-
-                leaves_batch_stats_gen, _ = jax.tree_flatten(batch_stats_gen)
-                flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+                #leaves_batch_stats_disc, _ = jax.tree_flatten(self.batch_stats_disc)
+                #flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
 
                 self._key, key_z_fixed, key_z, key_con_fixed, key_con = jax.random.split(self._key, 5)
@@ -1001,8 +1012,8 @@ class Trainer(object):
                 #jax.debug.print('topographic_ks shape: {} ', topographic_ks.shape)
                 avg_per_code = topographic_ks[0]
                 
-                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, cat_codes=c_onehot, codes60=codes60, con_codes=con_block_full, features=avg_per_code, generator=True, test=False
+                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, batch_stats_disc_updated, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra = self.sim_mgr_gen.eval_params(
+                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_disc=self.batch_stats_disc, latent=latent, cat_codes=c_onehot, codes60=codes60, con_codes=con_block_full, features=avg_per_code, generator=True, test=False
                 )
 
                 #jax.debug.print('fake_imgs shape: {} ', fake_imgs.shape)
@@ -1046,19 +1057,6 @@ class Trainer(object):
                 #    n_con=self.n_con,
                 #)
               
-                self._key, subkey_recal = jax.random.split(self._key)
-                # During recal:
-                big_bs   = 64 * 8            # e.g. 512; use what fits memory
-                lat_big  = build_big_latents(subkey_recal, big_bs, (self.latent_dim - self.n_con), 10, self.n_con)
-                
-                # IMPORTANT: construct the generator with BN in train-mode AND momentum=0.0 just for this call.
-                gen_recal = Generator(training=True)  # add bn_momentum arg in your Module if needed
-                
-                # One forward that updates only batch_stats
-                _, vars_out = gen_recal.apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},
-                                              lat_big, mutable=['batch_stats'])
-                batch_stats_gen = vars_out['batch_stats']  # <- frozen for next gen scoring               
-
                 #(_, _, _, _), vars_d = Discriminator().apply({'params': params_disc, 'batch_stats': self.batch_stats_disc}, fake_images, mutable=['batch_stats'])
                 #self.batch_stats_disc = vars_d['batch_stats']
 
@@ -1174,7 +1172,7 @@ class Trainer(object):
                     #batch_stats_gen_leaves, _ = jax.tree_flatten(batch_stats_gen)
                     #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in batch_stats_gen_leaves])
                     
-                    (fake_imgs) = Generator(training=False).apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},fixed_latent)
+                    (fake_imgs) = Generator(training=False).apply({'params': best_params_gen_formatted},fixed_latent)
                     
                     filename = f"iteration-{i}.npy"
                     np.save(filename, fake_imgs[:, :, :, :])
@@ -1195,7 +1193,7 @@ class Trainer(object):
                 model_name='final_model_gen',
                 params=best_params_gen,
                 obs_params=self.sim_mgr_gen.obs_params,
-                batch_stats=batch_stats_gen,
+                #batch_stats=batch_stats_gen,
                 #best=mean_test_score > best_score,
             )
             #save_model(

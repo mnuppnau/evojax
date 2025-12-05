@@ -113,6 +113,12 @@ def get_task_reset_keys_disc(key: jnp.ndarray,
 #            reset_keys = jnp.tile(reset_keys, (pop_size, 1))
 #    return key, reset_keys
 
+def replicate_batch_stats(batch_stats, population_size):
+    """Replicate batch_stats across a population."""
+    return jax.tree_map(
+        lambda x: jnp.tile(x, (population_size,) + (1,) * x.ndim),
+        batch_stats
+    )
 
 @jax.jit
 def split_params_for_pmap(param: jnp.ndarray) -> jnp.ndarray:
@@ -412,7 +418,7 @@ class SimManager(object):
                     params_gen: jnp.ndarray,
                     params_disc: jnp.ndarray,
                     #params_q: jnp.ndarray,
-                    batch_stats_gen: dict,
+                    #batch_stats_gen: dict,
                     batch_stats_disc: dict,
                     #batch_stats_q: dict,
                     latent: jnp.ndarray,
@@ -433,9 +439,9 @@ class SimManager(object):
             An array of fitness scores.
         """
         if self._use_for_loop:
-            return self._for_loop_eval(params_gen, params_disc, params_q, batch_stats_gen, batch_stats_disc, latent, cat_codes, codes60, con_codes, features, generator, test)
+            return self._for_loop_eval(params_gen, params_disc, params_q, batch_stats_disc, latent, cat_codes, codes60, con_codes, features, generator, test)
         else:
-            return self._scan_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, latent, cat_codes, codes60, con_codes, features, generator, test)
+            return self._scan_loop_eval(params_gen, params_disc, batch_stats_disc, latent, cat_codes, codes60, con_codes, features, generator, test)
 
     def _for_loop_eval(self,
                        params: jnp.ndarray,
@@ -490,7 +496,7 @@ class SimManager(object):
                         params_gen: jnp.ndarray,
                         params_disc: jnp.ndarray,
                         #params_q: jnp.ndarray,
-                        batch_stats_gen: dict,
+                        #batch_stats_gen: dict,
                         batch_stats_disc: dict,
                         latent: jnp.ndarray,
                         cat_codes: jnp.ndarray,
@@ -507,27 +513,29 @@ class SimManager(object):
 
         # check if first dimension of batch_stats_gen and batch_stats_disc is equal to pop_size
 
-        if batch_stats_gen.shape[0] != self._pop_size and len(batch_stats_gen.shape) == 2: #and not test:
+        #if batch_stats_gen.shape[0] != self._pop_size and len(batch_stats_gen.shape) == 2: #and not test:
             # add pop size as first dimension to batch_stats_gen and batch_stats_disc
-            batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
+         #   batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
         
-        if len(batch_stats_gen.shape) == 1:
-            batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
+        #if len(batch_stats_gen.shape) == 1:
+        #    batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
         
         if params_gen is not None and params_gen.shape[0] != self._pop_size:
             params_gen = jnp.repeat(params_gen[None, :], self._pop_size, axis=0)
             
-        self.batch_stats_gen = batch_stats_gen
+        #self.batch_stats_gen = batch_stats_gen
 
-        if batch_stats_disc.shape[0] != self._pop_size and len(batch_stats_disc.shape) == 2: #and not test:
+        #if batch_stats_disc.shape[0] != self._pop_size and len(batch_stats_disc.shape) == 2: #and not test:
             # add pop size as first dimension to batch_stats_gen and batch_stats_disc
-            batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
+        #    batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
 
-        if len(batch_stats_disc.shape) == 1:
-            batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
+        #if len(batch_stats_disc.shape) == 1:
+        #    batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
 
         if params_disc is not None and params_disc.shape[0] != self._pop_size:
             params_disc = jnp.repeat(params_disc[None, :], self._pop_size, axis=0)
+
+        batch_stats_disc = replicate_batch_stats(batch_stats_disc, self._pop_size)
 
         latent = jnp.repeat(latent[None, :], self._pop_size, axis=0)
         cat_codes = jnp.repeat(cat_codes[None, :], self._pop_size, axis=0)
@@ -558,7 +566,7 @@ class SimManager(object):
     
         #task_state = task_state.replace(var_con=var_con)
 
-        task_state = task_state.replace(batch_stats_gen=self.batch_stats_gen)
+        #task_state = task_state.replace(batch_stats_gen=self.batch_stats_gen)
         task_state = task_state.replace(batch_stats_disc=self.batch_stats_disc)
         task_state = task_state.replace(obs=latent)
         task_state = task_state.replace(cat_codes=cat_codes)
@@ -575,7 +583,7 @@ class SimManager(object):
         if self._num_device > 1: #and not test:
             #if generator:
             params_gen = split_params_for_pmap(params_gen)
-            batch_stats_gen = split_params_for_pmap(batch_stats_gen)
+            #batch_stats_gen = split_params_for_pmap(batch_stats_gen)
             #if not generator:
             #    fake_imgs = split_params_for_pmap(fake_imgs)
             params_disc = split_params_for_pmap(params_disc)
@@ -583,7 +591,7 @@ class SimManager(object):
             #params_q = split_params_for_pmap(params_q)
             features = split_params_for_pmap(features)
             policy_state = split_states_for_pmap(policy_state)
-            batch_stats_disc = split_params_for_pmap(batch_stats_disc)
+            #batch_stats_disc = split_params_for_pmap(batch_stats_disc)
             #batch_stats_q = split_params_for_pmap(batch_stats_q)
 
         #jax.debug.print('obs params : {}', self.obs_params)
@@ -646,7 +654,7 @@ class SimManager(object):
         #    pop_stats = jnp.array([mean_mi, mean_g, mean_con, var_mi, var_g, var_con])
 
 
-        batch_stats_gen_updated = final_states.batch_stats_gen
+        #batch_stats_gen_updated = final_states.batch_stats_gen
         batch_stats_disc_updated = final_states.batch_stats_disc
         #batch_stats_q_updated = final_states.batch_stats_q
 
@@ -768,4 +776,4 @@ class SimManager(object):
             scores4 = None
             avg_per_code = None
         #self._key = new_key
-        return scores1, scores2, scores3, scores4, self._bd_summarize_fn(final_states), batch_stats_gen_updated, batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra
+        return scores1, scores2, scores3, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra
