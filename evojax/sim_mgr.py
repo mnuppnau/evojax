@@ -113,6 +113,13 @@ def get_task_reset_keys_disc(key: jnp.ndarray,
 #            reset_keys = jnp.tile(reset_keys, (pop_size, 1))
 #    return key, reset_keys
 
+@jax.jit
+def replicate_batch_stats(batch_stats):
+    """Replicate batch_stats across population of 256."""
+    return jax.tree_map(
+        lambda x: jnp.tile(x, (256,) + (1,) * x.ndim),
+        batch_stats
+    )
 
 @jax.jit
 def split_params_for_pmap(param: jnp.ndarray) -> jnp.ndarray:
@@ -292,12 +299,12 @@ class SimManager(object):
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_con = jnp.zeros(params_gen.shape[0])
             disc_logits = jnp.zeros((256,64,10))
-            mean_var_fake = jnp.zeros(self._pop_size//2) #//2
-            sum_per_cat_code = jnp.zeros((self._pop_size//2,10, 128))
-            count_per_cat_code = jnp.zeros((self._pop_size//2,10))
-            r_cons = jnp.zeros(self._pop_size//2)
-            r_sense = jnp.zeros(self._pop_size//2)
-            r_intra = jnp.zeros(self._pop_size//2)
+            mean_var_fake = jnp.zeros(self._pop_size) #//2
+            sum_per_cat_code = jnp.zeros((self._pop_size,10, 128))
+            count_per_cat_code = jnp.zeros((self._pop_size,10))
+            r_cons = jnp.zeros(self._pop_size)
+            r_sense = jnp.zeros(self._pop_size)
+            r_intra = jnp.zeros(self._pop_size)
             #fake_imgs = jnp.zeros((256,64,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, features, obs_params, t,
@@ -507,27 +514,30 @@ class SimManager(object):
 
         # check if first dimension of batch_stats_gen and batch_stats_disc is equal to pop_size
 
-        if batch_stats_gen.shape[0] != self._pop_size and len(batch_stats_gen.shape) == 2: #and not test:
+        #if batch_stats_gen.shape[0] != self._pop_size and len(batch_stats_gen.shape) == 2: #and not test:
             # add pop size as first dimension to batch_stats_gen and batch_stats_disc
-            batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
+        #    batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
         
-        if len(batch_stats_gen.shape) == 1:
-            batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
+        #if len(batch_stats_gen.shape) == 1:
+        #    batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
         
         if params_gen is not None and params_gen.shape[0] != self._pop_size:
             params_gen = jnp.repeat(params_gen[None, :], self._pop_size, axis=0)
             
-        self.batch_stats_gen = batch_stats_gen
+        #self.batch_stats_gen = batch_stats_gen
 
-        if batch_stats_disc.shape[0] != self._pop_size and len(batch_stats_disc.shape) == 2: #and not test:
+        #if batch_stats_disc.shape[0] != self._pop_size and len(batch_stats_disc.shape) == 2: #and not test:
             # add pop size as first dimension to batch_stats_gen and batch_stats_disc
-            batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
+        #    batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
 
-        if len(batch_stats_disc.shape) == 1:
-            batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
+        #if len(batch_stats_disc.shape) == 1:
+        #    batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
 
         if params_disc is not None and params_disc.shape[0] != self._pop_size:
             params_disc = jnp.repeat(params_disc[None, :], self._pop_size, axis=0)
+
+        batch_stats_gen = replicate_batch_stats(batch_stats_gen)
+        batch_stats_disc = replicate_batch_stats(batch_stats_disc)
 
         latent = jnp.repeat(latent[None, :], self._pop_size, axis=0)
         cat_codes = jnp.repeat(cat_codes[None, :], self._pop_size, axis=0)
@@ -535,6 +545,7 @@ class SimManager(object):
         con_codes = jnp.repeat(con_codes[None, :], self._pop_size, axis=0)
         features = jnp.repeat(features[None, :], self._pop_size, axis=0)
 
+        self.batch_stats_gen = batch_stats_gen
         self.batch_stats_disc = batch_stats_disc
 
         if test: 
@@ -575,7 +586,7 @@ class SimManager(object):
         if self._num_device > 1: #and not test:
             #if generator:
             params_gen = split_params_for_pmap(params_gen)
-            batch_stats_gen = split_params_for_pmap(batch_stats_gen)
+            #batch_stats_gen = split_params_for_pmap(batch_stats_gen)
             #if not generator:
             #    fake_imgs = split_params_for_pmap(fake_imgs)
             params_disc = split_params_for_pmap(params_disc)
@@ -583,7 +594,7 @@ class SimManager(object):
             #params_q = split_params_for_pmap(params_q)
             features = split_params_for_pmap(features)
             policy_state = split_states_for_pmap(policy_state)
-            batch_stats_disc = split_params_for_pmap(batch_stats_disc)
+            #batch_stats_disc = split_params_for_pmap(batch_stats_disc)
             #batch_stats_q = split_params_for_pmap(batch_stats_q)
 
         #jax.debug.print('obs params : {}', self.obs_params)

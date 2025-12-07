@@ -76,7 +76,7 @@ from typing import Tuple
 
 class Generator(nn.Module):
     """InfoGAN generator for MNIST, based on your simple ConvTranspose stack."""
-    features: int = 64
+    features: int = 56
     training: bool = True
 
     @nn.compact
@@ -574,7 +574,7 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
                   #fake_loss = bce_logits(fake_preds, jnp.zeros((32,), dtype=jnp.int32))
               
                   # use 0.9 as the label for real images instead of 1.0
-                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.95)
+                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.9)
                   # use 0.1 as the label for fake images instead of 0.0
                   fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds))
 
@@ -586,7 +586,7 @@ def train_step_disc(state, data, labels, fake_imgs, fake_cat_input, con_codes, s
 
                   #jax.debug.print('mi loss: {} ', loss_mi)
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = (real_loss + fake_loss) / 2.0 + loss_mi*0.6 + loss_con*0.1
+                  loss = (real_loss*4 + fake_loss*4) / 2.0 + loss_mi + loss_con*0.2
                 
                   return loss, vars_d
 
@@ -623,7 +623,7 @@ def build_big_latents(key, total_size, z_dim, n_disc, n_con):
     reps = (total_size + n_disc - 1) // n_disc
     codes = jnp.tile(jnp.arange(n_disc), reps)[:total_size]
     c_onehot = jax.nn.one_hot(codes, n_disc)
-    c_cont = jax.random.uniform(k_c, (total_size, n_con), minval=-1., maxval=1.)
+    c_cont = jax.random.uniform(k_c, (total_size, n_con), minval=-0.5, maxval=0.5)
     latent = jnp.concatenate([z, c_onehot, c_cont], axis=-1)
     return latent[jax.random.permutation(k_perm, total_size)]
 
@@ -636,7 +636,7 @@ def build_recal_latents(key, batch_size, z_dim, n_disc, n_con):
     c = jnp.tile(jnp.arange(n_disc), reps)[:batch_size]
     c_onehot = jax.nn.one_hot(c, n_disc)
     # continuous: same range you use at train time
-    c_cont = jax.random.uniform(k_con, (batch_size, n_con), minval=-1.0, maxval=1.0)
+    c_cont = jax.random.uniform(k_con, (batch_size, n_con), minval=-0.5, maxval=0.5)
     # concatenate
     latent = jnp.concatenate([z, c_onehot, c_cont], axis=-1)
     # (optional) small permutation to avoid repeating same order every batch
@@ -685,7 +685,7 @@ def sample_latent(key, shape_noise, shape_cat):
   #code_cat = jax.nn.one_hot(c, 10)  # One-hot encoding for categorical code
   #code_cat = jax.nn.one_hot(c, 10)
 
-  con = jax.random.uniform(con_key, (shape_cat[0], 2), minval=-1, maxval=1)
+  con = jax.random.uniform(con_key, (shape_cat[0], 2), minval=-0.5, maxval=0.5)
   
   latent = jnp.concatenate([noise, code_cat, con], axis=-1)
 
@@ -756,8 +756,8 @@ class Trainer(object):
         else:
             self._logger = logger
 
-        self.batch_stats_gen = policy_gen.flat_batch_stats_gen
-        self.batch_stats_disc = policy_gen.flat_batch_stats_disc
+        self.batch_stats_gen = policy_gen.init_batch_stats_gen
+        self.batch_stats_disc = policy_gen.init_batch_stats_disc
 
         self.batch_size = batch_size
         self.mini_batch_size = 64
@@ -880,24 +880,26 @@ class Trainer(object):
             fixed_batch_latent = jax.random.normal(noise_key, (self.batch_size, self.latent_dim-self.n_con))
             fixed_c = jnp.tile(jnp.arange(10), 7)
             fixed_c = fixed_c[:self.batch_size]
-            fixed_con = jax.random.uniform(con_key, (self.batch_size, 2), minval=-1, maxval=1) 
+            fixed_con = jax.random.uniform(con_key, (self.batch_size, 2), minval=-0.5, maxval=0.5) 
                     
             fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, 10), fixed_con], axis=-1)
 
             self._key, noise_key, con_key = jax.random.split(self._key, 3)
 
+            batch_stats_gen = self.batch_stats_gen
+            batch_stats_disc = self.batch_stats_disc
             for i in range(self._max_iter):
                 
                 shape_noise = (self.mini_batch_size, self.latent_dim-self.n_con)
                 shape_cat = (self.mini_batch_size,)
 
-                if i < 1:
-                    if len(self.batch_stats_gen.shape) == 1:
-                        batch_stats_gen = jnp.expand_dims(self.batch_stats_gen, axis=0)
+                #if i < 1:
+                #    if len(self.batch_stats_gen.shape) == 1:
+                #        batch_stats_gen = jnp.expand_dims(self.batch_stats_gen, axis=0)
                 
-                    batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
+                #    batch_stats_gen = self.policy_gen._format_batch_stats_gen_fn(batch_stats_gen)
 
-                if i % 1 == 0:
+                if i % 2 == 0:
                     for mini_batch in range(num_mini_batches):
                         # Sample batch of data.
 
@@ -956,8 +958,8 @@ class Trainer(object):
                                               lat_big, mutable=['batch_stats'])
                 batch_stats_gen = vars_out['batch_stats']  # <- frozen for next gen scoring               
 
-                leaves_batch_stats_gen, _ = jax.tree_flatten(batch_stats_gen)
-                flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+                #leaves_batch_stats_gen, _ = jax.tree_flatten(batch_stats_gen)
+                #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
 
 
                 self._key, key_z_fixed, key_z, key_con_fixed, key_con = jax.random.split(self._key, 5)
@@ -965,7 +967,7 @@ class Trainer(object):
                 z_base_fixed = jax.random.normal(key_z_fixed, (3, 62))  # 6 different z vectors
                 z_base = jax.random.normal(key_z, (30, 62)) 
                 
-                con_base_fixed = jax.random.uniform(key_con_fixed, (3, 2), minval=-1, maxval=1)  # 6 different continuous codes
+                con_base_fixed = jax.random.uniform(key_con_fixed, (3, 2), minval=-0.5, maxval=0.5)  # 6 different continuous codes
                 #z_base_concat = jnp.concatenate([z_base, fixed_z_subset], axis=0) 
                 z_block = jnp.repeat(z_base_fixed, 10, axis=0)  # Repeat each z 10 times for each categorical code
                 z_block = jnp.concatenate([z_base, z_block], axis=0)
@@ -974,7 +976,7 @@ class Trainer(object):
                 codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 6)  # Categorical codes from 0 to 9, repeated 6 times
                 onehot60 = jax.nn.one_hot(codes60, 10)
                 
-                con_base = jax.random.uniform(key_con, (30, 2), minval=-1, maxval=1)
+                con_base = jax.random.uniform(key_con, (30, 2), minval=-0.5, maxval=0.5)
   
                 con_block = jnp.repeat(con_base_fixed, 10, axis=0)  # Repeat each con code 10 times
 
@@ -985,7 +987,7 @@ class Trainer(object):
                 self._key, key_z, key_con = jax.random.split(self._key, 3)
 
                 z_block4 = jax.random.normal(key_z, (4, 62))  # 4 different z vectors
-                con_block4 = jax.random.uniform(key_con, (4, 2), minval=-1, maxval=1)
+                con_block4 = jax.random.uniform(key_con, (4, 2), minval=-0.5, maxval=0.5)
 
                 z_block_full = jnp.concatenate([z_block, z_block4], axis=0)
                 con_block_full = jnp.concatenate([con_block, con_block4], axis=0)
@@ -1002,7 +1004,7 @@ class Trainer(object):
                 avg_per_code = topographic_ks[0]
                 
                 scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, cat_codes=c_onehot, codes60=codes60, con_codes=con_block_full, features=avg_per_code, generator=True, test=False
+                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=batch_stats_gen, batch_stats_disc=self.batch_stats_disc, latent=latent, cat_codes=c_onehot, codes60=codes60, con_codes=con_block_full, features=avg_per_code, generator=True, test=False
                 )
 
                 #jax.debug.print('fake_imgs shape: {} ', fake_imgs.shape)

@@ -149,7 +149,7 @@ class Latent_Points(VectorizedTask):
                 c = c[:self.batch_size]
                 batch_cat_one_hot = jax.nn.one_hot(c, 10)
 
-                batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-1.0, maxval=1.0)
+                batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-0.5, maxval=0.5)
 
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot, batch_con], axis=-1)
 
@@ -170,7 +170,7 @@ class Latent_Points(VectorizedTask):
                 batch_cat_one_hot = jax.nn.one_hot(jnp.full((self.batch_size,), c_cat_idx), self.n_classes)
                 
 
-                c_cont_value = random.uniform(con_key, (2,), minval=-1.0, maxval=1.0)
+                c_cont_value = random.uniform(con_key, (2,), minval=-0.5, maxval=0.5)
                 batch_con = jnp.tile(c_cont_value, (self.batch_size,1))
                 #c1 = jnp.tile(jnp.arange(10),6)
                 #c2 = jax.random.randint(cat_key, (4,), 0, 10)

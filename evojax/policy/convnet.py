@@ -82,7 +82,7 @@ def load_model(state, path):
 
 class Generator(nn.Module):
     """InfoGAN generator for MNIST, based on your simple ConvTranspose stack."""
-    features: int = 64
+    features: int = 56
     training: bool = True
 
     @nn.compact
@@ -586,7 +586,7 @@ class GenPolicy(PolicyNetwork):
 
         self.model_gen = Generator(training=False)
        
-        self.model_disc = Discriminator(training=False)
+        self.model_disc = Discriminator()
 
         self.model_q = Discriminator(training=False)
         
@@ -614,30 +614,30 @@ class GenPolicy(PolicyNetwork):
             'GenPolicy.num_params = {}'.format(self.num_params))
         self._format_params_gen_fn = jax.vmap(format_params_gen_fn)
 
-        self.num_batch_stats, format_batch_stats_gen_fn = get_params_format_fn(self.init_batch_stats_gen)
-        self._logger.info(
-            'GenPolicy.num_batch_stats = {}'.format(self.num_batch_stats))
-        self._format_batch_stats_gen_fn = jax.vmap(format_batch_stats_gen_fn)
+        #self.num_batch_stats, format_batch_stats_gen_fn = get_params_format_fn(self.init_batch_stats_gen)
+        #self._logger.info(
+        #    'GenPolicy.num_batch_stats = {}'.format(self.num_batch_stats))
+        #self._format_batch_stats_gen_fn = jax.vmap(format_batch_stats_gen_fn)
 
         leaves_params, _ = jax.tree_util.tree_flatten(self.init_params_gen)
         
         self.flat_params_gen = jnp.concatenate([p.flatten() for p in leaves_params])
 
-        leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(self.init_batch_stats_gen)
+        #leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(self.init_batch_stats_gen)
 
-        self.flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+        #self.flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
 
         self.num_params_disc, format_params_disc_fn = get_params_format_fn(self.init_params_disc)
         self._logger.info(
             'DiscPolicy.num_params = {}'.format(self.num_params_disc))
         self._format_params_disc_fn = jax.vmap(format_params_disc_fn)
-        self.num_batch_stats_disc, format_batch_stats_disc_fn = get_params_format_fn(self.init_batch_stats_disc)
-        self._logger.info(
-            'DiscPolicy.num_batch_stats = {}'.format(self.num_batch_stats_disc))
-        self._format_batch_stats_disc_fn = jax.vmap(format_batch_stats_disc_fn)
+        #self.num_batch_stats_disc, format_batch_stats_disc_fn = get_params_format_fn(self.init_batch_stats_disc)
+        #self._logger.info(
+        #    'DiscPolicy.num_batch_stats = {}'.format(self.num_batch_stats_disc))
+        #self._format_batch_stats_disc_fn = jax.vmap(format_batch_stats_disc_fn)
 
-        leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(self.init_batch_stats_disc)
-        self.flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
+        #leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(self.init_batch_stats_disc)
+        #self.flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
         def forward_fn_gen(params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, latent_input):
           
@@ -647,7 +647,7 @@ class GenPolicy(PolicyNetwork):
 
             (fake_data) = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=False)
             
-            (preds, q, mu, var, q_flat) = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=False)
+            (preds, q, mu, var, q_flat), _ = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
             #_, _, _, _, q_flat = self.model_q.apply({'params': params_d, 'batch_stats': vars_d['batch_stats']}, fake_data, mutable=False)
             #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
@@ -677,8 +677,8 @@ class GenPolicy(PolicyNetwork):
     def set_format_params_disc_fn(self, format_params_disc_fn):
         self._format_params_disc_fn = format_params_disc_fn
 
-    def set_format_batch_stats_disc_fn(self, format_batch_stats_disc_fn):
-        self._format_batch_stats_disc_fn = format_batch_stats_disc_fn
+    #def set_format_batch_stats_disc_fn(self, format_batch_stats_disc_fn):
+    #    self._format_batch_stats_disc_fn = format_batch_stats_disc_fn
 
     def get_actions(self,
                     t_states: TaskState,
@@ -691,10 +691,12 @@ class GenPolicy(PolicyNetwork):
         params_disc = self._format_params_disc_fn(params_disc)
         #params_q = self._format_params_q_fn(params_q)
 
-        batch_stats_gen = self._format_batch_stats_gen_fn(t_states.batch_stats_gen)
-        batch_stats_disc = self._format_batch_stats_disc_fn(t_states.batch_stats_disc)
+        #batch_stats_gen = self._format_batch_stats_gen_fn(t_states.batch_stats_gen)
+        #batch_stats_disc = self._format_batch_stats_disc_fn(t_states.batch_stats_disc)
         #batch_stats_q = self._format_batch_stats_q_fn(t_states.batch_stats_q) 
 
+        batch_stats_gen = t_states.batch_stats_gen
+        batch_stats_disc = t_states.batch_stats_disc
         #jax.debug.print('params gen : {} ', params_gen)
 
         fake_data, preds, disc_logits, mu, var, mean_var_fake, q_flat = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
