@@ -8,6 +8,45 @@ from jax import vmap
 from jax import ops 
 from jax.lax import scan, fori_loop
 
+@jit
+def initialize_centroids(embeddings, k, key):
+    indices = random.choice(key, jnp.arange(embeddings.shape[0]), shape=(10,), replace=False)
+    return jnp.take(embeddings, indices, axis=0)
+
+@jit
+def compute_distances(embedding, centroids):
+    return jnp.sqrt(jnp.sum((embedding - centroids)**2, axis=-1))
+
+@jit
+def assign_clusters(embeddings, centroids):
+    distances = vmap(compute_distances, in_axes=(0, None))(embeddings, centroids)
+    return jnp.argmin(distances, axis=-1)
+
+@jit
+def update_centroids(embeddings, assignments, k):
+    def update_centroid(i):
+        mask = jnp.equal(assignments, i)
+        masked_embeddings = jnp.where(mask[:, None], embeddings, 0)
+        return jnp.sum(masked_embeddings, axis=0) / jnp.sum(mask)
+
+    return vmap(update_centroid)(jnp.arange(10))
+
+def kmeans_step(state, _):
+    centroids, embeddings, k = state
+    assignments = assign_clusters(embeddings, centroids)
+    centroids = update_centroids(embeddings, assignments, k)
+    return (centroids, embeddings, k), None
+
+@jit
+def kmeans(embeddings, k=10, num_iters=60, seed=0):
+    key = random.PRNGKey(seed)
+    centroids = initialize_centroids(embeddings, k, key)
+    initial_state = (centroids, embeddings, k)
+
+    final_state, _ = lax.scan(kmeans_step, initial_state, None, length=num_iters)
+    final_centroids, embeddings, k = final_state
+    assignments = assign_clusters(embeddings, final_centroids)
+    return final_centroids, assignments
 
 @jax.jit
 def non_dominated_sort_lax(objectives: jnp.ndarray) -> jnp.ndarray:

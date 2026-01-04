@@ -220,7 +220,7 @@ class Discriminator(nn.Module):
 
         # ----- Q trunk -----
         q = nn.Conv(
-            self.features * 2,
+            self.features*4,
             kernel_size=(4, 4),
             strides=(2, 2),
             padding='VALID',
@@ -584,11 +584,11 @@ class GenPolicy(PolicyNetwork):
         else:
             self._logger = logger
 
-        self.model_gen = Generator(training=False)
+        self.model_gen = Generator()
        
-        self.model_disc = Discriminator(training=False)
+        self.model_disc = Discriminator()
 
-        self.model_q = Discriminator(training=False)
+        self.model_q = Discriminator()
         
         key = random.PRNGKey(122)
 
@@ -639,17 +639,21 @@ class GenPolicy(PolicyNetwork):
         leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(self.init_batch_stats_disc)
         self.flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
-        def forward_fn_gen(params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, latent_input):
+        def forward_fn_gen(params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, latent_input, noise, shift_x, shift_y):
           
             #(fake_data) = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input)
        
             #(preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
-            (fake_data) = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=False)
+            (fake_data), _ = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
+           
+            fake_data_with_noise = fake_data + noise
+          
+            #fake_data_with_noise_shifted = jnp.roll(fake_data_with_noise, shift=(shift_x, shift_y), axis=(1,2))
             
-            (preds, q, mu, var, q_flat) = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=False)
+            (preds, q, mu, var, q_flat), _ = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data_with_noise, mutable=['batch_stats'])
 
-            #_, _, _, _, q_flat = self.model_q.apply({'params': params_d, 'batch_stats': vars_d['batch_stats']}, fake_data, mutable=False)
+            #(_, q, mu, var, q_flat), _ = self.model_q.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
             #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
 
             #leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
@@ -693,11 +697,12 @@ class GenPolicy(PolicyNetwork):
 
         batch_stats_gen = self._format_batch_stats_gen_fn(t_states.batch_stats_gen)
         batch_stats_disc = self._format_batch_stats_disc_fn(t_states.batch_stats_disc)
+
         #batch_stats_q = self._format_batch_stats_q_fn(t_states.batch_stats_q) 
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, preds, disc_logits, mu, var, mean_var_fake, q_flat = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs)
+        fake_data, preds, disc_logits, mu, var, mean_var_fake, q_flat = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs, t_states.noise, t_states.shift_x, t_states.shift_y)
         
         return fake_data, preds, disc_logits, mu, var, mean_var_fake, q_flat, p_states
         #return self._forward_fn(params, t_states.obs), p_states

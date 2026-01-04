@@ -150,6 +150,18 @@ def compute_reinforce_update(
     )
     return total_mu.mean(axis=0), total_sigma.mean(axis=0)
 
+@jax.jit
+def mi_penalty(fitness_mi, fitness_adv, mi_thr=-0.01, v_ref=0.01, M=5.0, eps=1e-8):
+    # violation
+    v = jnp.maximum(0.0, mi_thr - fitness_mi)
+
+    # scale from current population
+    scale = jnp.std(fitness_adv) + eps
+
+    # penalty weight
+    lam = (M * scale) / (v_ref + eps)
+
+    return lam * v
 
 @jax.jit
 def update_stdev(
@@ -281,9 +293,9 @@ class PGPE(NEAlgorithm):
 
         if optimizer_config is None:
             optimizer_config = {}
-        decay_coef = optimizer_config.get("center_lr_decay_coef", 0.99)
+        decay_coef = optimizer_config.get("center_lr_decay_coef", 1.0)
         self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 20000
+            "center_lr_decay_steps", 90000
         )
 
         if optimizer == "adam":
@@ -318,6 +330,7 @@ class PGPE(NEAlgorithm):
         self._scaled_noises = None
 
         self._key, subkey = random.split(self._key)
+       
         self.belief_space = belief_space if belief_space is not None else initialize_belief_space(
             population_size=self.pop_size, param_size=abs(param_size), key=subkey)
 
@@ -389,9 +402,19 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], r_anchor: Union[np.ndarray, jnp.ndarray], mmd: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
 
         
+        avg_r_anchor = jnp.mean(r_anchor)
+
+        #if avg_r_anchor < 0.0009:
+        #    w_r_anchor = 1000.0
+        #elif avg_r_anchor < 0.009:
+        #    w_r_anchor = 100.0
+        #elif avg_r_anchor < 0.09:
+        #    w_r_anchor = 10.0
+        #else:
+        #    w_r_anchor = 2.0
         
         # add a dimension to the fitness scores so that (256,) becomes (256, 1)
         fitness_adv = fitness_adv[:, None]
@@ -403,37 +426,76 @@ class PGPE(NEAlgorithm):
         r_intra2 = r_intra[:, None]
         pop_var2 = pop_var[:, None]
 
-        penalty = jnp.where(
-             pop_var < self.MIN_DIVERSITY,
-             (self.MIN_DIVERSITY - pop_var) * 100,  # Heavy penalty if below threshold
-             0.0  # No penalty if above threshold
-        )
+        mmd2 = mmd[:, None]
+        mmd_max = jnp.max(mmd2)
+        fitness_adv_max = jnp.max(fitness_adv)
+        fitness_mi_max = jnp.max(fitness_mi)
+        fitness_con_max = jnp.max(fitness_con)
+        #penalty = jnp.where(
+        #     pop_var < self.MIN_DIVERSITY,
+        #     (self.MIN_DIVERSITY - pop_var) * 100,  # Heavy penalty if below threshold
+        #     0.0  # No penalty if above threshold
+        #)
         #jax.debug.print('fitness adv scores {} : ', fitness_adv.flatten())
-       
-        if self._t < 30000:
+        #objectives = jnp.hstack([-fitness_adv])
+        if self._t < 50000:
+        #    objectives = jnp.hstack([-fitness_adv, -pop_var2])
+        #elif self._t < 1000:
             objectives = jnp.hstack([-fitness_adv])
-        elif self._t < 38000:
-            objectives = jnp.hstack([-fitness_mi, -fitness_adv])
-        elif self._t < 40000:
-            objectives = jnp.hstack([-fitness_mi, -r_sense2, -fitness_adv])
-        elif self._t < 54000:
-            objectives = jnp.hstack([r_cons2, -r_sense2, -fitness_adv])
-        elif self._t < 70000:
-            objectives = jnp.hstack([-r_sense2, r_cons2, -fitness_adv])
-        else: 
-            objectives = jnp.hstack([r_cons2, -r_intra2, -fitness_adv])
+        elif self._t < 190000 and fitness_mi_max < -0.001 and fitness_con_max < -0.005:
+            objectives = jnp.hstack([-fitness_adv, -fitness_mi, -fitness_con])
+        elif self._t < 190000 and fitness_con_max < -0.005:
+            objectives = jnp.hstack([-fitness_adv, -fitness_con])
+        elif self._t < 190000 and fitness_mi_max < -0.001:
+            objectives = jnp.hstack([-fitness_adv, -fitness_mi])
+        else:
+            objectives = jnp.hstack([-fitness_adv])
+        ##elif mmd_max < 2.03 and fitness_mi_max < -0.02:
+        ##    objectives = jnp.hstack([-fitness_adv, -fitness_mi, -mmd2])
+        ##elif mmd_max < 2.03:
+        ##    objectives = jnp.hstack([-fitness_adv, -fitness_con, -mmd2])
+        #elif fitness_mi_max < -0.01 and fitness_con_max < -0.05:
+        #    objectives = jnp.hstack([-fitness_adv, -fitness_mi, -fitness_con])
+        #elif fitness_con_max < -0.03:
+        #    objectives = jnp.hstack([-fitness_adv, -fitness_con])
+        #elif fitness_mi_max < -0.005:
+        #    objectives = jnp.hstack([-fitness_adv, -fitness_mi])
+        #else:
+        #    objectives = jnp.hstack([-fitness_adv])
+        #elif self._t < 40000 and mmd_max < 2.03:
+        #    objectives = jnp.hstack([-fitness_mi, -fitness_adv, -mmd2])
+        #elif self._t < 40000:
+        #    objectives = jnp.hstack([-fitness_mi, -fitness_adv])
+        #elif self._t < 50000 and mmd_max < 2.03:
+        #    objectives = jnp.hstack([-r_sense2, -fitness_adv, -mmd2])
+        #elif self._t < 50000:
+        #    objectives = jnp.hstack([-r_sense2, -fitness_adv, -fitness_mi])
+        #elif self._t < 60000 and mmd_max < 2.03:
+        #    objectives = jnp.hstack([r_cons2, -fitness_adv, -mmd2])
+        #elif self._t < 60000:
+        #    objectives = jnp.hstack([r_cons2, -fitness_adv, -fitness_mi])
+        #elif self._t < 70000 and mmd_max < 2.03:
+        #    objectives = jnp.hstack([-r_sense2, -mmd2, -fitness_adv])
+        #elif self._t < 70000:
+        #    objectives = jnp.hstack([-r_sense2, -fitness_mi, -fitness_adv])
+        ##
+        #elif mmd_max < 2.03: 
+        #    objectives = jnp.hstack([-mmd2, -fitness_adv, -fitness_con])
+        #else:
+        #    objectives = jnp.hstack([-fitness_mi, -fitness_adv, -fitness_con])
+            #    objectives = jnp.hstack([r_cons2, -r_intra2, -fitness_adv])
 
         ranks = non_dominated_sort_lax(objectives)
        
-        order = jnp.lexsort((-fitness_mi.flatten(), ranks))
+        order = jnp.lexsort((-fitness_adv.flatten(), ranks))
 
 
-        avg_fitness_adv = jnp.mean(fitness_adv)
-        avg_fitness_mi = jnp.mean(fitness_mi)
+        #avg_fitness_adv = jnp.mean(fitness_adv)
+        #avg_fitness_mi = jnp.mean(fitness_mi)
 
-        w_adv = avg_fitness_adv / (avg_fitness_adv + avg_fitness_mi)
-        w_adv = jnp.clip(w_adv, 0.3, 0.7)
-        w_mi = 1 - w_adv
+        #w_adv = avg_fitness_adv / (avg_fitness_adv + avg_fitness_mi)
+        #w_adv = jnp.clip(w_adv, 0.3, 0.7)
+        #w_mi = 1 - w_adv
 
 
         self.belief_space = update_topographic_ks(
@@ -466,31 +528,108 @@ class PGPE(NEAlgorithm):
         #else:
         #    fitness_scores = fitness_adv.flatten()*0.1 + fitness_mi.flatten() * 1000 - r_cons * 20 + r_sense * 10 + r_intra
         #    
-        fitness_adv = fitness_adv.flatten()
+        #if jnp.mean(fitness_mi) < -0.4:
+        #    w_mi = 10
+        #elif jnp.mean(fitness_mi) < -0.2:
+        #    w_mi = 20
+        #else:
+        if self._t < 3000: 
+            w_mi = 40
+        elif self._t < 6000:
+            w_mi = 30
+        elif self._t < 9000:
+            w_mi = 20
+        elif self._t < 25000:
+            w_mi = 10
+        else:
+            w_mi = 100
+       
+        if self._t < 6000:
+            w_adv = 1.0
+        elif self._t < 8000:
+            w_adv = 0.95
+        elif self._t < 14000:
+            w_adv = 0.9
+        elif self._t < 30000:
+            w_adv = 0.85
+        elif self._t < 50000:
+            w_adv = 0.9
+        elif self._t < 70000:
+            w_adv = 0.95
+        else:
+            w_adv = 1.0
 
-        realism_gate = jax.nn.sigmoid(fitness_adv + 2.0)
+        if self._t < 50000:
+            w_sense = 10.0
+            w_intra = 1.0
+            w_cons = 1.0
+            w_con = 1.0
+        elif self._t < 60000:
+            w_sense = 2.0
+            w_intra = 2.0
+            w_cons = 0.4
+            w_con = 0.8
+        elif self._t < 70000:
+            w_sense = 1.0
+            w_intra = 1.0
+            w_cons = 2.0
+            w_con = 1.0
+        elif self._t < 90000:
+            w_sense = 2.0
+            w_intra = 4.0
+            w_cons = 1.0
+            w_con = 1.6
+        else:
+            w_sense = 4.0
+            w_intra = 6.0
+            w_cons = 1.0
+            w_con = 3.0
+
+
+        
+        raw_fitness_adv = fitness_adv.flatten() #* w_adv
+        fitness_adv = raw_fitness_adv # * w_adv
+        
+        std_adv = jnp.std(fitness_adv) + 1e-8
+        std_mi = jnp.std(fitness_mi) + 1e-8
+
+
+        max_w_mi = jnp.minimum(100, jnp.maximum((std_adv / std_mi)//2,6))
+
+        realism_gate = jax.nn.sigmoid(raw_fitness_adv + 1.6)
         # 2. MI is a constraint. If MI loss is high, it dominates fitness.
         # If MI loss is low (good), its gradient contribution diminishes.
-        mi_target = -0.06
-        mi_gap = jnp.minimum(fitness_mi.flatten() - mi_target, 0.0)
-        fitness_mi = 8 * mi_gap
+        #mi_target = -0.001
+        #mi_gap = jnp.minimum(fitness_mi.flatten() - mi_target, 0.00)
+        
+        #fitness_mi = w_mi * mi_gap
         #fitness_mi = 5 * fitness_mi.flatten()
 
-        r_sense = 4 * jnp.minimum(r_sense, 0.4)
+        penalty_mi = mi_penalty(fitness_mi.flatten(), fitness_adv.flatten(), mi_thr=-0.01, v_ref=0.01, M=5.0)
+        r_sense = w_sense * jnp.minimum(r_sense, 0.62)
 
         r_cons_weight = jnp.clip( (self._t - 3000) / 3000 , 0.0, 1.0)
 
-        r_cons_penalty = 2 * jnp.maximum(r_cons, 0.1)
+        #r_cons_penalty = 2 * jnp.maximum(r_cons, 0.1)
       
-        r_cons = -1.0 * r_cons_weight * r_cons_penalty
-        
-        #if self._t < 3000:
-        #    fitness_scores = fitness_adv + fitness_mi * 3
-        #else:
-        cultural_score = r_sense + r_cons + r_intra + fitness_con.flatten()*0.6
-        fitness_scores = fitness_adv + fitness_mi + realism_gate * cultural_score + pop_var  * 0.1
+        r_cons = -1.0 * r_cons_weight * r_cons#r_cons_penalty
+        r_cons = w_cons * r_cons
+
+        r_intra = w_intra * r_intra
+
+        fitness_con = w_con * fitness_con.flatten()
+
+        w_r_anchor = 20.0
+
+        if self._t < 40000:
+            fitness_scores = -jnp.argsort(order)
+            #fitness_scores = fitness_adv + fitness_mi.flatten() * max_w_mi + mmd2.flatten()*0.02 + fitness_con.flatten()*0.1
+        else:
+            cultural_score = r_sense + r_intra + r_cons + fitness_con
+            fitness_scores = fitness_adv + realism_gate * cultural_score - penalty_mi - (r_anchor * w_r_anchor)
         #fitness_scores = fitness_adv + fitness_mi + r_sense + fitness_con.flatten()*0.6 + r_intra + r_cons
 
+        #fitness_scores = -jnp.argsort(order+1)
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
 
         grad_center, grad_stdev = compute_reinforce_update(
