@@ -23,15 +23,26 @@ from evojax.algo.cultural.helper_functions import (
 )
 
 
-def initialize_domain_ks(param_size: int):
+def initialize_domain_ks(num_clusters: int, num_pixels: int, num_images_per_cluster: int):
     return (
-        jnp.zeros((20,param_size)),  # parameter sets
-        jnp.zeros((20,param_size)),  # standard deviations
-        jnp.zeros((20,param_size)),  # scaled noises
-        jnp.full((20,),1000),  # fitness values, adversarial
-        jnp.full((20,),1000),  # fitness values, mutual information
-        jnp.full((20,),1000),  # Tchebyschev fitness values
-        jnp.full((20,),1000),  # entropy
+        jnp.zeros((num_clusters, num_pixels)),  # mnist centroids
+        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 0
+        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 1
+        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 2
+        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 3
+        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 4
+        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 5
+        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 6
+        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 7
+        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 8
+        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 9
+        #jnp.zeros((20,param_size)),  # parameter sets
+        #jnp.zeros((20,param_size)),  # standard deviations
+        #jnp.zeros((20,param_size)),  # scaled noises
+        #jnp.full((20,),1000),  # fitness values, adversarial
+        #jnp.full((20,),1000),  # fitness values, mutual information
+        #jnp.full((20,),1000),  # Tchebyschev fitness values
+        #jnp.full((20,),1000),  # entropy
     )
 
 
