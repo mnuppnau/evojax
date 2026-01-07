@@ -602,7 +602,7 @@ class Latent_Points(VectorizedTask):
             
             q_cat = jax.nn.log_softmax(q, axis=-1)
 
-            loss_q_disc = loss_mutual_information_ce(state.cat_codes, q_cat)
+            loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
             #loss_q_disc = -loss_q_disc
             #loss_q_disc = cpc_mi_loss(state.cat_codes, q_cat, negative_samples=10)
 

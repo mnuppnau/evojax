@@ -556,6 +556,7 @@ def compute_fake_centroids(fake_features: jnp.ndarray, n_codes: int = 10) -> jnp
         mask = (indices % n_codes) == code_idx
         masked_sum = jnp.sum(jnp.where(mask[:, None], fake_features, 0.0), axis=0)
         count = jnp.sum(mask)
+        jax.debug.print("Code index: {}, Count: {}", code_idx, count)
         return masked_sum / count
     
     return jax.vmap(compute_centroid_for_code)(jnp.arange(n_codes))
@@ -758,7 +759,7 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
                   #jax.debug.print('Q accuracy: {} ', q_acc)
                   # Calculate Mutual Information loss
                   q_cat = nn.log_softmax(q_fake, axis=-1)
-                  loss_mi = loss_mutual_information_ce(fake_cat_input, q_cat)
+                  loss_mi = loss_mutual_information(fake_cat_input, q_cat)
                   #loss_mi = cpc_mi_loss(fake_cat_input, q_cat, negative_samples=10)
                   #loss_con = normal_nll_loss(con_codes, mu, var)
                   loss_con = continuous_loss(con_codes, mu_fake, var_fake)
@@ -777,7 +778,7 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
                   #fake_loss = bce_logits(fake_preds, jnp.zeros((32,), dtype=jnp.int32))
               
                   # use 0.9 as the label for real images instead of 1.0
-                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.9)
+                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.97)
                   # use 0.1 as the label for fake images instead of 0.0
                   fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds))
 
@@ -1023,56 +1024,169 @@ class Trainer(object):
         self.labels = dataset.targets.numpy()
 
         # sample 10,000 mnist data points for clustering
-        cluster_data, _ = sample_batch(subkey, self.data, self.labels, 10000)
+        cluster_data, cluster_labels = sample_batch(subkey, self.data, self.labels, 20000)
 
+        self.cluster_labels = cluster_labels
         # reshape to (num_samples, 28*28)
         self.cluster_data = cluster_data.reshape((cluster_data.shape[0], -1))
 
-        centroids, assignments = kmeans(self.cluster_data)
-       
+        num_parent_clusters = 10
+        num_subclusters = 5
+        
+        centroids, assignments = kmeans(self.cluster_data, k=num_parent_clusters)
+        
         jax.debug.print('KMeans centroids shape: {}', centroids.shape)
         jax.debug.print('KMeans assignments shape: {}', assignments.shape)
-
-        # print the number of data points assigned to each cluster
-        for x in range(10):
-            num_points = jnp.sum(assignments == x)
-            jax.debug.print('Cluster {}: {} points', x, num_points)
-
-        code0_800_idx = jnp.where(assignments == 0)[0][:800]
-        code1_800_idx = jnp.where(assignments == 1)[0][:800]
-        code2_800_idx = jnp.where(assignments == 2)[0][:800]
-        code3_800_idx = jnp.where(assignments == 3)[0][:800]
-        code4_800_idx = jnp.where(assignments == 4)[0][:800]
-        code5_800_idx = jnp.where(assignments == 5)[0][:800]
-        code6_800_idx = jnp.where(assignments == 6)[0][:800]
-        code7_800_idx = jnp.where(assignments == 7)[0][:800]
-        code8_800_idx = jnp.where(assignments == 8)[0][:800]
-        code9_800_idx = jnp.where(assignments == 9)[0][:800]
         
-        self.code0_800 = self.cluster_data[code0_800_idx]
-        self.code1_800 = self.cluster_data[code1_800_idx]
-        self.code2_800 = self.cluster_data[code2_800_idx]
-        self.code3_800 = self.cluster_data[code3_800_idx]
-        self.code4_800 = self.cluster_data[code4_800_idx]
-        self.code5_800 = self.cluster_data[code5_800_idx]
-        self.code6_800 = self.cluster_data[code6_800_idx]
-        self.code7_800 = self.cluster_data[code7_800_idx]
-        self.code8_800 = self.cluster_data[code8_800_idx]
-        self.code9_800 = self.cluster_data[code9_800_idx]
-
-        # concat to (10, 800, 784)
+        # First pass: determine cluster sizes and find minimum
+        cluster_sizes = jnp.array([jnp.sum(assignments == x) for x in range(num_parent_clusters)])
+        min_cluster_size = int(jnp.min(cluster_sizes))
+        jax.debug.print('Cluster sizes: {}', cluster_sizes)
+        jax.debug.print('Minimum cluster size: {}', min_cluster_size)
+        
+        # Extract data and labels using minimum size
+        cluster_indices = []
+        cluster_labels_list = []
+        
+        for x in range(num_parent_clusters):
+            cluster_mask = assignments == x
+            cluster_idx = jnp.where(cluster_mask)[0][:min_cluster_size]
+            cluster_indices.append(cluster_idx)
+            cluster_label_subset = self.cluster_labels[cluster_idx]
+            cluster_labels_list.append(cluster_label_subset)
+            
+            # Print label distribution (analysis only)
+            label_counts = jnp.array([jnp.sum(cluster_label_subset == digit) for digit in range(10)])
+            jax.debug.print('Cluster {}: {} points, labels: {}', x, min_cluster_size, label_counts)
+        
+        # Stack clustered data and labels
         self.clustered_data = jnp.stack([
-            self.code0_800,
-            self.code1_800,
-            self.code2_800,
-            self.code3_800,
-            self.code4_800,
-            self.code5_800,
-            self.code6_800,
-            self.code7_800,
-            self.code8_800,
-            self.code9_800,
+            self.cluster_data[idx] for idx in cluster_indices
         ], axis=0)
+        self.clustered_labels = jnp.stack(cluster_labels_list, axis=0)
+        
+        jax.debug.print('Clustered data shape: {}', self.clustered_data.shape)
+        
+        # Collect all 75 subclusters (5 per cluster)
+        all_subclusters = []
+        
+        for i in range(num_parent_clusters):
+            cluster_data_i = self.clustered_data[i]
+            cluster_labels_i = self.clustered_labels[i]
+            
+            self._key, subkey = jax.random.split(self._key)
+            sub_centroids, sub_assignments = kmeans(cluster_data_i, k=num_subclusters, seed=98)
+            
+            for j in range(num_subclusters):
+                sub_mask = sub_assignments == j
+                sub_data = cluster_data_i[sub_mask]
+                sub_labels = cluster_labels_i[sub_mask]
+                
+                # Compute centroid for this subcluster
+                centroid = jnp.mean(sub_data, axis=0)
+                
+                # Label counts for analysis only
+                label_counts = jnp.array([jnp.sum(sub_labels == digit) for digit in range(10)])
+                
+                all_subclusters.append({
+                    'data': sub_data,
+                    'labels': sub_labels,
+                    'label_counts': label_counts,
+                    'centroid': centroid,
+                    'cluster_idx': i,
+                    'subcluster_idx': j,
+                    'size': len(sub_data)
+                })
+        
+        jax.debug.print('\nTotal subclusters: {}', len(all_subclusters))
+        
+        # Print all subclusters' label distributions (analysis only)
+        for sc in all_subclusters:
+            jax.debug.print('Cluster {}, Subcluster {}: {} points, labels: {}', 
+                            sc['cluster_idx'], sc['subcluster_idx'], sc['size'], sc['label_counts'])
+        
+        # Greedy selection: pick 10 most distinct subclusters based on centroid distances
+        # Constraint: only one subcluster per parent cluster
+        global_mean = jnp.mean(self.cluster_data, axis=0)
+        
+        # Find first subcluster: furthest from global mean
+        distances_to_mean = [float(jnp.linalg.norm(sc['centroid'] - global_mean)) for sc in all_subclusters]
+        first_idx = int(jnp.argmax(jnp.array(distances_to_mean)))
+        
+        selected_indices = [first_idx]
+        used_parent_clusters = {all_subclusters[first_idx]['cluster_idx']}
+        remaining_indices = [i for i in range(len(all_subclusters)) if i != first_idx]
+        
+        jax.debug.print('\nGreedy selection of 10 most distinct subclusters (one per parent cluster):')
+        jax.debug.print('Selected subcluster 1: cluster {}-{} (furthest from global mean)', 
+                        all_subclusters[first_idx]['cluster_idx'], 
+                        all_subclusters[first_idx]['subcluster_idx'])
+        
+        # Greedily select remaining 9 subclusters
+        for selection_num in range(2, 11):
+            best_idx = None
+            best_min_distance = -float('inf')
+            
+            for idx in remaining_indices:
+                # Skip if parent cluster already used
+                if all_subclusters[idx]['cluster_idx'] in used_parent_clusters:
+                    continue
+                
+                candidate_centroid = all_subclusters[idx]['centroid']
+                
+                # Find minimum distance to any already selected centroid
+                min_dist_to_selected = float('inf')
+                for sel_idx in selected_indices:
+                    dist = float(jnp.linalg.norm(candidate_centroid - all_subclusters[sel_idx]['centroid']))
+                    min_dist_to_selected = min(min_dist_to_selected, dist)
+                
+                # We want the candidate with the largest minimum distance (most distinct)
+                if min_dist_to_selected > best_min_distance:
+                    best_min_distance = min_dist_to_selected
+                    best_idx = idx
+            
+            if best_idx is None:
+                jax.debug.print('Warning: Could not find subcluster for selection {}', selection_num)
+                break
+            
+            selected_indices.append(best_idx)
+            used_parent_clusters.add(all_subclusters[best_idx]['cluster_idx'])
+            remaining_indices.remove(best_idx)
+            
+            jax.debug.print('Selected subcluster {}: cluster {}-{} (min dist to selected: {:.2f})', 
+                            selection_num,
+                            all_subclusters[best_idx]['cluster_idx'], 
+                            all_subclusters[best_idx]['subcluster_idx'],
+                            best_min_distance)
+        
+        # Get the selected subclusters
+        selected_subclusters = [all_subclusters[idx] for idx in selected_indices]
+        
+        # Find minimum size among selected subclusters
+        min_selected_size = min(sc['size'] for sc in selected_subclusters)
+        jax.debug.print('\nMinimum selected subcluster size: {}', min_selected_size)
+        
+        # Stack selected subclusters
+        self.subclustered_data = jnp.stack([
+            sc['data'][:min_selected_size] for sc in selected_subclusters
+        ], axis=0)
+        
+        self.subclustered_labels = jnp.stack([
+            sc['labels'][:min_selected_size] for sc in selected_subclusters
+        ], axis=0)
+        
+        jax.debug.print('Subclustered data shape: {}', self.subclustered_data.shape)
+        jax.debug.print('Subclustered labels shape: {}', self.subclustered_labels.shape)
+        
+        # Print final summary (analysis only - labels used here for evaluation)
+        jax.debug.print('\nFinal selected subclusters analysis:')
+        for i, sc in enumerate(selected_subclusters):
+            dominant_digit = int(jnp.argmax(sc['label_counts']))
+            purity = sc['label_counts'][dominant_digit] / sc['size'] * 100
+            jax.debug.print('  Selection {}: cluster {}-{}, size {}, dominant digit {}, purity {:.1f}%, labels: {}', 
+                            i, sc['cluster_idx'], sc['subcluster_idx'], 
+                            min_selected_size, dominant_digit, purity, sc['label_counts']) 
+
 
         # initialize the discriminator
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
@@ -1173,69 +1287,75 @@ class Trainer(object):
                 shape_noise = (self.mini_batch_size, self.latent_dim-self.n_con)
                 shape_cat = (self.mini_batch_size,)
 
-                if i == 40000:
-                    self._key, subkey_real, subkey_latent = jax.random.split(self._key, 3)
-                    sampled_real = sample_from_clusters(
-                        self.clustered_data,
-                        subkey_real,
-                        128
-                    )
-                    # pass through discriminator to get features
-                    ( _, _, _, _, real_features) = Discriminator(training=False).apply(
-                        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
-                        sampled_real.reshape(1280, 28, 28, 1),
-                        mutable=False
-                    )
-                    self.real_features = real_features.reshape((10, 128, 256))
+                #if i == 40000:
+                #    self._key, subkey_real, subkey_latent = jax.random.split(self._key, 3)
+                #    sampled_real = sample_from_clusters(
+                #        self.subclustered_data,
+                #        subkey_real,
+                #        128
+                #    )
+                #    # pass through discriminator to get features
+                #    ( _, _, _, _, real_features) = Discriminator(training=False).apply(
+                #        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
+                #        sampled_real.reshape(1280, 28, 28, 1),
+                #        mutable=False
+                #    )
+                #    self.real_features = real_features.reshape((10, 128, 256))
+                #    
+                #    # sample latent with batch size 128 to get fake images
+                #   
+                #    # instead of random latent, use fixed latent for assignment
+                #    self._key, key_z_fixed, key_z, key_con_fixed, key_con = jax.random.split(self._key, 5)
+                #    
+                #    z_base_fixed = jax.random.normal(key_z_fixed, (51, 62))  # 6 different z vectors
+                #    z_base = jax.random.normal(key_z, (510, 62)) 
+                #    
+                #    con_block = jax.random.uniform(key_con_fixed, (1020, 2), minval=-0.5, maxval=0.5)  # 6 different continuous codes
+                #    z_block = jnp.repeat(z_base_fixed, 10, axis=0)  # Repeat each z 10 times for each categorical code
+                #    z_block = jnp.concatenate([z_base, z_block], axis=0)
+                #    codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 102)  # Categorical codes from 0 to 9, repeated 6 times
+                #    onehot60 = jax.nn.one_hot(codes60, 10)
+                #    
+                #    self._key, key_z, key_con, key_noise, shift_key_x, shift_key_y = jax.random.split(self._key, 6)
+
+                #    z_block4 = jax.random.normal(key_z, (4, 62))  # 4 different z vectors
+
+                #    z_block_full = jnp.concatenate([z_block, z_block4], axis=0)
+                #    
+                #    con_block_full = jnp.concatenate([con_block, jax.random.uniform(key_con, (4, 2), minval=-0.5, maxval=0.5)], axis=0)
+                #    c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
+                #    latent = jnp.concat([z_block_full, c_onehot, con_block_full], axis=1)
+
+                #    (fake_images) = Generator(training=False).apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
+                #    fake_images = fake_images.reshape((1024, 28, 28, 1))
+
+                #    (_,_,_,_,fake_features) = Discriminator(training=False).apply(
+                #        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
+                #        fake_images,
+                #        mutable=False
+                #    )
+                #    fake_features = fake_features.reshape((1024, 256))
+
+                #    self.row_idx, self.col_idx, self.cost_matrix = assign_fake_to_real(
+                #        self.real_features,
+                #        fake_features
+                #    )
+
+                #    # print the assignment of fake code to real cluster
+                #    for j in range(10):
+                #        assigned_cluster = self.col_idx[j]
+                #        jax.debug.print('Fake code {} assigned to real cluster {}', j, assigned_cluster)
+
+                if i == 210000:
                     
-                    # sample latent with batch size 128 to get fake images
-                   
-                    # instead of random latent, use fixed latent for assignment
-                    self._key, key_z_fixed, key_z, key_con_fixed, key_con = jax.random.split(self._key, 5)
-                    
-                    z_base_fixed = jax.random.normal(key_z_fixed, (6, 62))  # 6 different z vectors
-                    z_base = jax.random.normal(key_z, (60, 62)) 
-                    
-                    con_block = jax.random.uniform(key_con_fixed, (120, 2), minval=-0.5, maxval=0.5)  # 6 different continuous codes
-                    z_block = jnp.repeat(z_base_fixed, 10, axis=0)  # Repeat each z 10 times for each categorical code
-                    z_block = jnp.concatenate([z_base, z_block], axis=0)
-                    codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 12)  # Categorical codes from 0 to 9, repeated 6 times
-                    onehot60 = jax.nn.one_hot(codes60, 10)
-                    
-                    self._key, key_z, key_con, key_noise, shift_key_x, shift_key_y = jax.random.split(self._key, 6)
-
-                    z_block4 = jax.random.normal(key_z, (8, 62))  # 4 different z vectors
-
-                    z_block_full = jnp.concatenate([z_block, z_block4], axis=0)
-                    
-                    con_block_full = jnp.concatenate([con_block, jax.random.uniform(key_con, (8, 2), minval=-0.5, maxval=0.5)], axis=0)
-                    c_onehot = jnp.concat([onehot60, onehot60[:8]], axis=0)
-                    latent = jnp.concat([z_block_full, c_onehot, con_block_full], axis=1)
-
-                    (fake_images) = Generator(training=False).apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
-                    fake_images = fake_images.reshape((128, 28, 28, 1))
-
-                    (_,_,_,_,fake_features) = Discriminator(training=False).apply(
-                        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
-                        fake_images,
-                        mutable=False
-                    )
-                    fake_features = fake_features.reshape((128, 256))
-
-                    self.row_idx, self.col_idx, self.cost_matrix = assign_fake_to_real(
-                        self.real_features,
-                        fake_features
-                    )
-
-                if i == 160000:
                     # update clusters to cluster features extracted from Discriminator using cluster data
                     (_,_,_,_,real_features) = Discriminator(training=False).apply(
                         {'params': params_disc, 'batch_stats': self.batch_stats_disc},
-                        self.cluster_data.reshape(10000, 28, 28, 1),
+                        self.cluster_data.reshape(20000, 28, 28, 1),
                         mutable=False
                     )
                     
-                    real_features = real_features.reshape((10000, 256))
+                    real_features = real_features.reshape((20000, 256))
                     centroids, assignments = kmeans(real_features)
 
                     jax.debug.print('KMeans centroids shape: {}', centroids.shape)
@@ -1276,7 +1396,7 @@ class Trainer(object):
                     code9_min_size = self.cluster_data[code9_min_size_idx]
 
                     # concat to (10, min_cluster_size_rounded_down, 784)
-                    self.clustered_data = jnp.stack([
+                    self.subclustered_data = jnp.stack([
                         code0_min_size,
                         code1_min_size,
                         code2_min_size,
@@ -1289,9 +1409,38 @@ class Trainer(object):
                         code9_min_size,
                     ], axis=0)
 
+                    code0_labels = self.cluster_labels[code0_min_size_idx]
+                    code1_labels = self.cluster_labels[code1_min_size_idx]
+                    code2_labels = self.cluster_labels[code2_min_size_idx]
+                    code3_labels = self.cluster_labels[code3_min_size_idx]
+                    code4_labels = self.cluster_labels[code4_min_size_idx]
+                    code5_labels = self.cluster_labels[code5_min_size_idx]
+                    code6_labels = self.cluster_labels[code6_min_size_idx]
+                    code7_labels = self.cluster_labels[code7_min_size_idx]
+                    code8_labels = self.cluster_labels[code8_min_size_idx]
+                    code9_labels = self.cluster_labels[code9_min_size_idx]
+
+                    # print the count of labels in each code cluster
+                    for z, labels in enumerate([
+                        code0_labels,
+                        code1_labels,
+                        code2_labels,
+                        code3_labels,
+                        code4_labels,
+                        code5_labels,
+                        code6_labels,
+                        code7_labels,
+                        code8_labels,
+                        code9_labels,
+                    ]):
+                        unique, counts = jnp.unique(labels, return_counts=True)
+                        jax.debug.print('Code {} label distribution after kmeans:', z)
+                        for u, c in zip(unique, counts):
+                            jax.debug.print('  Label {}: {} samples', u, c)
+
                     self._key, subkey_real, subkey_latent = jax.random.split(self._key, 3)
                     sampled_real = sample_from_clusters(
-                        self.clustered_data,
+                        self.subclustered_data,
                         subkey_real,
                         128
                     )
@@ -1304,38 +1453,37 @@ class Trainer(object):
                     self.real_features = real_features.reshape((10, 128, 256))
                     
                     # sample latent with batch size 128 to get fake images
-                   
-                    # instead of random latent, use fixed latent for assignment
+                  
                     self._key, key_z_fixed, key_z, key_con_fixed, key_con = jax.random.split(self._key, 5)
                     
-                    z_base_fixed = jax.random.normal(key_z_fixed, (6, 62))  # 6 different z vectors
-                    z_base = jax.random.normal(key_z, (60, 62)) 
+                    z_base_fixed = jax.random.normal(key_z_fixed, (51, 62))  # 6 different z vectors
+                    z_base = jax.random.normal(key_z, (510, 62)) 
                     
-                    con_block = jax.random.uniform(key_con_fixed, (120, 2), minval=-0.5, maxval=0.5)  # 6 different continuous codes
+                    con_block = jax.random.uniform(key_con_fixed, (1020, 2), minval=-0.5, maxval=0.5)  # 6 different continuous codes
                     z_block = jnp.repeat(z_base_fixed, 10, axis=0)  # Repeat each z 10 times for each categorical code
                     z_block = jnp.concatenate([z_base, z_block], axis=0)
-                    codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 12)  # Categorical codes from 0 to 9, repeated 6 times
+                    codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 102)  # Categorical codes from 0 to 9, repeated 6 times
                     onehot60 = jax.nn.one_hot(codes60, 10)
                     
                     self._key, key_z, key_con, key_noise, shift_key_x, shift_key_y = jax.random.split(self._key, 6)
 
-                    z_block4 = jax.random.normal(key_z, (8, 62))  # 4 different z vectors
+                    z_block4 = jax.random.normal(key_z, (4, 62))  # 4 different z vectors
 
                     z_block_full = jnp.concatenate([z_block, z_block4], axis=0)
                     
-                    con_block_full = jnp.concatenate([con_block, jax.random.uniform(key_con, (8, 2), minval=-0.5, maxval=0.5)], axis=0)
-                    c_onehot = jnp.concat([onehot60, onehot60[:8]], axis=0)
+                    con_block_full = jnp.concatenate([con_block, jax.random.uniform(key_con, (4, 2), minval=-0.5, maxval=0.5)], axis=0)
+                    c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
                     latent = jnp.concat([z_block_full, c_onehot, con_block_full], axis=1)
 
                     (fake_images) = Generator(training=False).apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
-                    fake_images = fake_images.reshape((128, 28, 28, 1))
+                    fake_images = fake_images.reshape((1024, 28, 28, 1))
 
                     (_,_,_,_,fake_features) = Discriminator(training=False).apply(
                         {'params': params_disc, 'batch_stats': self.batch_stats_disc},
                         fake_images,
                         mutable=False
                     )
-                    fake_features = fake_features.reshape((128, 256))
+                    fake_features = fake_features.reshape((1024, 256))
 
                     self.row_idx, self.col_idx, self.cost_matrix = assign_fake_to_real(
                         self.real_features,
@@ -1394,11 +1542,11 @@ class Trainer(object):
                         #if real_fake_loss > 0.25 or i % 20 == 0: 
                         params_disc, self.batch_stats_disc, opt_disc = state 
 
-                if i >= 40000 and i % 20 == 0:
+                if i >= 160000 and i % 20 == 0:
                     ### recalibrate real feature centroids
                     self._key, subkey_real = jax.random.split(self._key)
                     sampled_real = sample_from_clusters(
-                        self.clustered_data,
+                        self.subclustered_data,
                         subkey_real,
                         64
                     )
@@ -1428,8 +1576,10 @@ class Trainer(object):
                 if i < 1:
                     domain_ks = belief_space[1]
                     centroids = domain_ks[0]
-                    domain_updated = (centroids, self.code0_800, self.code1_800, self.code2_800, self.code3_800, self.code4_800, self.code5_800, self.code6_800, self.code7_800, self.code8_800, self.code9_800)
+                    #domain_updated = (centroids, self.code0_800, self.code1_800, self.code2_800, self.code3_800, self.code4_800, self.code5_800, self.code6_800, self.code7_800, self.code8_800, self.code9_800)
 
+                    domain_updated = (centroids, self.subclustered_data[0], self.subclustered_data[1], self.subclustered_data[2], self.subclustered_data[3], self.subclustered_data[4], self.subclustered_data[5], self.subclustered_data[6], self.subclustered_data[7], self.subclustered_data[8], self.subclustered_data[9])
+                    
                     belief_space = belief_space[:1] + (domain_updated,) + belief_space[2:]
 
                 self._key, subkey_recal = jax.random.split(self._key)
@@ -1449,7 +1599,7 @@ class Trainer(object):
                 flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
 
 
-                self._key, key_z_fixed, key_z, key_con_fixed, key_con = jax.random.split(self._key, 5)
+                self._key, key_z_fixed, key_z, key_codes, key_con_fixed, key_con = jax.random.split(self._key, 6)
                 
                 z_base_fixed = jax.random.normal(key_z_fixed, (3, 62))  # 6 different z vectors
                 z_base = jax.random.normal(key_z, (30, 62)) 
@@ -1460,8 +1610,30 @@ class Trainer(object):
                 z_block = jnp.concatenate([z_base, z_block], axis=0)
                 #con_base_concat = jnp.concatenate([con_base, fixed_con_subset], axis=0)
                 #con_block = jnp.repeat(con_base_concat, 10, axis=0)  # Repeat each con code 10 times
+                #if i > 69000:
+                #codes30 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 3)  # Categorical codes from 0 to 9, repeated 6 times
+                #onehot30 = jax.nn.one_hot(codes30, 10)
+                #codes30_rand = jax.random.randint(key_codes, shape=(30,), minval=0, maxval=10)
+                #onehot30_rand = jax.nn.one_hot(codes30_rand, 10)
+                #codes60 = jnp.concatenate([codes30, codes30_rand], axis=0)
+                #onehot60 = jnp.concatenate([onehot30, onehot30_rand], axis=0) 
+                #codes4_rand = jax.random.randint(key_codes, shape=(4,), minval=0, maxval=10)
+                #onehot4_rand = jax.nn.one_hot(codes4_rand, 10)
+
+                #c_onehot = jnp.concat([onehot60, onehot4_rand], axis=0) 
                 codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 6)  # Categorical codes from 0 to 9, repeated 6 times
                 onehot60 = jax.nn.one_hot(codes60, 10)
+                
+                codes4 = jnp.array([0,1,2,3], dtype=jnp.int32)
+                onehot4 = jax.nn.one_hot(codes4, 10)
+
+                c_onehot = jnp.concat([onehot60, onehot4], axis=0)
+
+                #else:
+                    # use random codes for first 60000 iters
+                #    codes60 = jax.random.randint(key_codes, shape=(60,), minval=0, maxval=10)
+                #    onehot60 = jax.nn.one_hot(codes60, 10)
+                #    c_onehot = jnp.concat([onehot60,jax.random.randint(key_codes, shape=(4,10), minval=0, maxval=10)], axis=0)
                 
                 #con_base = jax.random.uniform(key_con, (30, 2), minval=-0.5, maxval=0.5)
   
@@ -1491,7 +1663,7 @@ class Trainer(object):
 
 
                 #latent = jnp.concat([latent60, latent60[:4]], axis=0)
-                c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
+                #c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
                 latent = jnp.concat([z_block_full, c_onehot, con_block_full], axis=1)
                 #con_full_block = jnp.concat([con_block, con_block[:4]], axis=0)
                 topographic_ks = belief_space[4]
