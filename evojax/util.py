@@ -40,6 +40,22 @@ def get_single_params_format_fn(init_params: FrozenDict) -> Callable:
     
     return params_format_fn
 
+def get_params_format_disc_fn(init_params: FrozenDict):
+    flat, tree = tree_util.tree_flatten(init_params)
+
+    sizes = np.asarray([p.size for p in flat], dtype=np.int64)  # <- always int, scalar size = 1
+    params_sizes = np.cumsum(sizes, dtype=np.int64)
+    split_idx = params_sizes.tolist()  # jnp.split likes python ints
+
+    total = int(params_sizes[-1])
+
+    def params_format_fn(params: jnp.ndarray) -> FrozenDict:
+        parts = jnp.split(params, split_idx, axis=-1)[:-1]
+        parts = [x.reshape(y.shape) for x, y in zip(parts, flat)]
+        return tree_util.tree_unflatten(tree, parts)
+
+    return total, params_format_fn
+
 
 def get_params_format_fn(init_params: FrozenDict) -> Tuple[int, Callable]:
     """Return a function that formats the parameters into a correct format."""
