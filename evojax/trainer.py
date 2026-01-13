@@ -149,106 +149,94 @@ class Generator(nn.Module):
         x = jnp.tanh(x)
         return x
 
+
 class Discriminator(nn.Module):
-    """Discriminator with attached Q-network, built on your architecture."""
+    """Discriminator with attached Q-network (SpectralNorm, no BatchNorm)."""
     features: int = 64
-    training: bool = True
     q_cat: int = 10
-    q_cont: int = 2   # set to 0 if you only want categorical codes
+    q_cont: int = 2  # set to 0 if you only want categorical codes
 
     @nn.compact
     def __call__(self, x):
         """
         Args:
             x: (B, 28, 28, 1) in [-1, 1]
+            train: bool (True during training, False during eval)
 
         Returns:
-            d_logits:        (B, 1)         real/fake logits
+            d_logits:        (B, 1)
             q_cat_logits:    (B, q_cat)
             q_cont_mu:       (B, q_cont) or None
             q_cont_logsigma: (B, q_cont) or None
+            q_feat_avg:      (B, features*4)
         """
+
+        def SN(layer):
+            # Wrapper constructor (names auto-assigned unless you pass name=...)
+            return nn.SpectralNorm(layer)
+
+        train = True
         # ----- shared backbone -----
-        h = nn.Conv(
+        h = SN(nn.Conv(
             self.features,
             kernel_size=(4, 4),
             strides=(2, 2),
-            padding='VALID',
+            padding="VALID",
             kernel_init=normal_init(0.02),
-        )(x)
-        h = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(h)
+        ))(x, update_stats=train)
         h = nn.leaky_relu(h, 0.2)
 
-        h = nn.Conv(
+        h = SN(nn.Conv(
             self.features * 2,
             kernel_size=(4, 4),
             strides=(2, 2),
-            padding='VALID',
+            padding="VALID",
             kernel_init=normal_init(0.02),
-        )(h)
-        h = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(h)
+        ))(h, update_stats=train)
         h = nn.leaky_relu(h, 0.2)
 
-        # At this point the spatial size is 5x5; next heads go from there.
-
         # ----- D head -----
-        d = nn.Conv(
+        d = SN(nn.Conv(
             1,
             kernel_size=(4, 4),
             strides=(2, 2),
-            padding='VALID',
+            padding="VALID",
             kernel_init=normal_init(0.02),
-        )(h)        # -> (B, 1, 1, 1)
-        d = d.reshape((d.shape[0], -1))  # (B, 1)
-        d_logits = d  # treat as logits; apply sigmoid in loss if desired
+        ))(h, update_stats=train)  # -> (B, 1, 1, 1)
+        d_logits = d.reshape((d.shape[0], -1))  # (B, 1)
 
         # ----- Q trunk -----
-        q = nn.Conv(
-            self.features*4,
+        q = SN(nn.Conv(
+            self.features * 4,
             kernel_size=(4, 4),
             strides=(2, 2),
-            padding='VALID',
+            padding="VALID",
             kernel_init=normal_init(0.02),
-        )(h)        # -> (B, 1, 1, 2*features)
-        q = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(q)
+        ))(h, update_stats=train)  # -> typically (B, 1, 1, features*4)
         q = nn.leaky_relu(q, 0.2)
-        
-        q_feat_avg = jnp.mean(q, axis=(1, 2))  # (B, 2*features)
 
-        q = q.reshape((q.shape[0], -1))  # (B, 2*features)
-
-        q_flat = q.reshape((q.shape[0], -1))
+        q_feat_avg = jnp.mean(q, axis=(1, 2))      # (B, features*4)
+        q_flat = q.reshape((q.shape[0], -1))       # (B, features*4)
 
         # ----- Q categorical head -----
-        q_cat_logits = nn.Dense(
+        q_cat_logits = SN(nn.Dense(
             self.q_cat,
             kernel_init=normal_init(0.02),
-        )(q)
+        ))(q_flat, update_stats=train)
 
         # ----- Q continuous head -----
-        q_cont_mu = nn.Dense(
+        if self.q_cont and self.q_cont > 0:
+            q_cont_mu = SN(nn.Dense(
                 self.q_cont,
                 kernel_init=normal_init(0.02),
-                )(q)
-        q_cont_logsigma = nn.Dense(
+            ))(q_flat, update_stats=train)
+
+            q_cont_logsigma = SN(nn.Dense(
                 self.q_cont,
                 kernel_init=normal_init(0.02),
-                )(q)
+            ))(q_flat, update_stats=train)
+        else:
+            q_cont_mu, q_cont_logsigma = None, None
 
         return d_logits, q_cat_logits, q_cont_mu, q_cont_logsigma, q_feat_avg
 
@@ -736,20 +724,20 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
                   #mu_fake = mu[:Bf]
                   #var_fake = jnp.exp(var[:Bf])
                   
-                  fake_images_with_noise = fake_imgs + noise
-                  real_images_with_noise = data + noise
+                  #fake_images_with_noise = fake_imgs + noise
+                  #real_images_with_noise = data + noise
 
                   #fake_images_with_noise_perturbed = jnp.roll(fake_images_with_noise, shift=(shift_x, shift_y), axis=(1,2))
                   #real_images_with_noise_perturbed = jnp.roll(real_images_with_noise, shift=(shift_x, shift_y), axis=(1,2))
                   
                   (fake_preds, q_fake, mu_fake, var_fake, _), vars_d = Discriminator().apply(
                       {'params': params_d, 'batch_stats': vars_d_batch_stats},
-                      fake_images_with_noise, mutable=['batch_stats']
+                      fake_imgs, mutable=['batch_stats']
                   )
                   
                   (real_preds, _, _, _, _), vars_d = Discriminator().apply(
                       {'params': params_d, 'batch_stats': vars_d['batch_stats']},
-                      real_images_with_noise, mutable=['batch_stats']
+                      data, mutable=['batch_stats']
                   )
                 
                   # use q_logits and labels to calculate q accuracy
@@ -778,7 +766,7 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
                   #fake_loss = bce_logits(fake_preds, jnp.zeros((32,), dtype=jnp.int32))
               
                   # use 0.9 as the label for real images instead of 1.0
-                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.97)
+                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.95)
                   # use 0.1 as the label for fake images instead of 0.0
                   fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds))
 
@@ -791,7 +779,7 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
                   real_fake_loss = (real_loss + fake_loss) / 2.0
                   #jax.debug.print('mi loss: {} ', loss_mi)
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = real_fake_loss + loss_mi*0.8 + loss_con*0.1 #+ logit_penalty + loss_con*0.2
+                  loss = real_fake_loss + loss_mi*0.2 + loss_con*0.05 #+ logit_penalty + loss_con*0.2
                 
                   return loss, (real_fake_loss, vars_d)
 
@@ -1016,7 +1004,7 @@ class Trainer(object):
 
         self._key, subkey = jax.random.split(self._key)
         
-        dataset = datasets.MNIST('./data', train=True, download=True)
+        dataset = datasets.FashionMNIST('./data', train=True, download=True)
         self.data = np.expand_dims(dataset.data.numpy() / 127.5 - 1.0, axis=-1)
        
         self._key, subkey = jax.random.split(self._key)
@@ -1192,7 +1180,7 @@ class Trainer(object):
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.solver_disc = optax.adam(learning_rate=0.00004, b1=0.5, b2=0.999)
+        self.solver_disc = optax.adam(learning_rate=0.00006, b1=0.5, b2=0.999)
 
     def run(self, demo_mode: bool = False) -> float:
 
@@ -1346,150 +1334,150 @@ class Trainer(object):
                 #        assigned_cluster = self.col_idx[j]
                 #        jax.debug.print('Fake code {} assigned to real cluster {}', j, assigned_cluster)
 
-                if i == 210000:
-                    
-                    # update clusters to cluster features extracted from Discriminator using cluster data
-                    (_,_,_,_,real_features) = Discriminator(training=False).apply(
-                        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
-                        self.cluster_data.reshape(20000, 28, 28, 1),
-                        mutable=False
-                    )
-                    
-                    real_features = real_features.reshape((20000, 256))
-                    centroids, assignments = kmeans(real_features)
+                #if i == 210000:
+                #    
+                #    # update clusters to cluster features extracted from Discriminator using cluster data
+                #    (_,_,_,_,real_features) = Discriminator(training=False).apply(
+                #        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
+                #        self.cluster_data.reshape(20000, 28, 28, 1),
+                #        mutable=False
+                #    )
+                #    
+                #    real_features = real_features.reshape((20000, 256))
+                #    centroids, assignments = kmeans(real_features)
 
-                    jax.debug.print('KMeans centroids shape: {}', centroids.shape)
-                    jax.debug.print('KMeans assignments shape: {}', assignments.shape)
+                #    jax.debug.print('KMeans centroids shape: {}', centroids.shape)
+                #    jax.debug.print('KMeans assignments shape: {}', assignments.shape)
 
-                    min_cluster_size = 10000.0
-                    # print the number of data points assigned to each cluster
-                    for w in range(10):
-                        num_points = jnp.sum(assignments == w)
-                        min_cluster_size = jnp.minimum(min_cluster_size, num_points)
-                        jax.debug.print('Cluster {}: {} points', w, num_points)
+                #    min_cluster_size = 10000.0
+                #    # print the number of data points assigned to each cluster
+                #    for w in range(10):
+                #        num_points = jnp.sum(assignments == w)
+                #        min_cluster_size = jnp.minimum(min_cluster_size, num_points)
+                #        jax.debug.print('Cluster {}: {} points', w, num_points)
 
-                    # round down to nearest hundred (e.g. 754 -> 700)
-                    min_cluster_size_rounded_down = (min_cluster_size // 100).astype(jnp.int32) * 100
+                #    # round down to nearest hundred (e.g. 754 -> 700)
+                #    min_cluster_size_rounded_down = (min_cluster_size // 100).astype(jnp.int32) * 100
 
-                    jax.debug.print('Min cluster size rounded down: {}', min_cluster_size_rounded_down)
-                    
-                    code0_min_size_idx = jnp.where(assignments == 0)[0][:min_cluster_size_rounded_down]
-                    code1_min_size_idx = jnp.where(assignments == 1)[0][:min_cluster_size_rounded_down]
-                    code2_min_size_idx = jnp.where(assignments == 2)[0][:min_cluster_size_rounded_down]
-                    code3_min_size_idx = jnp.where(assignments == 3)[0][:min_cluster_size_rounded_down]
-                    code4_min_size_idx = jnp.where(assignments == 4)[0][:min_cluster_size_rounded_down]
-                    code5_min_size_idx = jnp.where(assignments == 5)[0][:min_cluster_size_rounded_down]
-                    code6_min_size_idx = jnp.where(assignments == 6)[0][:min_cluster_size_rounded_down]
-                    code7_min_size_idx = jnp.where(assignments == 7)[0][:min_cluster_size_rounded_down]
-                    code8_min_size_idx = jnp.where(assignments == 8)[0][:min_cluster_size_rounded_down]
-                    code9_min_size_idx = jnp.where(assignments == 9)[0][:min_cluster_size_rounded_down]
+                #    jax.debug.print('Min cluster size rounded down: {}', min_cluster_size_rounded_down)
+                #    
+                #    code0_min_size_idx = jnp.where(assignments == 0)[0][:min_cluster_size_rounded_down]
+                #    code1_min_size_idx = jnp.where(assignments == 1)[0][:min_cluster_size_rounded_down]
+                #    code2_min_size_idx = jnp.where(assignments == 2)[0][:min_cluster_size_rounded_down]
+                #    code3_min_size_idx = jnp.where(assignments == 3)[0][:min_cluster_size_rounded_down]
+                #    code4_min_size_idx = jnp.where(assignments == 4)[0][:min_cluster_size_rounded_down]
+                #    code5_min_size_idx = jnp.where(assignments == 5)[0][:min_cluster_size_rounded_down]
+                #    code6_min_size_idx = jnp.where(assignments == 6)[0][:min_cluster_size_rounded_down]
+                #    code7_min_size_idx = jnp.where(assignments == 7)[0][:min_cluster_size_rounded_down]
+                #    code8_min_size_idx = jnp.where(assignments == 8)[0][:min_cluster_size_rounded_down]
+                #    code9_min_size_idx = jnp.where(assignments == 9)[0][:min_cluster_size_rounded_down]
 
-                    code0_min_size = self.cluster_data[code0_min_size_idx]
-                    code1_min_size = self.cluster_data[code1_min_size_idx]
-                    code2_min_size = self.cluster_data[code2_min_size_idx]
-                    code3_min_size = self.cluster_data[code3_min_size_idx]
-                    code4_min_size = self.cluster_data[code4_min_size_idx]
-                    code5_min_size = self.cluster_data[code5_min_size_idx]
-                    code6_min_size = self.cluster_data[code6_min_size_idx]
-                    code7_min_size = self.cluster_data[code7_min_size_idx]
-                    code8_min_size = self.cluster_data[code8_min_size_idx]
-                    code9_min_size = self.cluster_data[code9_min_size_idx]
+                #    code0_min_size = self.cluster_data[code0_min_size_idx]
+                #    code1_min_size = self.cluster_data[code1_min_size_idx]
+                #    code2_min_size = self.cluster_data[code2_min_size_idx]
+                #    code3_min_size = self.cluster_data[code3_min_size_idx]
+                #    code4_min_size = self.cluster_data[code4_min_size_idx]
+                #    code5_min_size = self.cluster_data[code5_min_size_idx]
+                #    code6_min_size = self.cluster_data[code6_min_size_idx]
+                #    code7_min_size = self.cluster_data[code7_min_size_idx]
+                #    code8_min_size = self.cluster_data[code8_min_size_idx]
+                #    code9_min_size = self.cluster_data[code9_min_size_idx]
 
-                    # concat to (10, min_cluster_size_rounded_down, 784)
-                    self.subclustered_data = jnp.stack([
-                        code0_min_size,
-                        code1_min_size,
-                        code2_min_size,
-                        code3_min_size,
-                        code4_min_size,
-                        code5_min_size,
-                        code6_min_size,
-                        code7_min_size,
-                        code8_min_size,
-                        code9_min_size,
-                    ], axis=0)
+                #    # concat to (10, min_cluster_size_rounded_down, 784)
+                #    self.subclustered_data = jnp.stack([
+                #        code0_min_size,
+                #        code1_min_size,
+                #        code2_min_size,
+                #        code3_min_size,
+                #        code4_min_size,
+                #        code5_min_size,
+                #        code6_min_size,
+                #        code7_min_size,
+                #        code8_min_size,
+                #        code9_min_size,
+                #    ], axis=0)
 
-                    code0_labels = self.cluster_labels[code0_min_size_idx]
-                    code1_labels = self.cluster_labels[code1_min_size_idx]
-                    code2_labels = self.cluster_labels[code2_min_size_idx]
-                    code3_labels = self.cluster_labels[code3_min_size_idx]
-                    code4_labels = self.cluster_labels[code4_min_size_idx]
-                    code5_labels = self.cluster_labels[code5_min_size_idx]
-                    code6_labels = self.cluster_labels[code6_min_size_idx]
-                    code7_labels = self.cluster_labels[code7_min_size_idx]
-                    code8_labels = self.cluster_labels[code8_min_size_idx]
-                    code9_labels = self.cluster_labels[code9_min_size_idx]
+                #    code0_labels = self.cluster_labels[code0_min_size_idx]
+                #    code1_labels = self.cluster_labels[code1_min_size_idx]
+                #    code2_labels = self.cluster_labels[code2_min_size_idx]
+                #    code3_labels = self.cluster_labels[code3_min_size_idx]
+                #    code4_labels = self.cluster_labels[code4_min_size_idx]
+                #    code5_labels = self.cluster_labels[code5_min_size_idx]
+                #    code6_labels = self.cluster_labels[code6_min_size_idx]
+                #    code7_labels = self.cluster_labels[code7_min_size_idx]
+                #    code8_labels = self.cluster_labels[code8_min_size_idx]
+                #    code9_labels = self.cluster_labels[code9_min_size_idx]
 
-                    # print the count of labels in each code cluster
-                    for z, labels in enumerate([
-                        code0_labels,
-                        code1_labels,
-                        code2_labels,
-                        code3_labels,
-                        code4_labels,
-                        code5_labels,
-                        code6_labels,
-                        code7_labels,
-                        code8_labels,
-                        code9_labels,
-                    ]):
-                        unique, counts = jnp.unique(labels, return_counts=True)
-                        jax.debug.print('Code {} label distribution after kmeans:', z)
-                        for u, c in zip(unique, counts):
-                            jax.debug.print('  Label {}: {} samples', u, c)
+                #    # print the count of labels in each code cluster
+                #    for z, labels in enumerate([
+                #        code0_labels,
+                #        code1_labels,
+                #        code2_labels,
+                #        code3_labels,
+                #        code4_labels,
+                #        code5_labels,
+                #        code6_labels,
+                #        code7_labels,
+                #        code8_labels,
+                #        code9_labels,
+                #    ]):
+                #        unique, counts = jnp.unique(labels, return_counts=True)
+                #        jax.debug.print('Code {} label distribution after kmeans:', z)
+                #        for u, c in zip(unique, counts):
+                #            jax.debug.print('  Label {}: {} samples', u, c)
 
-                    self._key, subkey_real, subkey_latent = jax.random.split(self._key, 3)
-                    sampled_real = sample_from_clusters(
-                        self.subclustered_data,
-                        subkey_real,
-                        128
-                    )
-                    # pass through discriminator to get features
-                    ( _, _, _, _, real_features) = Discriminator(training=False).apply(
-                        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
-                        sampled_real.reshape(1280, 28, 28, 1),
-                        mutable=False
-                    )
-                    self.real_features = real_features.reshape((10, 128, 256))
-                    
-                    # sample latent with batch size 128 to get fake images
-                  
-                    self._key, key_z_fixed, key_z, key_con_fixed, key_con = jax.random.split(self._key, 5)
-                    
-                    z_base_fixed = jax.random.normal(key_z_fixed, (51, 62))  # 6 different z vectors
-                    z_base = jax.random.normal(key_z, (510, 62)) 
-                    
-                    con_block = jax.random.uniform(key_con_fixed, (1020, 2), minval=-0.5, maxval=0.5)  # 6 different continuous codes
-                    z_block = jnp.repeat(z_base_fixed, 10, axis=0)  # Repeat each z 10 times for each categorical code
-                    z_block = jnp.concatenate([z_base, z_block], axis=0)
-                    codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 102)  # Categorical codes from 0 to 9, repeated 6 times
-                    onehot60 = jax.nn.one_hot(codes60, 10)
-                    
-                    self._key, key_z, key_con, key_noise, shift_key_x, shift_key_y = jax.random.split(self._key, 6)
+                #    self._key, subkey_real, subkey_latent = jax.random.split(self._key, 3)
+                #    sampled_real = sample_from_clusters(
+                #        self.subclustered_data,
+                #        subkey_real,
+                #        128
+                #    )
+                #    # pass through discriminator to get features
+                #    ( _, _, _, _, real_features) = Discriminator(training=False).apply(
+                #        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
+                #        sampled_real.reshape(1280, 28, 28, 1),
+                #        mutable=False
+                #    )
+                #    self.real_features = real_features.reshape((10, 128, 256))
+                #    
+                #    # sample latent with batch size 128 to get fake images
+                #  
+                #    self._key, key_z_fixed, key_z, key_con_fixed, key_con = jax.random.split(self._key, 5)
+                #    
+                #    z_base_fixed = jax.random.normal(key_z_fixed, (51, 62))  # 6 different z vectors
+                #    z_base = jax.random.normal(key_z, (510, 62)) 
+                #    
+                #    con_block = jax.random.uniform(key_con_fixed, (1020, 2), minval=-0.5, maxval=0.5)  # 6 different continuous codes
+                #    z_block = jnp.repeat(z_base_fixed, 10, axis=0)  # Repeat each z 10 times for each categorical code
+                #    z_block = jnp.concatenate([z_base, z_block], axis=0)
+                #    codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 102)  # Categorical codes from 0 to 9, repeated 6 times
+                #    onehot60 = jax.nn.one_hot(codes60, 10)
+                #    
+                #    self._key, key_z, key_con, key_noise, shift_key_x, shift_key_y = jax.random.split(self._key, 6)
 
-                    z_block4 = jax.random.normal(key_z, (4, 62))  # 4 different z vectors
+                #    z_block4 = jax.random.normal(key_z, (4, 62))  # 4 different z vectors
 
-                    z_block_full = jnp.concatenate([z_block, z_block4], axis=0)
-                    
-                    con_block_full = jnp.concatenate([con_block, jax.random.uniform(key_con, (4, 2), minval=-0.5, maxval=0.5)], axis=0)
-                    c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
-                    latent = jnp.concat([z_block_full, c_onehot, con_block_full], axis=1)
+                #    z_block_full = jnp.concatenate([z_block, z_block4], axis=0)
+                #    
+                #    con_block_full = jnp.concatenate([con_block, jax.random.uniform(key_con, (4, 2), minval=-0.5, maxval=0.5)], axis=0)
+                #    c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
+                #    latent = jnp.concat([z_block_full, c_onehot, con_block_full], axis=1)
 
-                    (fake_images) = Generator(training=False).apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
-                    fake_images = fake_images.reshape((1024, 28, 28, 1))
+                #    (fake_images) = Generator(training=False).apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},latent, mutable=False)
+                #    fake_images = fake_images.reshape((1024, 28, 28, 1))
 
-                    (_,_,_,_,fake_features) = Discriminator(training=False).apply(
-                        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
-                        fake_images,
-                        mutable=False
-                    )
-                    fake_features = fake_features.reshape((1024, 256))
+                #    (_,_,_,_,fake_features) = Discriminator(training=False).apply(
+                #        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
+                #        fake_images,
+                #        mutable=False
+                #    )
+                #    fake_features = fake_features.reshape((1024, 256))
 
-                    self.row_idx, self.col_idx, self.cost_matrix = assign_fake_to_real(
-                        self.real_features,
-                        fake_features
-                    )
-                    jax.debug.print('Updated cluster assignments after kmeans at iteration {}', i)
+                #    self.row_idx, self.col_idx, self.cost_matrix = assign_fake_to_real(
+                #        self.real_features,
+                #        fake_features
+                #    )
+                #    jax.debug.print('Updated cluster assignments after kmeans at iteration {}', i)
 
                 if i < 1:
                     if len(self.batch_stats_gen.shape) == 1:
@@ -1539,30 +1527,30 @@ class Trainer(object):
                         )
 
                         #jax.debug.print('loss: {} ', loss)
-                        #if real_fake_loss > 0.25 or i % 20 == 0: 
+                        #if real_fake_loss > 0.30 or i % 100 == 0: 
                         params_disc, self.batch_stats_disc, opt_disc = state 
 
-                if i >= 160000 and i % 20 == 0:
-                    ### recalibrate real feature centroids
-                    self._key, subkey_real = jax.random.split(self._key)
-                    sampled_real = sample_from_clusters(
-                        self.subclustered_data,
-                        subkey_real,
-                        64
-                    )
-                    # pass through discriminator to get features
-                    ( _, _, _, _, real_features) = Discriminator(training=False).apply(
-                        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
-                        sampled_real.reshape(640, 28, 28, 1),
-                        mutable=False
-                    )
-                    self.real_features = real_features.reshape((10, 64, 256))
+                #if i >= 160000 and i % 20 == 0:
+                #    ### recalibrate real feature centroids
+                #    self._key, subkey_real = jax.random.split(self._key)
+                #    sampled_real = sample_from_clusters(
+                #        self.subclustered_data,
+                #        subkey_real,
+                #        64
+                #    )
+                #    # pass through discriminator to get features
+                #    ( _, _, _, _, real_features) = Discriminator(training=False).apply(
+                #        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
+                #        sampled_real.reshape(640, 28, 28, 1),
+                #        mutable=False
+                #    )
+                #    self.real_features = real_features.reshape((10, 64, 256))
 
-                    # create centroids for each code in real_features
-                    centroids = compute_real_centroids(self.real_features)
+                #    # create centroids for each code in real_features
+                #    centroids = compute_real_centroids(self.real_features)
 
-                    # order centroids according to assignment
-                    ordered_centroids = reorder_real_centroids(centroids, self.col_idx)
+                #    # order centroids according to assignment
+                #    ordered_centroids = reorder_real_centroids(centroids, self.col_idx)
 
 
                 leaves_params, _ = jax.tree_flatten(params_disc) 
@@ -1682,6 +1670,88 @@ class Trainer(object):
                 self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, r_anchor=r_anchor, mmd=mmd, adv=False)
 
                 #params_gen, belief_space = self.solver_gen.ask()
+
+                #self._key, subkey_recal = jax.random.split(self._key)
+                ## During recal:
+                #big_bs   = 64 * 8            # e.g. 512; use what fits memory
+                #lat_big  = build_big_latents(subkey_recal, big_bs, (self.latent_dim - self.n_con), 10, self.n_con)
+                #
+                ## IMPORTANT: construct the generator with BN in train-mode AND momentum=0.0 just for this call.
+                #gen_recal = Generator(training=True)  # add bn_momentum arg in your Module if needed
+                #
+                ## One forward that updates only batch_stats
+                #_, vars_out = gen_recal.apply({'params': best_params_gen_formatted, 'batch_stats': batch_stats_gen},
+                #                              lat_big, mutable=['batch_stats'])
+                #batch_stats_gen = vars_out['batch_stats']  # <- frozen for next gen scoring               
+
+                #leaves_batch_stats_gen, _ = jax.tree_flatten(batch_stats_gen)
+                #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+
+
+                #self._key, key_z_fixed, key_z, key_codes, key_con_fixed, key_con = jax.random.split(self._key, 6)
+                #
+                #z_base_fixed = jax.random.normal(key_z_fixed, (3, 62))  # 6 different z vectors
+                #z_base = jax.random.normal(key_z, (30, 62)) 
+                #
+                #con_block = jax.random.uniform(key_con_fixed, (60, 2), minval=-0.5, maxval=0.5)  # 6 different continuous codes
+                ##z_base_concat = jnp.concatenate([z_base, fixed_z_subset], axis=0) 
+                #z_block = jnp.repeat(z_base_fixed, 10, axis=0)  # Repeat each z 10 times for each categorical code
+                #z_block = jnp.concatenate([z_base, z_block], axis=0)
+
+                #codes60 = jnp.tile(jnp.arange(10, dtype=jnp.int32), 6)  # Categorical codes from 0 to 9, repeated 6 times
+                #onehot60 = jax.nn.one_hot(codes60, 10)
+                #
+                #codes4 = jnp.array([0,1,2,3], dtype=jnp.int32)
+                #onehot4 = jax.nn.one_hot(codes4, 10)
+
+                #c_onehot = jnp.concat([onehot60, onehot4], axis=0)
+
+
+                #latent60 = jnp.concatenate([z_block, onehot60, con_block], axis=-1)
+
+                #self._key, key_z, key_con, key_noise, shift_key_x, shift_key_y = jax.random.split(self._key, 6)
+
+                #shift_x = jax.random.randint(shift_key_x, shape=(), minval=-1, maxval=2)
+                #shift_y = jax.random.randint(shift_key_y, shape=(), minval=-1, maxval=2)
+                #
+                #noise = jax.random.normal(key_noise, (64, 28, 28, 1))*0.1
+
+                #noise_shift = (noise, shift_x, shift_y)
+                #
+                #z_block4 = jax.random.normal(key_z, (4, 62))  # 4 different z vectors
+
+                #z_block_full = jnp.concatenate([z_block, z_block4], axis=0)
+                #
+                #con_block_full = jnp.concatenate([con_block, jax.random.uniform(key_con, (4, 2), minval=-0.5, maxval=0.5)], axis=0)
+
+
+                #latent = jnp.concat([z_block_full, c_onehot, con_block_full], axis=1)
+                #topographic_ks = belief_space[4]
+
+                #avg_per_code = topographic_ks[0]
+                #
+                #scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, r_anchor, mmd = self.sim_mgr_gen.eval_params(
+                #params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, noise=noise_shift, cat_codes=c_onehot, codes60=codes60, con_codes=con_block_full, features=avg_per_code, real_centroids=ordered_centroids, generator=True, test=False
+                #)
+
+                ##jax.debug.print('fake_imgs shape: {} ', fake_imgs.shape)
+                #if isinstance(self.solver_gen, QualityDiversityMethod):
+                #    self.solver_gen.observe_bd(bds_gen)
+                #
+                #self.solver_gen.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, r_anchor=r_anchor, mmd=mmd, adv=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
                 #scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, _ = self.sim_mgr_gen.eval_params(
                 #params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc,  generator=True, test=False

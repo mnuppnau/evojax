@@ -29,7 +29,7 @@ from evojax.policy.base import PolicyNetwork
 from evojax.policy.base import PolicyState
 from evojax.task.base import TaskState
 from evojax.util import create_logger
-from evojax.util import get_params_format_fn, get_single_params_format_fn
+from evojax.util import get_params_format_fn, get_single_params_format_fn, get_params_format_disc_fn
 
 
 class CNN(nn.Module):
@@ -155,104 +155,95 @@ class Generator(nn.Module):
         return x
 
 
+# assumes you already have: normal_init
+
 class Discriminator(nn.Module):
-    """Discriminator with attached Q-network, built on your architecture."""
+    """Discriminator with attached Q-network (SpectralNorm, no BatchNorm)."""
     features: int = 64
-    training: bool = True
     q_cat: int = 10
-    q_cont: int = 2   # set to 0 if you only want categorical codes
+    q_cont: int = 2  # set to 0 if you only want categorical codes
 
     @nn.compact
     def __call__(self, x):
         """
         Args:
             x: (B, 28, 28, 1) in [-1, 1]
+            train: bool (True during training, False during eval)
 
         Returns:
-            d_logits:        (B, 1)         real/fake logits
+            d_logits:        (B, 1)
             q_cat_logits:    (B, q_cat)
             q_cont_mu:       (B, q_cont) or None
             q_cont_logsigma: (B, q_cont) or None
+            q_feat_avg:      (B, features*4)
         """
+
+        def SN(layer):
+            # Wrapper constructor (names auto-assigned unless you pass name=...)
+            return nn.SpectralNorm(layer)
+
+        train = True
         # ----- shared backbone -----
-        h = nn.Conv(
+        h = SN(nn.Conv(
             self.features,
             kernel_size=(4, 4),
             strides=(2, 2),
-            padding='VALID',
+            padding="VALID",
             kernel_init=normal_init(0.02),
-        )(x)
-        h = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(h)
+        ))(x, update_stats=train)
         h = nn.leaky_relu(h, 0.2)
 
-        h = nn.Conv(
+        h = SN(nn.Conv(
             self.features * 2,
             kernel_size=(4, 4),
             strides=(2, 2),
-            padding='VALID',
+            padding="VALID",
             kernel_init=normal_init(0.02),
-        )(h)
-        h = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(h)
+        ))(h, update_stats=train)
         h = nn.leaky_relu(h, 0.2)
 
-        # At this point the spatial size is 5x5; next heads go from there.
-
         # ----- D head -----
-        d = nn.Conv(
+        d = SN(nn.Conv(
             1,
             kernel_size=(4, 4),
             strides=(2, 2),
-            padding='VALID',
+            padding="VALID",
             kernel_init=normal_init(0.02),
-        )(h)        # -> (B, 1, 1, 1)
-        d = d.reshape((d.shape[0], -1))  # (B, 1)
-        d_logits = d  # treat as logits; apply sigmoid in loss if desired
+        ))(h, update_stats=train)  # -> (B, 1, 1, 1)
+        d_logits = d.reshape((d.shape[0], -1))  # (B, 1)
 
         # ----- Q trunk -----
-        q = nn.Conv(
-            self.features*4,
+        q = SN(nn.Conv(
+            self.features * 4,
             kernel_size=(4, 4),
             strides=(2, 2),
-            padding='VALID',
+            padding="VALID",
             kernel_init=normal_init(0.02),
-        )(h)        # -> (B, 1, 1, 2*features)
-        q = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
-        )(q)
+        ))(h, update_stats=train)  # -> typically (B, 1, 1, features*4)
         q = nn.leaky_relu(q, 0.2)
-        
-        q_feat_avg = jnp.mean(q, axis=(1, 2))  # (B, 2*features)
 
-        q = q.reshape((q.shape[0], -1))  # (B, 2*features)
+        q_feat_avg = jnp.mean(q, axis=(1, 2))      # (B, features*4)
+        q_flat = q.reshape((q.shape[0], -1))       # (B, features*4)
 
-        #q_flat = q.reshape((q.shape[0], -1))
         # ----- Q categorical head -----
-        q_cat_logits = nn.Dense(
+        q_cat_logits = SN(nn.Dense(
             self.q_cat,
             kernel_init=normal_init(0.02),
-        )(q)
+        ))(q_flat, update_stats=train)
 
-        q_cont_mu = nn.Dense(
+        # ----- Q continuous head -----
+        if self.q_cont and self.q_cont > 0:
+            q_cont_mu = SN(nn.Dense(
                 self.q_cont,
                 kernel_init=normal_init(0.02),
-            )(q)
-        q_cont_logsigma = nn.Dense(
+            ))(q_flat, update_stats=train)
+
+            q_cont_logsigma = SN(nn.Dense(
                 self.q_cont,
                 kernel_init=normal_init(0.02),
-            )(q)
+            ))(q_flat, update_stats=train)
+        else:
+            q_cont_mu, q_cont_logsigma = None, None
 
         return d_logits, q_cat_logits, q_cont_mu, q_cont_logsigma, q_feat_avg
 
@@ -631,7 +622,7 @@ class GenPolicy(PolicyNetwork):
         self._logger.info(
             'DiscPolicy.num_params = {}'.format(self.num_params_disc))
         self._format_params_disc_fn = jax.vmap(format_params_disc_fn)
-        self.num_batch_stats_disc, format_batch_stats_disc_fn = get_params_format_fn(self.init_batch_stats_disc)
+        self.num_batch_stats_disc, format_batch_stats_disc_fn = get_params_format_disc_fn(self.init_batch_stats_disc)
         self._logger.info(
             'DiscPolicy.num_batch_stats = {}'.format(self.num_batch_stats_disc))
         self._format_batch_stats_disc_fn = jax.vmap(format_batch_stats_disc_fn)
@@ -647,11 +638,11 @@ class GenPolicy(PolicyNetwork):
 
             (fake_data), _ = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
            
-            fake_data_with_noise = fake_data + noise
+            #fake_data_with_noise = fake_data + noise
           
             #fake_data_with_noise_shifted = jnp.roll(fake_data_with_noise, shift=(shift_x, shift_y), axis=(1,2))
             
-            (preds, q, mu, var, q_flat), _ = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data_with_noise, mutable=['batch_stats'])
+            (preds, q, mu, var, q_flat), _ = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
             #(_, q, mu, var, q_flat), _ = self.model_q.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
             #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
