@@ -252,7 +252,7 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            fake_imgs, actions, disc_logits, mu, var, mean_var_fake, q_flat, policy_state = policy_net.get_actions(
+            fake_imgs, actions, disc_logits, mu, var, mean_var_fake, q_flat, q_flat_real, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
             
             #task_state = task_state.replace(batch_stats_gen=batch_stats_gen)
@@ -263,7 +263,7 @@ class SimManager(object):
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, loss_mi, loss_g, loss_con, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, mmd, r_anchor, done = task.step(task_state, actions, disc_logits, mu, var, q_flat, features, fake_imgs)
+            task_state, loss_mi, loss_g, loss_con, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, mmd, r_anchor, done = task.step(task_state, actions, disc_logits, mu, var, q_flat, q_flat_real, features, fake_imgs)
             
             reward_adv =  loss_g 
             reward_mi = loss_mi

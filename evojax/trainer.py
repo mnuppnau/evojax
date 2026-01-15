@@ -1180,7 +1180,7 @@ class Trainer(object):
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.solver_disc = optax.adam(learning_rate=0.00006, b1=0.5, b2=0.999)
+        self.solver_disc = optax.adam(learning_rate=0.00001, b1=0.5, b2=0.999)
 
     def run(self, demo_mode: bool = False) -> float:
 
@@ -1487,7 +1487,7 @@ class Trainer(object):
 
                     ordered_centroids = self.ordered_centroids
 
-                if i % 2 == 0:
+                if i % 1 == 0:
                     for mini_batch in range(num_mini_batches):
                         # Sample batch of data.
 
@@ -1654,13 +1654,16 @@ class Trainer(object):
                 #c_onehot = jnp.concat([onehot60, onehot60[:4]], axis=0)
                 latent = jnp.concat([z_block_full, c_onehot, con_block_full], axis=1)
                 #con_full_block = jnp.concat([con_block, con_block[:4]], axis=0)
+                self._key, subkey_real = jax.random.split(self._key)
+                data, labels = sample_batch(subkey_real, self.data, self.labels, 64)
+
                 topographic_ks = belief_space[4]
 
                 #jax.debug.print('topographic_ks shape: {} ', topographic_ks.shape)
                 avg_per_code = topographic_ks[0]
                 
                 scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, BN_stats_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, r_anchor, mmd = self.sim_mgr_gen.eval_params(
-                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, noise=noise_shift, cat_codes=c_onehot, codes60=codes60, con_codes=con_block_full, features=avg_per_code, real_centroids=ordered_centroids, generator=True, test=False
+                params_gen=params_gen, params_disc=flat_params_disc, batch_stats_gen=flat_batch_stats_gen, batch_stats_disc=flat_batch_stats_disc, latent=latent, noise=noise_shift, cat_codes=c_onehot, codes60=codes60, con_codes=con_block_full, features=avg_per_code, real_centroids=data, generator=True, test=False
                 )
 
                 #jax.debug.print('fake_imgs shape: {} ', fake_imgs.shape)
