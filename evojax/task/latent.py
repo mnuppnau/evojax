@@ -464,16 +464,16 @@ class Latent_Points(VectorizedTask):
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
-        def step_fn(state, action, q, mu, var, q_flat, topographic_ks, fake_images):
+        def step_fn(state, action, q, mu, var, q_flat, q_flat_real, topographic_ks, fake_images):
           
 
-            target_centroids = state.real_centroids
-            
-            centroid_loss = compute_hybrid_anchor_loss(
-                fake_features=q_flat,
-                target_centroids=target_centroids,
-                n_codes=self.n_classes
-            )
+            #target_centroids = state.real_centroids
+            #
+            #centroid_loss = compute_hybrid_anchor_loss(
+            #    fake_features=q_flat,
+            #    target_centroids=target_centroids,
+            #    n_codes=self.n_classes
+            #)
 
             #centroid_loss = compute_centroid_loss(
             #    fake_features=q_flat,
@@ -481,7 +481,10 @@ class Latent_Points(VectorizedTask):
             #    n_codes=self.n_classes
             #)
 
+            feat_dist = jnp.abs(jnp.mean(q_flat_real, axis=0) - jnp.mean(q_flat, axis=0)).sum()
 
+            feat_loss = -feat_dist
+            
             mmd_out = evaluate_fake_batch(
                 fake_images,
                 self.mu_classes,
@@ -608,7 +611,7 @@ class Latent_Points(VectorizedTask):
 
             #loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
             #loss_g = optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,))).mean()
-            loss_g = jnp.minimum(action, 1.0).mean()
+            loss_g = jnp.minimum(action, 10.0).mean()
             #loss_g = -loss_g
             #loss_con = neg_log_likelihood_normal(state.con_codes, action, jnp.zeros_like(action))
             
@@ -619,7 +622,7 @@ class Latent_Points(VectorizedTask):
             #loss_con = -loss_con
             #loss_g = -loss_g#*0.1 + loss_q_disc# + loss_q_cont*0.005
             
-            return state, loss_q_disc, loss_g, loss_con, sum_per_cat_code, count_per_code, r_cons, r_sense, r_intra, entropy, centroid_loss, jnp.ones(())
+            return state, loss_q_disc, loss_g, loss_con, sum_per_cat_code, count_per_code, r_cons, r_sense, r_intra, entropy, feat_loss, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
@@ -633,6 +636,7 @@ class Latent_Points(VectorizedTask):
              mu: jnp.ndarray,
              var: jnp.ndarray,
              q_flat: jnp.ndarray,
+             q_flat_real: jnp.ndarray,
              topographic_ks: jnp.ndarray,
              fake_imgs: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
-        return self._step_fn(state, action, disc_logits, mu, var, q_flat,topographic_ks, fake_imgs)
+        return self._step_fn(state, action, disc_logits, mu, var, q_flat, q_flat_real,topographic_ks, fake_imgs)
