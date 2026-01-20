@@ -46,11 +46,11 @@ def parse_args():
     parser.add_argument(
         '--seed', type=int, default=42, help='Random seed for training.')
     parser.add_argument(
-        '--center-lr-gen', type=float, default=0.005, help='Center learning rate.')
+        '--center-lr-gen', type=float, default=0.006, help='Center learning rate.')
     parser.add_argument(
         '--std-lr-gen', type=float, default=0.089, help='Std learning rate.')
     parser.add_argument(
-        '--init-std-gen', type=float, default=0.069, help='Initial std.')
+        '--init-std-gen', type=float, default=0.039, help='Initial std.')
     parser.add_argument(
         '--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument(

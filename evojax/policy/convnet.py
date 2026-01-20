@@ -645,13 +645,13 @@ class GenPolicy(PolicyNetwork):
        
             #(preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
-            (fake_data), _ = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
+            (fake_data), _ = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input,mutable=['batch_stats'])
            
-            fake_data_with_noise = fake_data + noise
+            #fake_data_with_noise = fake_data + noise
           
             #fake_data_with_noise_shifted = jnp.roll(fake_data_with_noise, shift=(shift_x, shift_y), axis=(1,2))
             
-            (preds, q, mu, var, q_flat), _ = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data_with_noise, mutable=['batch_stats'])
+            (preds, q, mu, var, q_flat), _ = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
             #(_, q, mu, var, q_flat), _ = self.model_q.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
             #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])

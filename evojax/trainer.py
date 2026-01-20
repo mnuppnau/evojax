@@ -736,26 +736,26 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
                   #mu_fake = mu[:Bf]
                   #var_fake = jnp.exp(var[:Bf])
                   
-                  fake_images_with_noise = fake_imgs + noise
-                  real_images_with_noise = data + noise
+                  #fake_images_with_noise = fake_imgs + noise
+                  #real_images_with_noise = data + noise
 
                   #fake_images_with_noise_perturbed = jnp.roll(fake_images_with_noise, shift=(shift_x, shift_y), axis=(1,2))
                   #real_images_with_noise_perturbed = jnp.roll(real_images_with_noise, shift=(shift_x, shift_y), axis=(1,2))
                   
                   (fake_preds, q_fake, mu_fake, var_fake, _), vars_d = Discriminator().apply(
                       {'params': params_d, 'batch_stats': vars_d_batch_stats},
-                      fake_images_with_noise, mutable=['batch_stats']
+                      fake_imgs, mutable=['batch_stats']
                   )
                   
                   (real_preds, _, _, _, _), vars_d = Discriminator().apply(
                       {'params': params_d, 'batch_stats': vars_d['batch_stats']},
-                      real_images_with_noise, mutable=['batch_stats']
+                      data, mutable=['batch_stats']
                   )
                 
                   # use q_logits and labels to calculate q accuracy
                   #q_preds = q_logits.argmax(axis=-1)
                   #q_acc = jnp.mean(q_preds == labels)
-                  logit_penalty = 1e-2 * jnp.mean(fake_preds ** 2)
+                  #logit_penalty = 1e-2 * jnp.mean(fake_preds ** 2)
                   #jax.debug.print('Q accuracy: {} ', q_acc)
                   # Calculate Mutual Information loss
                   q_cat = nn.log_softmax(q_fake, axis=-1)
@@ -778,7 +778,7 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
                   #fake_loss = bce_logits(fake_preds, jnp.zeros((32,), dtype=jnp.int32))
               
                   # use 0.9 as the label for real images instead of 1.0
-                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.97)
+                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.9)
                   # use 0.1 as the label for fake images instead of 0.0
                   fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds))
 
@@ -791,7 +791,7 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
                   real_fake_loss = (real_loss + fake_loss) / 2.0
                   #jax.debug.print('mi loss: {} ', loss_mi)
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = real_fake_loss + loss_mi*0.8 + loss_con*0.1 #+ logit_penalty + loss_con*0.2
+                  loss = real_fake_loss + loss_mi + loss_con*0.1 #+ logit_penalty + loss_con*0.2
                 
                   return loss, (real_fake_loss, vars_d)
 
@@ -1016,9 +1016,9 @@ class Trainer(object):
 
         self._key, subkey = jax.random.split(self._key)
         
-        dataset = datasets.MNIST('./data', train=True, download=True)
-        self.data = np.expand_dims(dataset.data.numpy() / 127.5 - 1.0, axis=-1)
-       
+        dataset = datasets.FashionMNIST('./data', train=True, download=True)
+        #self.data = (dataset.data.numpy() - 0.5) / 0.5       # Normalize to [-1, 1]
+        self.data = np.expand_dims(dataset.data.numpy() - 0.5, axis=-1) / 0.5
         self._key, subkey = jax.random.split(self._key)
 
         self.labels = dataset.targets.numpy()
@@ -1192,7 +1192,7 @@ class Trainer(object):
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.solver_disc = optax.adam(learning_rate=0.00004, b1=0.5, b2=0.999)
+        self.solver_disc = optax.adam(learning_rate=0.00001, b1=0.5, b2=0.999)
 
     def run(self, demo_mode: bool = False) -> float:
 
@@ -1346,7 +1346,7 @@ class Trainer(object):
                 #        assigned_cluster = self.col_idx[j]
                 #        jax.debug.print('Fake code {} assigned to real cluster {}', j, assigned_cluster)
 
-                if i == 210000:
+                if i == 310000:
                     
                     # update clusters to cluster features extracted from Discriminator using cluster data
                     (_,_,_,_,real_features) = Discriminator(training=False).apply(
@@ -1499,7 +1499,7 @@ class Trainer(object):
 
                     ordered_centroids = self.ordered_centroids
 
-                if i % 2 == 0:
+                if i % 4 == 0:
                     for mini_batch in range(num_mini_batches):
                         # Sample batch of data.
 
@@ -1542,7 +1542,7 @@ class Trainer(object):
                         #if real_fake_loss > 0.25 or i % 20 == 0: 
                         params_disc, self.batch_stats_disc, opt_disc = state 
 
-                if i >= 160000 and i % 20 == 0:
+                if i >= 360000 and i % 20 == 0:
                     ### recalibrate real feature centroids
                     self._key, subkey_real = jax.random.split(self._key)
                     sampled_real = sample_from_clusters(
@@ -1772,67 +1772,67 @@ class Trainer(object):
                     scores_gen_adv = np.array(scores_gen_adv)
                     self._logger.info('Generator:')
                     self._logger.info(
-                        'Iter={0}, size={1}, max={2:.4f}, '
-                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                        'Iter={0}, size={1}, max={2:.7f}, '
+                        'avg={3:.7f}, min={4:.7f}, std={5:.7f}'.format(
                             i, scores_gen_adv.size, scores_gen_adv.max(), scores_gen_adv.mean(),
                             scores_gen_adv.min(), scores_gen_adv.std()))
                     #scores_disc = np.array(scores_real+scores_fake)
                     #self._logger.info('Discriminator:')
                     #self._logger.info(
-                    #    'Iter={0}, size={1}, max={2:.4f}, '
-                    #    'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                    #    'Iter={0}, size={1}, max={2:.7f}, '
+                    #    'avg={3:.7f}, min={4:.7f}, std={5:.7f}'.format(
                     #        i, scores_disc.size, scores_disc.max(), scores_disc.mean(),
                     #        scores_disc.min(), scores_disc.std()))
                     scores_mi = np.array(scores_gen_mi)
                     #self._logger.info('Mutual Information:')
                     self._logger.info(
-                        'Iter={0}, size={1}, max={2:.4f}, '
-                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                        'Iter={0}, size={1}, max={2:.7f}, '
+                        'avg={3:.7f}, min={4:.7f}, std={5:.7f}'.format(
                             i, scores_mi.size, scores_mi.max(), scores_mi.mean(),
                             scores_mi.min(), scores_mi.std()))
 
                     scores_con = np.array(scores_gen_con)
                     self._logger.info(
-                        'Iter={0}, size={1}, max={2:.4f}, '
-                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                        'Iter={0}, size={1}, max={2:.7f}, '
+                        'avg={3:.7f}, min={4:.7f}, std={5:.7f}'.format(
                             i, scores_con.size, scores_con.max(), scores_con.mean(),
                             scores_con.min(), scores_con.std()))
 
                     r_cons = np.array(r_cons)
                     self._logger.info(
-                        'Iter={0}, size={1}, max={2:.4f}, '
-                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                        'Iter={0}, size={1}, max={2:.7f}, '
+                        'avg={3:.7f}, min={4:.7f}, std={5:.7f}'.format(
                             i, r_cons.size, r_cons.max(), r_cons.mean(),
                             r_cons.min(), r_cons.std()))
                     
                     r_sense = np.array(r_sense)
                     self._logger.info(
-                        'Iter={0}, size={1}, max={2:.4f}, '
-                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                        'Iter={0}, size={1}, max={2:.7f}, '
+                        'avg={3:.7f}, min={4:.7f}, std={5:.7f}'.format(
                             i, r_sense.size, r_sense.max(), r_sense.mean(),
                             r_sense.min(), r_sense.std()))
                     
                     r_intra = np.array(r_intra)
                     self._logger.info(
-                        'Iter={0}, size={1}, max={2:.4f}, '
-                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                        'Iter={0}, size={1}, max={2:.7f}, '
+                        'avg={3:.7f}, min={4:.7f}, std={5:.7f}'.format(
                             i, r_intra.size, r_intra.max(), r_intra.mean(),
                             r_intra.min(), r_intra.std()))
 
                     mmd = np.array(mmd)
                     self._logger.info(
-                        'Iter={0}, size={1}, max={2:.4f}, '
-                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                        'Iter={0}, size={1}, max={2:.7f}, '
+                        'avg={3:.7f}, min={4:.7f}, std={5:.7f}'.format(
                             i, mmd.size, mmd.max(), mmd.mean(),
                             mmd.min(), mmd.std()))
                     self._logger.info(
-                        'Iter={0}, real_fake_loss={1:.4f}'.format(
+                        'Iter={0}, real_fake_loss={1:.7f}'.format(
                             i, real_fake_loss))
                     
                     r_anchor = np.array(r_anchor)
                     self._logger.info(
-                        'Iter={0}, size={1}, max={2:.4f}, '
-                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                        'Iter={0}, size={1}, max={2:.7f}, '
+                        'avg={3:.7f}, min={4:.7f}, std={5:.7f}'.format(
                             i, r_anchor.size, r_anchor.max(), r_anchor.mean(),
                             r_anchor.min(), r_anchor.std()))
                     #with open('/home/gh0st/Downloads/pgpe_main.csv', 'a') as file:
