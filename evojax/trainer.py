@@ -107,7 +107,7 @@ class Generator(nn.Module):
             momentum=0.1,
             scale_init=normal_init(0.02),
         )(x)
-        x = nn.relu(x)
+        x = jnp.tanh(x)
 
         x = nn.ConvTranspose(
             self.features * 2,
@@ -122,7 +122,7 @@ class Generator(nn.Module):
             momentum=0.1,
             scale_init=normal_init(0.02),
         )(x)
-        x = nn.relu(x)
+        x = jnp.tanh(x)
 
         x = nn.ConvTranspose(
             self.features,
@@ -137,7 +137,7 @@ class Generator(nn.Module):
             momentum=0.1,
             scale_init=normal_init(0.02),
         )(x)
-        x = nn.relu(x)
+        x = jnp.tanh(x)
 
         x = nn.ConvTranspose(
             1,
@@ -656,15 +656,33 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
             # code_cat is one-hot, q_cat_logits are raw outputs
             return jnp.mean(optax.softmax_cross_entropy(logits=q_cat_logits, labels=code_cat))
 
-        def continuous_loss(x, mu, var):
-            # Simple MSE for mean prediction
-            mse = jnp.mean((x - mu) ** 2)
-            
-            # Regularize variance to stay near 1.0
-            var_reg = jnp.mean((var - 1.0) ** 2) * 0.1
-            
-            return mse + var_reg
+        #def continuous_loss(x, mu, var):
+        #    # Simple MSE for mean prediction
+        #    mse = jnp.mean((x - mu) ** 2)
+        #    
+        #    # Regularize variance to stay near 1.0
+        #    var_reg = jnp.mean((var - 1.0) ** 2) * 0.1
+        #    
+        #    return mse + var_reg
 
+        def continuous_loss(c_true, mu, logsigma):
+            """
+            Negative log-likelihood of c_true under N(mu, sigma^2).
+            
+            Args:
+                c_true: (B, q_cont) - the actual continuous codes used to generate
+                mu: (B, q_cont) - predicted mean from Q network
+                logsigma: (B, q_cont) - predicted log(std) from Q network
+            """
+            # Clamp logsigma for numerical stability
+            logsigma = jnp.clip(logsigma, -2.0, 2.0)
+            
+            # NLL of Gaussian: 0.5 * log(2π) + logsigma + 0.5 * ((x - mu) / sigma)^2
+            # We can drop the constant 0.5 * log(2π)
+            nll = logsigma + 0.5 * ((c_true - mu) / jnp.exp(logsigma)) ** 2
+            
+            return jnp.mean(nll)
+        
         def normal_nll_loss(x, mu, var):
             """
             Calculate the negative log likelihood of a normal distribution
@@ -779,7 +797,7 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
                   real_fake_loss = (real_loss + fake_loss) / 2.0
                   #jax.debug.print('mi loss: {} ', loss_mi)
                   #jax.debug.print('con loss: {} ', loss_con)
-                  loss = real_fake_loss + loss_mi*0.2 + loss_con*0.05 #+ logit_penalty + loss_con*0.2
+                  loss = real_fake_loss + loss_mi + loss_con*0.1 #+ logit_penalty + loss_con*0.2
                 
                   return loss, (real_fake_loss, vars_d)
 

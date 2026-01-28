@@ -112,7 +112,7 @@ class Generator(nn.Module):
             momentum=0.1,
             scale_init=normal_init(0.02),
         )(x)
-        x = nn.relu(x)
+        x = jnp.tanh(x)
 
         x = nn.ConvTranspose(
             self.features * 2,
@@ -127,7 +127,7 @@ class Generator(nn.Module):
             momentum=0.1,
             scale_init=normal_init(0.02),
         )(x)
-        x = nn.relu(x)
+        x = jnp.tanh(x)
 
         x = nn.ConvTranspose(
             self.features,
@@ -142,7 +142,7 @@ class Generator(nn.Module):
             momentum=0.1,
             scale_init=normal_init(0.02),
         )(x)
-        x = nn.relu(x)
+        x = jnp.tanh(x)
 
         x = nn.ConvTranspose(
             1,

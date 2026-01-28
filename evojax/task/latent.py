@@ -342,14 +342,32 @@ def bce_logits(logit, label):
     batch_bce = jnp.maximum(logit, 0) - logit * label + jnp.log(1 + jnp.exp(neg_abs))
     return jnp.mean(batch_bce)
 
-def continuous_loss(x, mu, var):
-    # Simple MSE for mean prediction
-    mse = jnp.mean((x - mu) ** 2)
+#def continuous_loss(x, mu, var):
+#    # Simple MSE for mean prediction
+#    mse = jnp.mean((x - mu) ** 2)
+#    
+#    # Regularize variance to stay near 1.0
+#    var_reg = jnp.mean((var - 1.0) ** 2) * 0.1
+#    
+#    return mse + var_reg
+
+def continuous_loss(c_true, mu, logsigma):
+    """
+    Negative log-likelihood of c_true under N(mu, sigma^2).
     
-    # Regularize variance to stay near 1.0
-    var_reg = jnp.mean((var - 1.0) ** 2) * 0.1
+    Args:
+        c_true: (B, q_cont) - the actual continuous codes used to generate
+        mu: (B, q_cont) - predicted mean from Q network
+        logsigma: (B, q_cont) - predicted log(std) from Q network
+    """
+    # Clamp logsigma for numerical stability
+    logsigma = jnp.clip(logsigma, -2.0, 2.0)
     
-    return mse + var_reg
+    # NLL of Gaussian: 0.5 * log(2π) + logsigma + 0.5 * ((x - mu) / sigma)^2
+    # We can drop the constant 0.5 * log(2π)
+    nll = logsigma + 0.5 * ((c_true - mu) / jnp.exp(logsigma)) ** 2
+    
+    return jnp.mean(nll)
 
 #def neg_log_likelihood_normal(x, mean, logvar):
 #    return 0.5 * jnp.mean(jnp.sum(logvar + jnp.exp(-logvar) * (x - mean) ** 2, axis=-1))
@@ -612,6 +630,7 @@ class Latent_Points(VectorizedTask):
             #loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
             #loss_g = optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,))).mean()
             loss_g = jnp.minimum(action, 10.0).mean()
+            #jax.debug.print('loss_g: {lg}', lg=loss_g)
             #loss_g = -loss_g
             #loss_con = neg_log_likelihood_normal(state.con_codes, action, jnp.zeros_like(action))
             
