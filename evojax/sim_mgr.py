@@ -414,7 +414,6 @@ class SimManager(object):
                     params_gen: jnp.ndarray,
                     params_disc: jnp.ndarray,
                     #params_q: jnp.ndarray,
-                    batch_stats_gen: dict,
                     batch_stats_disc: dict,
                     #batch_stats_q: dict,
                     latent: jnp.ndarray,
@@ -437,9 +436,9 @@ class SimManager(object):
             An array of fitness scores.
         """
         if self._use_for_loop:
-            return self._for_loop_eval(params_gen, params_disc, params_q, batch_stats_gen, batch_stats_disc, latent, noise, cat_codes, codes60, con_codes, features, real_centroids, generator, test)
+            return self._for_loop_eval(params_gen, params_disc, params_q, batch_stats_disc, latent, noise, cat_codes, codes60, con_codes, features, real_centroids, generator, test)
         else:
-            return self._scan_loop_eval(params_gen, params_disc, batch_stats_gen, batch_stats_disc, latent, noise, cat_codes, codes60, con_codes, features, real_centroids, generator, test)
+            return self._scan_loop_eval(params_gen, params_disc, batch_stats_disc, latent, noise, cat_codes, codes60, con_codes, features, real_centroids, generator, test)
 
     def _for_loop_eval(self,
                        params: jnp.ndarray,
@@ -494,7 +493,6 @@ class SimManager(object):
                         params_gen: jnp.ndarray,
                         params_disc: jnp.ndarray,
                         #params_q: jnp.ndarray,
-                        batch_stats_gen: dict,
                         batch_stats_disc: dict,
                         latent: jnp.ndarray,
                         noise_shift: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
@@ -510,21 +508,10 @@ class SimManager(object):
                         test: bool) -> Tuple[jnp.ndarray, TaskState]:
         """Rollout using jax.lax.scan."""
         policy_reset_func = self._policy_reset_fn
-
-        # check if first dimension of batch_stats_gen and batch_stats_disc is equal to pop_size
-
-        if batch_stats_gen.shape[0] != self._pop_size and len(batch_stats_gen.shape) == 2: #and not test:
-            # add pop size as first dimension to batch_stats_gen and batch_stats_disc
-            batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
-        
-        if len(batch_stats_gen.shape) == 1:
-            batch_stats_gen = jnp.repeat(batch_stats_gen[None, :], self._pop_size, axis=0)
         
         if params_gen is not None and params_gen.shape[0] != self._pop_size:
             params_gen = jnp.repeat(params_gen[None, :], self._pop_size, axis=0)
             
-        self.batch_stats_gen = batch_stats_gen
-
         if batch_stats_disc.shape[0] != self._pop_size and len(batch_stats_disc.shape) == 2: #and not test:
             # add pop size as first dimension to batch_stats_gen and batch_stats_disc
             batch_stats_disc = jnp.repeat(batch_stats_disc[None, :], self._pop_size, axis=0)
@@ -572,7 +559,6 @@ class SimManager(object):
     
         #task_state = task_state.replace(var_con=var_con)
 
-        task_state = task_state.replace(batch_stats_gen=self.batch_stats_gen)
         task_state = task_state.replace(batch_stats_disc=self.batch_stats_disc)
         task_state = task_state.replace(obs=latent)
         task_state = task_state.replace(noise=noise)
@@ -593,7 +579,6 @@ class SimManager(object):
         if self._num_device > 1: #and not test:
             #if generator:
             params_gen = split_params_for_pmap(params_gen)
-            batch_stats_gen = split_params_for_pmap(batch_stats_gen)
             #if not generator:
             #    fake_imgs = split_params_for_pmap(fake_imgs)
             params_disc = split_params_for_pmap(params_disc)
@@ -624,62 +609,9 @@ class SimManager(object):
                 sum_per_cat_code = reshape_metrics_from_pmap(sum_per_cat_code)
                 count_per_cat_code = reshape_metrics_from_pmap(count_per_cat_code)
                 #r_cons = combine_ind_scalar(r_cons)
-                #fake_imgs = reshape_data_from_pmap(fake_imgs)
-                #jax.debug.print('disc_logits shape : {}', disc_logits.shape)
-                #disc_logits = combine_ind_scalar(disc_logits)
-                #loss_g = combine_ind_scalar(loss_g)
-                #jax.debug.print('loss_g shape : {}', loss_g.shape)
-                #loss_con = combine_ind_scalar(loss_con)
-                #fake_imgs = combine_ind_scalar(fake_imgs)
 
-                #jax.debug.print('avg per code : {}', avg_per_code.shape)
-        #jax.debug.print('scores adv shape : {}', scores_adv.shape)
-        #jax.debug.print('mean var fake shape : {}', mean_var_fake.shape)
-        #if generator and not test:
-        #    # update the population mean_mi, mean_g, mean_con, var_mi, var_g, var_con in the task state
-        #    curr_mean_mi = jnp.mean(loss_mi)
-        #    curr_mean_g = jnp.mean(loss_g)
-        #    curr_mean_con = jnp.mean(loss_con)
-
-        #    curr_var_mi = jnp.var(loss_mi) + 1e-8
-        #    curr_var_g = jnp.var(loss_g) + 1e-8
-        #    curr_var_con = jnp.var(loss_con) + 1e-8
-
-        #    prev_mean_mi = jnp.mean(final_states.mean_mi)
-        #    prev_mean_g = jnp.mean(final_states.mean_g)
-        #    prev_mean_con = jnp.mean(final_states.mean_con)
-
-        #    prev_var_mi = jnp.mean(final_states.var_mi)
-        #    prev_var_g = jnp.mean(final_states.var_g)
-        #    prev_var_con = jnp.mean(final_states.var_con)
-
-        #    mean_mi = prev_mean_mi * 0.1 + curr_mean_mi * 0.9
-        #    mean_g = prev_mean_g * 0.1 + curr_mean_g * 0.9
-        #    mean_con = prev_mean_con * 0.1 + curr_mean_con * 0.9
-
-        #    var_mi = prev_var_mi * 0.1 + curr_var_mi * 0.9
-        #    var_g = prev_var_g * 0.1 + curr_var_g * 0.9
-        #    var_con = prev_var_con * 0.1 + curr_var_con * 0.9
-
-        #    pop_stats = jnp.array([mean_mi, mean_g, mean_con, var_mi, var_g, var_con])
-
-
-        batch_stats_gen_updated = final_states.batch_stats_gen
         batch_stats_disc_updated = final_states.batch_stats_disc
         #batch_stats_q_updated = final_states.batch_stats_q
-
-        #noise_keys, cat_keys = random.split(self._key, 2)
-
-        #if generator:
-        #    self._key, reset_keys1, reset_keys2 = get_task_reset_keys_testing(
-        #        noise_keys, cat_keys, testing, self._pop_size, self._n_evaluations, n_repeats, self._ma_training)
-
-        #if generator:
-        #    task_state = task_reset_func(reset_keys1, reset_keys2)
-
-        ##if generator:
-        #    cat_codes = task_state.cat_codes
-        #else:
         #    cat_codes = None
         if not test:
             fake_imgs = None
@@ -794,4 +726,4 @@ class SimManager(object):
             scores4 = None
             avg_per_code = None
         #self._key = new_key
-        return scores1, scores2, scores3, scores4, self._bd_summarize_fn(final_states), batch_stats_gen_updated, batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra, r_anchor, mmd
+        return scores1, scores2, scores3, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra, r_anchor, mmd

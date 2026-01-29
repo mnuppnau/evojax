@@ -628,10 +628,10 @@ class Latent_Points(VectorizedTask):
             #loss_q_disc = cpc_mi_loss(state.cat_codes, q_cat, negative_samples=10)
 
             #loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
-            #loss_g = optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,))).mean()
-            loss_g = jnp.minimum(action, 10.0).mean()
+            loss_g = optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,))).mean()
+            #loss_g = jnp.minimum(action, 10.0).mean()
             #jax.debug.print('loss_g: {lg}', lg=loss_g)
-            #loss_g = -loss_g
+            loss_g = -loss_g
             #loss_con = neg_log_likelihood_normal(state.con_codes, action, jnp.zeros_like(action))
             
             #loss_con = normal_nll_loss(state.con_codes, mu, var)*0.1

@@ -46,11 +46,11 @@ def parse_args():
     parser.add_argument(
         '--seed', type=int, default=42, help='Random seed for training.')
     parser.add_argument(
-        '--center-lr-gen', type=float, default=0.0046, help='Center learning rate.')
+        '--center-lr-gen', type=float, default=0.003, help='Center learning rate.')
     parser.add_argument(
-        '--std-lr-gen', type=float, default=0.069, help='Std learning rate.')
+        '--std-lr-gen', type=float, default=0.05, help='Std learning rate.')
     parser.add_argument(
-        '--init-std-gen', type=float, default=0.03, help='Initial std.')
+        '--init-std-gen', type=float, default=0.02, help='Initial std.')
     parser.add_argument(
         '--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument(
@@ -74,6 +74,9 @@ def main(config):
     init_params_gen = policy_gen.init_params_gen
     flat_params_gen = policy_gen.flat_params_gen
 
+    init_params_hypernet = policy_gen.init_params_hypernet
+    flat_params_hypernet = policy_gen.flat_params_hypernet
+
     train_task_mnist = MNIST(batch_size=config.batch_size, test=False)
     test_task_mnist = MNIST(batch_size=config.batch_size, test=True)
   
@@ -83,10 +86,10 @@ def main(config):
     train_task_latent = Latent_Points(batch_size=config.batch_size, test=False)
     test_task_latent = Latent_Points(batch_size=config.batch_size, test=True)
 
-    solver_gen = PGPE_CA(
+    solver_hn = PGPE_CA(
         pop_size=config.pop_size,
-        param_size=policy_gen.num_params,
-        init_params=flat_params_gen,
+        param_size=policy_gen.num_params_hypernet,
+        init_params=flat_params_hypernet,
         optimizer='adam',
         center_learning_rate=config.center_lr_gen,
         stdev_learning_rate=config.std_lr_gen,
@@ -123,7 +126,7 @@ def main(config):
     # Train.
     trainer = Trainer(
         policy_gen=policy_gen,
-        solver_gen=solver_gen,
+        solver_hn=solver_hn,
         #solver_disc=solver_disc,
         #solver_q=solver_q,
         train_task_gen=train_task_latent,
