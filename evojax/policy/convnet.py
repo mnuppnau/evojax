@@ -14,10 +14,12 @@
 
 import logging
 from typing import Tuple
+from jax import tree_util
 
 import orbax.checkpoint as orbax_cp
 import optax
 import jax
+import numpy as np
 import jax.numpy as jnp
 from jax import random
 from flax import linen as nn
@@ -79,6 +81,95 @@ def load_model(state, path):
 # Assuming you have something like:
 # normal_init = nn.initializers.normal
 
+# --- 1. The HyperNetwork (Tunable Size) ---
+class HyperNetwork(nn.Module):
+    chunk_size: int = 256        # Reduced to keep param count low (~20k params total)
+    
+    @nn.compact
+    def __call__(self, embeddings):
+        """
+        Input:  (Total_Chunks, Embedding_Dim)
+        Output: (Total_Chunks, Chunk_Size)
+        
+        Since we pass a batch of embeddings, nn.Dense automatically 
+        broadcasts. No vmap needed here.
+        """
+        # Hidden Layer 1
+        x = nn.Dense(32)(embeddings) 
+        x = nn.tanh(x)
+        
+        # Hidden Layer 2
+        x = nn.Dense(32)(x)
+        x = nn.tanh(x)
+        
+        # Output Layer (The bottleneck)
+        # 64 inputs * 256 outputs = 16,384 params
+        weights = nn.Dense(self.chunk_size
+                           )(x)
+
+        
+        return weights
+
+class ParameterAdapter:
+    def __init__(self, target_init_params, chunk_size=256):
+        self.chunk_size = chunk_size
+        self.target_tree = tree_util.tree_structure(target_init_params)
+        
+        # --- STATIC SETUP ---
+        flat_params, _ = tree_util.tree_flatten(target_init_params)
+        self.param_sizes = [np.prod(p.shape) for p in flat_params]
+        self.param_shapes = [p.shape for p in flat_params]
+        
+        # Calculate chunks
+        layer_ids_list = []
+        chunk_ids_list = []
+        
+        for layer_idx, size in enumerate(self.param_sizes):
+            n_chunks = (size + chunk_size - 1) // chunk_size
+            layer_ids_list.append(np.full(n_chunks, layer_idx))
+            chunk_ids_list.append(np.arange(n_chunks))
+
+        self.layer_ids = jnp.array(np.concatenate(layer_ids_list))
+        self.chunk_ids = jnp.array(np.concatenate(chunk_ids_list))
+        self.total_chunks = len(self.layer_ids)
+        self.split_indices = np.cumsum(self.param_sizes)[:-1]
+
+        # --- DEFINE CONSTANTS FOR EMBEDDING SIZES ---
+        # These must match exactly what you use in generate_params
+        self.N_LAYERS = 20   # Size of layer one-hot
+        self.N_CHUNKS = 100  # Size of chunk one-hot
+        self.INPUT_DIM = self.N_LAYERS + self.N_CHUNKS # 120
+
+    def init_hypernet(self, rng):
+        """
+        Creates the initial parameters. 
+        CRITICAL: The dummy shape here must match the runtime shape exactly.
+        """
+        # Create a dummy input with the correct feature dimension (120)
+        dummy_input = jnp.zeros((self.total_chunks, self.INPUT_DIM))
+        return HyperNetwork(self.chunk_size).init(rng, dummy_input)
+
+    def generate_params(self, hypernet_params):
+        # 1. CREATE EMBEDDINGS (Must match INPUT_DIM)
+        l_oh = jax.nn.one_hot(self.layer_ids, self.N_LAYERS)      
+        c_oh = jax.nn.one_hot(self.chunk_ids, self.N_CHUNKS)     
+        
+        # Concatenate: 20 + 100 = 120 features
+        embeddings = jnp.concatenate([l_oh, c_oh], axis=-1)
+
+        # 2. RUN HYPERNET
+        flat_chunks = HyperNetwork(self.chunk_size).apply(hypernet_params, embeddings)
+        
+        # 3. RECONSTRUCT (Slice and Dice)
+        raw_stream = flat_chunks.reshape(-1)
+        total_gen_params = self.split_indices[-1] + self.param_sizes[-1]
+        valid_stream = raw_stream[:total_gen_params]
+        param_list = jnp.split(valid_stream, self.split_indices)
+        
+        reshaped_params = [
+            p.reshape(s) for p, s in zip(param_list, self.param_shapes)
+        ]
+        return tree_util.tree_unflatten(self.target_tree, reshaped_params)
 
 class Generator(nn.Module):
     """InfoGAN generator for MNIST, based on your simple ConvTranspose stack."""
@@ -106,12 +197,16 @@ class Generator(nn.Module):
             padding='VALID',
             kernel_init=normal_init(0.02),
         )(z_full)
-        x = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
+        x = nn.GroupNorm(
+            num_groups=32,
+            epsilon=1e-5,
         )(x)
+        #x = nn.BatchNorm(
+        #    use_running_average=not self.training,
+        #    axis=-1,
+        #    momentum=0.1,
+        #    scale_init=normal_init(0.02),
+        #)(x)
         x = jnp.tanh(x)
 
         x = nn.ConvTranspose(
@@ -121,12 +216,16 @@ class Generator(nn.Module):
             padding='VALID',
             kernel_init=normal_init(0.02),
         )(x)
-        x = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
+        x = nn.GroupNorm(
+            num_groups=32,
+            epsilon=1e-5,
         )(x)
+        #x = nn.BatchNorm(
+        #    use_running_average=not self.training,
+        #    axis=-1,
+        #    momentum=0.1,
+        #    scale_init=normal_init(0.02),
+        #)(x)
         x = jnp.tanh(x)
 
         x = nn.ConvTranspose(
@@ -136,12 +235,16 @@ class Generator(nn.Module):
             padding='VALID',
             kernel_init=normal_init(0.02),
         )(x)
-        x = nn.BatchNorm(
-            use_running_average=not self.training,
-            axis=-1,
-            momentum=0.1,
-            scale_init=normal_init(0.02),
+        x = nn.GroupNorm(
+            num_groups=32,
+            epsilon=1e-5,
         )(x)
+        #x = nn.BatchNorm(
+        #    use_running_average=not self.training,
+        #    axis=-1,
+        #    momentum=0.1,
+        #    scale_init=normal_init(0.02),
+        #)(x)
         x = jnp.tanh(x)
 
         x = nn.ConvTranspose(
@@ -587,12 +690,15 @@ class GenPolicy(PolicyNetwork):
         key, key_gen, key_disc, key_bin = random.split(key, 4)
 
         variables_gen = self.model_gen.init(key_gen, jnp.ones([64,74], jnp.float32))
-        variables_disc = self.model_disc.init(key_disc, jnp.ones([60,28,28,1], jnp.float32))
+        variables_disc = self.model_disc.init(key_disc, jnp.ones([1,28,28,1], jnp.float32))
         
         variables_q = self.model_q.init(key_bin, jnp.ones([64,5,5,128], jnp.float32))
         
-        self.init_params_gen, self.init_batch_stats_gen = variables_gen['params'], variables_gen['batch_stats']
+        self.init_params_gen = variables_gen['params']
         self.init_params_disc, self.init_batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
+
+        self.adapter = ParameterAdapter(self.init_params_gen, chunk_size=512)
+        self.init_params_hypernet = self.adapter.init_hypernet(random.PRNGKey(11))
 
         #jax.debug.print('batch stats gen shape : {}', self.init_batch_stats_gen.shape)
         self.latent_dim = 64
@@ -602,27 +708,29 @@ class GenPolicy(PolicyNetwork):
         format_single_params_gen_fn = get_single_params_format_fn(self.init_params_gen)
         self._format_single_params_gen_fn = format_single_params_gen_fn
         
+        format_single_params_hypernet_fn = get_single_params_format_fn(self.init_params_hypernet)
+        self._format_single_params_hypernet_fn = format_single_params_hypernet_fn
+
         self._logger.info(
             'GenPolicy.num_params = {}'.format(self.num_params))
         self._format_params_gen_fn = jax.vmap(format_params_gen_fn)
 
-        self.num_batch_stats, format_batch_stats_gen_fn = get_params_format_fn(self.init_batch_stats_gen)
+        self.num_params_hypernet, format_params_hn_fn = get_params_format_fn(self.init_params_hypernet)
         self._logger.info(
-            'GenPolicy.num_batch_stats = {}'.format(self.num_batch_stats))
-        self._format_batch_stats_gen_fn = jax.vmap(format_batch_stats_gen_fn)
+            'GenPolicy.num_params_hypernet = {}'.format(self.num_params_hypernet))
+        self._format_params_hn_fn = jax.vmap(format_params_hn_fn)
 
         leaves_params, _ = jax.tree_util.tree_flatten(self.init_params_gen)
-        
         self.flat_params_gen = jnp.concatenate([p.flatten() for p in leaves_params])
 
-        leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(self.init_batch_stats_gen)
-
-        self.flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
+        leaves_params_hypernet, _ = jax.tree_util.tree_flatten(self.init_params_hypernet)
+        self.flat_params_hypernet = jnp.concatenate([p.flatten() for p in leaves_params_hypernet])
 
         self.num_params_disc, format_params_disc_fn = get_params_format_fn(self.init_params_disc)
         self._logger.info(
             'DiscPolicy.num_params = {}'.format(self.num_params_disc))
         self._format_params_disc_fn = jax.vmap(format_params_disc_fn)
+        
         self.num_batch_stats_disc, format_batch_stats_disc_fn = get_params_format_disc_fn(self.init_batch_stats_disc)
         self._logger.info(
             'DiscPolicy.num_batch_stats = {}'.format(self.num_batch_stats_disc))
@@ -631,13 +739,14 @@ class GenPolicy(PolicyNetwork):
         leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(self.init_batch_stats_disc)
         self.flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
-        def forward_fn_gen(params_g, vars_g_batch_stats, params_d, vars_d_batch_stats, latent_input, noise, shift_x, shift_y, data):
+        def forward_fn_gen(params_hn, params_d, vars_d_batch_stats, latent_input, noise, shift_x, shift_y, data):
           
+            params_g = self.adapter.generate_params(params_hn)
             #(fake_data) = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input)
        
             #(preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
 
-            (fake_data) = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=False) 
+            (fake_data) = self.model_gen.apply({'params': params_g}, latent_input) 
            
             #fake_data_with_noise = fake_data + noise
           
@@ -680,23 +789,22 @@ class GenPolicy(PolicyNetwork):
 
     def get_actions(self,
                     t_states: TaskState,
-                    params_gen: jnp.ndarray,
+                    params_hn: jnp.ndarray,
                     params_disc: jnp.ndarray,
                     #params_q: jnp.ndarray,
                     p_states: PolicyState) -> Tuple[jnp.ndarray, PolicyState]:
         
-        params_gen = self._format_params_gen_fn(params_gen)
+        params_hn = self._format_params_hn_fn(params_hn)
         params_disc = self._format_params_disc_fn(params_disc)
         #params_q = self._format_params_q_fn(params_q)
 
-        batch_stats_gen = self._format_batch_stats_gen_fn(t_states.batch_stats_gen)
         batch_stats_disc = self._format_batch_stats_disc_fn(t_states.batch_stats_disc)
 
         #batch_stats_q = self._format_batch_stats_q_fn(t_states.batch_stats_q) 
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, preds, disc_logits, mu, var, mean_var_fake, q_flat, q_flat_real = self._forward_fn_gen(params_gen, batch_stats_gen, params_disc, batch_stats_disc, t_states.obs, t_states.noise, t_states.shift_x, t_states.shift_y, t_states.real_centroids)
+        fake_data, preds, disc_logits, mu, var, mean_var_fake, q_flat, q_flat_real = self._forward_fn_gen(params_hn, params_disc, batch_stats_disc, t_states.obs, t_states.noise, t_states.shift_x, t_states.shift_y, t_states.real_centroids)
         
         return fake_data, preds, disc_logits, mu, var, mean_var_fake, q_flat, q_flat_real, p_states
         #return self._forward_fn(params, t_states.obs), p_states

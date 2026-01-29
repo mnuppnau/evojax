@@ -418,7 +418,7 @@ class PGPE(NEAlgorithm):
         
         # add a dimension to the fitness scores so that (256,) becomes (256, 1)
         #fitness_adv = fitness_adv[:, None]
-        fitness_mi = fitness_mi[:, None]
+        #fitness_mi = fitness_mi[:, None]
         #fitness_con = fitness_con[:, None]
 
         #r_cons2 = r_cons[:, None]
@@ -440,7 +440,7 @@ class PGPE(NEAlgorithm):
         #jax.debug.print('fitness adv scores {} : ', fitness_adv.flatten())
         #objectives = jnp.hstack([-fitness_adv])
         #if self._t < 40000:
-        #    objectives = jnp.hstack([-fitness_adv,-fitness_mi])
+        #objectives = jnp.hstack([-fitness_adv,-fitness_mi])
         ##elif self._t < 1000:
         ##    objectives = jnp.hstack([-fitness_adv,])
         ##elif self._t < 99000:
@@ -542,14 +542,16 @@ class PGPE(NEAlgorithm):
         #elif jnp.mean(fitness_mi) < -0.2:
         #    w_mi = 20
         #else:
-        if self._t < 4000: 
+        if self._t < 1000: 
             w_mi = 100
-        elif self._t < 6000:
+        elif self._t < 3000:
             w_mi = 20
         elif self._t < 9000:
-            w_mi = 30
-        elif self._t < 25000:
-            w_mi = 40
+            w_mi = 4
+        elif self._t < 35000:
+            w_mi = 2
+        elif self._t < 70000:
+            w_mi = 10
         else:
             w_mi = 100
        
@@ -568,62 +570,62 @@ class PGPE(NEAlgorithm):
         #else:
         #    w_adv = 1.0
 
-        if self._t < 30000:
-            w_sense = 4.0
-            w_intra = 1.0
-            w_cons = 0.2
-            w_con = 3.0
-        elif self._t < 50000:
-            w_sense = 2.0
-            w_intra = 1.0
-            w_cons = 0.8
-            w_con = 2.0
-        elif self._t < 80000:
-            w_sense = 3.0
-            w_intra = 2.0
-            w_cons = 1.6
-            w_con = 2.0
-        elif self._t < 160000:
-            w_sense = 4.0
-            w_intra = 3.0
-            w_cons = 1.0
-            w_con = 3.0
-        elif self._t < 200000:
-            w_sense = 3.0
-            w_intra = 1.0
-            w_cons = 1.0
-            w_con = 2.0
-        elif self._t < 240000:
-            w_sense = 4.0
-            w_intra = 2.0
-            w_cons = 2.0
-            w_con = 2.5
-        else:
-            w_sense = 8.0
-            w_intra = 4.0
-            w_cons = 3.0
-            w_con = 3.0
+        #if self._t < 30000:
+        #    w_sense = 4.0
+        #    w_intra = 1.0
+        #    w_cons = 0.2
+        #    w_con = 3.0
+        #elif self._t < 50000:
+        #    w_sense = 2.0
+        #    w_intra = 1.0
+        #    w_cons = 0.8
+        #    w_con = 2.0
+        #elif self._t < 80000:
+        #    w_sense = 3.0
+        #    w_intra = 2.0
+        #    w_cons = 1.6
+        #    w_con = 2.0
+        #elif self._t < 160000:
+        #    w_sense = 4.0
+        #    w_intra = 3.0
+        #    w_cons = 1.0
+        #    w_con = 3.0
+        #elif self._t < 200000:
+        #    w_sense = 3.0
+        #    w_intra = 1.0
+        #    w_cons = 1.0
+        #    w_con = 2.0
+        #elif self._t < 240000:
+        #    w_sense = 4.0
+        #    w_intra = 2.0
+        #    w_cons = 2.0
+        #    w_con = 2.5
+        #else:
+        #    w_sense = 8.0
+        #    w_intra = 4.0
+        #    w_cons = 3.0
+        #    w_con = 3.0
 
 
-        if self._t < 20000:
-            w_realism = -0.8
-        elif self._t < 40000:
-            w_realism = 0.3
-        elif self._t < 100000:
-            w_realism = 0.5
-        else:
-            w_realism = 0.8
+        #if self._t < 20000:
+        #    w_realism = -0.8
+        #elif self._t < 40000:
+        #    w_realism = 0.3
+        #elif self._t < 100000:
+        #    w_realism = 0.5
+        #else:
+        #    w_realism = 0.8
         
-        raw_fitness_adv = fitness_adv #* w_adv
+        #raw_fitness_adv = fitness_adv #* w_adv
         #fitness_adv = raw_fitness_adv # * w_adv
         
-        #std_adv = jnp.std(fitness_adv) + 1e-8
-        #std_mi = jnp.std(fitness_mi) + 1e-8
+        std_adv = jnp.std(fitness_adv) + 1e-8
+        std_mi = jnp.std(fitness_mi) + 1e-8
 
 
-        #max_w_mi = jnp.minimum(100, jnp.maximum((std_adv / std_mi)//2,6))
+        max_w_mi = jnp.minimum(1000, jnp.maximum((std_adv / std_mi)//2,4))
 
-        realism_gate = jax.nn.sigmoid(raw_fitness_adv + w_realism)
+        #realism_gate = jax.nn.sigmoid(raw_fitness_adv + w_realism)
         # 2. MI is a constraint. If MI loss is high, it dominates fitness.
         # If MI loss is low (good), its gradient contribution diminishes.
         #mi_target = -0.001
@@ -633,21 +635,21 @@ class PGPE(NEAlgorithm):
         #fitness_mi = 5 * fitness_mi.flatten()
 
         #penalty_mi = mi_penalty(fitness_mi.flatten(), fitness_adv.flatten(), mi_thr=-0.001, v_ref=0.01, M=5.0)
-        r_sense = w_sense * jnp.minimum(r_sense, 0.68)
+        #r_sense = w_sense * jnp.minimum(r_sense, 0.68)
 
-        r_cons_weight = jnp.clip( (self._t - 3000) / 3000 , 0.0, 1.0)
-        #r_cons_penalty = 2 * jnp.maximum(r_cons, 0.1)
-        r_cons = -1.0 * r_cons_weight * r_cons#r_cons_penalty
-        r_cons = w_cons * r_cons
-        r_cons = -4.0 - r_cons
+        #r_cons_weight = jnp.clip( (self._t - 3000) / 3000 , 0.0, 1.0)
+        ##r_cons_penalty = 2 * jnp.maximum(r_cons, 0.1)
+        #r_cons = -1.0 * r_cons_weight * r_cons#r_cons_penalty
+        #r_cons = w_cons * r_cons
+        #r_cons = -4.0 - r_cons
 
-        r_intra = w_intra * r_intra
+        #r_intra = w_intra * r_intra
 
-        r_intra = -4.4 + r_intra
-        r_intra = 0.1 * r_intra
-        r_sense = -4.0 + r_sense
+        #r_intra = -4.4 + r_intra
+        #r_intra = 0.1 * r_intra
+        #r_sense = -4.0 + r_sense
          
-        fitness_con = w_con * fitness_con.flatten()
+        #fitness_con = w_con * fitness_con.flatten()
 
         #fitness_adv_mean = jnp.mean(fitness_adv)
         #fitness_adv_std = jnp.std(fitness_adv)
@@ -658,7 +660,7 @@ class PGPE(NEAlgorithm):
         #r_anchor_norm = (r_anchor - r_anchor_mean) / (r_anchor_std + 1e-8)
 
         #fitness_adv = 10.0 - raw_fitness_adv
-        fitness_con = -6.0 - fitness_con 
+        #fitness_con = -6.0 - fitness_con 
         #fitness_adv = fitness_adv_norm + (0.2 * r_anchor_norm) 
         #jax.debug.print('realism gate shape {} : ', realism_gate.shape)
         #jax.debug.print('r_sense shape {} : ', r_sense.shape)
@@ -666,41 +668,41 @@ class PGPE(NEAlgorithm):
         #jax.debug.print('r_cons shape {} : ', r_cons.shape)
         #jax.debug.print('fitness_con shape {} : ', fitness_con.shape)
         
-        cultural_score = (r_sense + r_intra + r_cons + fitness_con) * 0.2
-        cultural_score = cultural_score[:, None]
+        #cultural_score = (r_sense + r_intra + r_cons + fitness_con) * 0.2
+        #cultural_score = cultural_score[:, None]
         #jax.debug.print('cultural score shape {} : ', cultural_score.shape)
 
 
-        diversity_score = fitness_adv + (realism_gate * cultural_score)
-        diversity_score = diversity_score[:, None] 
+        #diversity_score = fitness_adv + (realism_gate * cultural_score)
+        #diversity_score = diversity_score[:, None] 
 
         #jax.debug.print('diversity score shape {} : ', diversity_score.shape)
 
-        fitness_adv = fitness_adv[:, None]
+        #fitness_adv = fitness_adv[:, None]
         
-        if self._t % 2 == 0:
-            objectives_final = jnp.hstack([-fitness_adv, -fitness_mi, -cultural_score])
-        else:
-            objectives_final = jnp.hstack([-fitness_adv, -fitness_mi])
+        #if self._t % 2 == 0:
+        #    objectives_final = jnp.hstack([-fitness_adv, -fitness_mi, -cultural_score])
+        #else:
+        #    objectives_final = jnp.hstack([-fitness_adv, -fitness_mi])
         #jax.debug.print('objectives final shape {} : ', objectives_final.shape)
 
-        ranks_final = non_dominated_sort_lax(objectives_final)
+        #ranks_final = non_dominated_sort_lax(objectives_final)
 
-        order = jnp.lexsort((-fitness_adv.flatten(), ranks_final))
+        #order = jnp.lexsort((-fitness_adv.flatten(), ranks_final))
         #if self._t < 40000:
         #fitness_scores = -fitness_adv
         #elif self._t < 40000:
             #    
-        fitness_scores = -jnp.argsort(order)
+        #fitness_scores = -jnp.argsort(order)
         #    fitness_scores = fitness_adv
-            #fitness_scores = fitness_adv + fitness_mi.flatten() * max_w_mi + mmd2.flatten()*0.02 + fitness_con.flatten()*0.1
+        fitness_scores = fitness_adv + fitness_mi * w_mi + fitness_con
         #else:#if self._t < 160000:
         #cultural_score = r_sense + r_intra + r_cons + fitness_con
         #fitness_scores = fitness_adv + realism_gate * cultural_score - penalty_mi
         #else:
         #    cultural_score = r_sense + r_intra + fitness_con
         #fitness_scores = fitness_adv.flatten() + (fitness_mi.flatten() * w_mi) + (realism_gate * cultural_score)
-        #fitness_scores = fitness_adv + fitness_mi + r_sense + fitness_con.flatten()*0.6 + r_intra + r_cons
+        #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*100 #+ r_sense + fitness_con.flatten()*0.6 + r_intra + r_cons
 
         #fitness_scores = -jnp.argsort(order+1)
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
