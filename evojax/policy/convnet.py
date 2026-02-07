@@ -78,49 +78,50 @@ def load_model(state, path):
     restored_state = checkpointer.restore(path, item=state)
     return restored_state
 
-# Assuming you have something like:
-# normal_init = nn.initializers.normal
+import jax
+import jax.numpy as jnp
+from flax import linen as nn
+from jax import tree_util
+import numpy as np
 
-# --- 1. The HyperNetwork (Tunable Size) ---
+# --- 1. The HyperNetwork (Now with Geometric Input) ---
 class HyperNetwork(nn.Module):
-    chunk_size: int = 256        # Reduced to keep param count low (~20k params total)
+    chunk_size: int = 256
     
     @nn.compact
-    def __call__(self, embeddings):
+    def __call__(self, inputs):
         """
-        Input:  (Total_Chunks, Embedding_Dim)
-        Output: (Total_Chunks, Chunk_Size)
-        
-        Since we pass a batch of embeddings, nn.Dense automatically 
-        broadcasts. No vmap needed here.
+        Input:  (Batch, Input_Dim) 
+                Input_Dim = Layer_OneHot + Chunk_OneHot + 2 (Depth, Scale)
+        Output: (Batch, Chunk_Size)
         """
-        # Hidden Layer 1
-        x = nn.Dense(32)(embeddings) 
+        # We start with a slightly wider first layer to handle the mixed inputs
+        x = nn.Dense(32)(inputs) 
         x = nn.tanh(x)
         
-        # Hidden Layer 2
         x = nn.Dense(32)(x)
         x = nn.tanh(x)
         
-        # Output Layer (The bottleneck)
-        # 64 inputs * 256 outputs = 16,384 params
-        weights = nn.Dense(self.chunk_size
-                           )(x)
-
+        # Initialize output with higher variance as discussed to ensure signal strength
+        weights = nn.Dense(
+            self.chunk_size, 
+            kernel_init=jax.nn.initializers.normal(stddev=0.05) 
+        )(x)
         
         return weights
 
+# --- 2. The Adapter (The "Context" Builder) ---
 class ParameterAdapter:
     def __init__(self, target_init_params, chunk_size=256):
         self.chunk_size = chunk_size
         self.target_tree = tree_util.tree_structure(target_init_params)
         
-        # --- STATIC SETUP ---
+        # --- A. Flatten and Map Shapes ---
         flat_params, _ = tree_util.tree_flatten(target_init_params)
         self.param_sizes = [np.prod(p.shape) for p in flat_params]
         self.param_shapes = [p.shape for p in flat_params]
         
-        # Calculate chunks
+        # --- B. Assign Layer IDs and Chunk IDs ---
         layer_ids_list = []
         chunk_ids_list = []
         
@@ -132,35 +133,51 @@ class ParameterAdapter:
         self.layer_ids = jnp.array(np.concatenate(layer_ids_list))
         self.chunk_ids = jnp.array(np.concatenate(chunk_ids_list))
         self.total_chunks = len(self.layer_ids)
+        
+        # --- C. Define Geometric Context (The New Part) ---
+        # We manually map each layer index to a "Depth" (0-1) and "Scale" (0-1)
+        # Assuming the Generator order: [Dense(Start), GroupNorm, Conv(7x7), GN, Conv(14x14), GN, Conv(28x28)]
+        # You can adjust these based on your exact parameter list order.
+        # This is a heuristic: Start=0.0, End=1.0. 
+        total_layers = len(self.param_sizes)
+        self.depth_map = np.linspace(0.0, 1.0, total_layers)
+        
+        # For Scale, we map based on expected resolution.
+        # We create an array matching 'param_sizes' length.
+        # 0.25 = 7x7, 0.5 = 14x14, 1.0 = 28x28
+        # (Simplified: Just using increasing scale for deeper layers)
+        self.scale_map = np.linspace(0.25, 1.0, total_layers)
+
+        # Convert to JAX arrays for the GPU
+        self.depths = jnp.array(self.depth_map)[self.layer_ids] 
+        self.scales = jnp.array(self.scale_map)[self.layer_ids]
+
         self.split_indices = np.cumsum(self.param_sizes)[:-1]
 
-        # --- DEFINE CONSTANTS FOR EMBEDDING SIZES ---
-        # These must match exactly what you use in generate_params
-        self.N_LAYERS = 20   # Size of layer one-hot
-        self.N_CHUNKS = 100  # Size of chunk one-hot
-        self.INPUT_DIM = self.N_LAYERS + self.N_CHUNKS # 120
+        # --- D. Input Dimensions ---
+        self.N_LAYERS = 20   
+        self.N_CHUNKS = 100  
+        # +2 comes from the new Depth and Scale features
+        self.INPUT_DIM = self.N_LAYERS + self.N_CHUNKS + 2 
+
+        # --- PRE-CALCULATE EMBEDDINGS ONCE ---
+        l_oh = jax.nn.one_hot(self.layer_ids, self.N_LAYERS)      
+        c_oh = jax.nn.one_hot(self.chunk_ids, self.N_CHUNKS)     
+        d_feat = self.depths[:, None]
+        s_feat = self.scales[:, None]
+
+        self.static_embeddings = jnp.concatenate([l_oh, c_oh, d_feat, s_feat], axis=-1)
 
     def init_hypernet(self, rng):
-        """
-        Creates the initial parameters. 
-        CRITICAL: The dummy shape here must match the runtime shape exactly.
-        """
-        # Create a dummy input with the correct feature dimension (120)
         dummy_input = jnp.zeros((self.total_chunks, self.INPUT_DIM))
         return HyperNetwork(self.chunk_size).init(rng, dummy_input)
 
     def generate_params(self, hypernet_params):
-        # 1. CREATE EMBEDDINGS (Must match INPUT_DIM)
-        l_oh = jax.nn.one_hot(self.layer_ids, self.N_LAYERS)      
-        c_oh = jax.nn.one_hot(self.chunk_ids, self.N_CHUNKS)     
-        
-        # Concatenate: 20 + 100 = 120 features
-        embeddings = jnp.concatenate([l_oh, c_oh], axis=-1)
 
-        # 2. RUN HYPERNET
-        flat_chunks = HyperNetwork(self.chunk_size).apply(hypernet_params, embeddings)
+        # 4. Run HyperNet
+        flat_chunks = HyperNetwork(self.chunk_size).apply(hypernet_params, self.static_embeddings)
         
-        # 3. RECONSTRUCT (Slice and Dice)
+        # 5. Reconstruct
         raw_stream = flat_chunks.reshape(-1)
         total_gen_params = self.split_indices[-1] + self.param_sizes[-1]
         valid_stream = raw_stream[:total_gen_params]
@@ -172,91 +189,84 @@ class ParameterAdapter:
         return tree_util.tree_unflatten(self.target_tree, reshaped_params)
 
 class Generator(nn.Module):
-    """InfoGAN generator for MNIST, based on your simple ConvTranspose stack."""
     features: int = 64
     training: bool = True
-
+    
     @nn.compact
     def __call__(self, z):
-        """
-        Args:
-            z:      (B, z_dim)
-            c_cat:  (B, n_cat)    one-hot
-            c_cont: (B, n_cont)   e.g. 2 dims in [-1, 1]
-
-        Returns:
-            x: (B, 28, 28, 1) in [-1, 1]
-        """
-        # reshape to (B, 1, 1, C) for conv-transpose
-        z_full = z.reshape((z.shape[0], 1, 1, z.shape[1]))
-
-        x = nn.ConvTranspose(
-            self.features * 4,
-            kernel_size=(3, 3),
-            strides=(2, 2),
-            padding='VALID',
-            kernel_init=normal_init(0.02),
-        )(z_full)
-        x = nn.GroupNorm(
-            num_groups=32,
-            epsilon=1e-5,
-        )(x)
-        #x = nn.BatchNorm(
-        #    use_running_average=not self.training,
-        #    axis=-1,
-        #    momentum=0.1,
-        #    scale_init=normal_init(0.02),
-        #)(x)
+        # --- OLD APPROACH ---
+        # x = nn.Dense(self.features * 7 * 7)(z)  # <--- 232k Params! Too big for HyperNet.
+        
+        # --- NEW APPROACH (The Bottleneck) ---
+        # 1. Project to a manageable "Linear" space first
+        # 74 -> 256 params = ~19k parameters. 
+        # The HyperNet can easily master this!
+        x = nn.Dense(256, kernel_init=normal_init(0.02))(z)
+        x = nn.relu(x) # or tanh
+        
+        # 2. Expand to Spatial (using separate layer)
+        # 256 -> 3136 params = ~800k params? NO.
+        # We project linearly to the channel dimension of 7x7
+        # Reshape 256 -> (B, 1, 1, 256)
+        x = x.reshape((x.shape[0], 1, 1, 256))
+        
+        # Use ConvTranspose or Resize to expand spatially
+        # Project 256 channels -> 64 channels * 7 * 7 spatial?
+        # Let's just reshape to (4, 4, 16) or similar? 
+        # Actually, simpler: Project to 7x7x64 using a second Dense is still big.
+        
+        # BETTER: Project z -> 7*7*8 (small depth) -> Conv to 64
+        x = nn.Dense(7 * 7 * 8)(z) # 74 -> 392 outputs = 29k params. Very manageable.
+        x = x.reshape((x.shape[0], 7, 7, 8))
+        
+        # Now use a Conv to expand depth (standard HyperNet texture generation)
+        x = nn.Conv(self.features, kernel_size=(3,3), padding='SAME')(x)
+        x = nn.GroupNorm(num_groups=32)(x)
         x = jnp.tanh(x)
-
-        x = nn.ConvTranspose(
-            self.features * 2,
-            kernel_size=(4, 4),
-            strides=(1, 1),
-            padding='VALID',
-            kernel_init=normal_init(0.02),
-        )(x)
-        x = nn.GroupNorm(
-            num_groups=32,
-            epsilon=1e-5,
-        )(x)
-        #x = nn.BatchNorm(
-        #    use_running_average=not self.training,
-        #    axis=-1,
-        #    momentum=0.1,
-        #    scale_init=normal_init(0.02),
-        #)(x)
-        x = jnp.tanh(x)
-
-        x = nn.ConvTranspose(
+        
+        # ... Rest of the Resize-Conv network ...
+        # 2. UPSAMPLE BLOCK 1 (7x7 -> 14x14)
+        # Resize: Nearest Neighbor is clean and sharp (no ringing).
+        x = jax.image.resize(x, shape=(x.shape[0], 14, 14, x.shape[3]), method='nearest')
+        
+        # Convolve: Process the upsampled features
+        # We maintain 'features' depth (64) to keep capacity high
+        x = nn.Conv(
             self.features,
-            kernel_size=(3, 3),
-            strides=(2, 2),
-            padding='VALID',
-            kernel_init=normal_init(0.02),
+            kernel_size=(5, 5),  # 5x5 kernel helps smooth the nearest-neighbor edges
+            strides=(1, 1),
+            padding='SAME',
+            kernel_init=normal_init(0.02)
         )(x)
-        x = nn.GroupNorm(
-            num_groups=32,
-            epsilon=1e-5,
-        )(x)
-        #x = nn.BatchNorm(
-        #    use_running_average=not self.training,
-        #    axis=-1,
-        #    momentum=0.1,
-        #    scale_init=normal_init(0.02),
-        #)(x)
+        x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
         x = jnp.tanh(x)
 
-        x = nn.ConvTranspose(
+        # 3. UPSAMPLE BLOCK 2 (14x14 -> 28x28)
+        x = jax.image.resize(x, shape=(x.shape[0], 28, 28, x.shape[3]), method='nearest')
+        
+        # Convolve
+        x = nn.Conv(
+            self.features // 2,  # Reduce depth to 32
+            kernel_size=(5, 5),
+            strides=(1, 1),
+            padding='SAME',
+            kernel_init=normal_init(0.02)
+        )(x)
+        x = nn.GroupNorm(num_groups=16, epsilon=1e-5)(x) # Adjusted groups for smaller depth
+        x = jnp.tanh(x)
+
+        # 4. OUTPUT BLOCK (28x28 -> 28x28)
+        # Collapse to 1 channel (Grayscale)
+        x = nn.Conv(
             1,
-            kernel_size=(4, 4),
-            strides=(2, 2),
-            padding='VALID',
-            kernel_init=normal_init(0.02),
+            kernel_size=(5, 5),
+            strides=(1, 1),
+            padding='SAME',
+            kernel_init=normal_init(0.02)
         )(x)
         x = jnp.tanh(x)
+        
         return x
-
 
 # assumes you already have: normal_init
 
@@ -739,45 +749,24 @@ class GenPolicy(PolicyNetwork):
         leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(self.init_batch_stats_disc)
         self.flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
-        def forward_fn_gen(params_hn, params_d, vars_d_batch_stats, latent_input, noise, shift_x, shift_y, data):
+        def forward_fn_gen(params_hn, params_d, vars_d_batch_stats, latent_input, noise):
           
             params_g = self.adapter.generate_params(params_hn)
-            #(fake_data) = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input)
        
-            #(preds, q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
-
             (fake_data) = self.model_gen.apply({'params': params_g}, latent_input) 
            
-            #fake_data_with_noise = fake_data + noise
+            fake_data_with_noise = fake_data + noise
           
-            #fake_data_with_noise_shifted = jnp.roll(fake_data_with_noise, shift=(shift_x, shift_y), axis=(1,2))
             
-            (preds, q, mu, var, q_flat) = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=False)
-
-            (_,_,_,_,q_flat_real) = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, data, mutable=False)
-
-            #(_, q, mu, var, q_flat), _ = self.model_q.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data, mutable=['batch_stats'])
-            #(disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
-
-            #leaves_batch_stats_gen, _ = jax.tree_util.tree_flatten(vars_g['batch_stats'])
-            #flat_batch_stats_gen = jnp.concatenate([p.flatten() for p in leaves_batch_stats_gen])
-
-            #leaves_batch_stats_disc, _ = jax.tree_util.tree_flatten(vars_d['batch_stats'])
-            #flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
+            (preds, q, mu, var, q_flat) = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data_with_noise, mutable=False)
 
             # calculate variance of fake data
             var_fake = jnp.var(fake_data[:, 4:24, 4:24, :], axis=0)
            
-            #jax.debug.print('q_flat shape: {}', q_flat.shape)
             # take mean of variance
             mean_var_fake = jnp.mean(var_fake)
 
-            #jax.debug.print('Mean variance of fake data: {}', mean_var_fake)
-
-            #leaves_batch_stats_q, _ = jax.tree_util.tree_flatten(vars_q['batch_stats'])
-            #flat_batch_stats_q = jnp.concatenate([p.flatten() for p in leaves_batch_stats_q])
-            
-            return fake_data, preds, q, mu, var, mean_var_fake, q_flat, q_flat_real
+            return preds, q, mu, var, mean_var_fake, q_flat
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -804,9 +793,9 @@ class GenPolicy(PolicyNetwork):
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        fake_data, preds, disc_logits, mu, var, mean_var_fake, q_flat, q_flat_real = self._forward_fn_gen(params_hn, params_disc, batch_stats_disc, t_states.obs, t_states.noise, t_states.shift_x, t_states.shift_y, t_states.real_centroids)
+        preds, disc_logits, mu, var, mean_var_fake, q_flat = self._forward_fn_gen(params_hn, params_disc, batch_stats_disc, t_states.obs, t_states.noise)
         
-        return fake_data, preds, disc_logits, mu, var, mean_var_fake, q_flat, q_flat_real, p_states
+        return preds, disc_logits, mu, var, mean_var_fake, q_flat, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
