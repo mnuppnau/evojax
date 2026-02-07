@@ -36,15 +36,10 @@ class State(TaskState):
     obs: jnp.ndarray
     #latent_input: jnp.ndarray
     noise: jnp.ndarray
-    shift_x: jnp.ndarray
-    shift_y: jnp.ndarray
     cat_codes: jnp.ndarray
     codes60: jnp.ndarray
-    real_centroids: jnp.ndarray
     con_codes: jnp.ndarray
-    batch_stats_gen: any
     batch_stats_disc: any
-    batch_stats_q: any
 
 def rff_init(
     key: jax.random.PRNGKey,
@@ -398,9 +393,7 @@ class Latent_Points(VectorizedTask):
         self.max_steps = 1
         self.obs_shape = (latent_dim + n_classes,)
 
-        self.batch_stats_gen = None
         self.batch_stats_disc = None
-        self.batch_stats_q = None 
 
         self.mean_mi = jnp.array([0.0])
         self.mean_g = jnp.array([0.0])
@@ -429,89 +422,46 @@ class Latent_Points(VectorizedTask):
             if test:
                 batch_latent = random.normal(noise_key, (self.batch_size, self.noise_dim))
                 
-                #c = jnp.tile(jnp.arange(10),52)
-                # remove the last 4 elements to make it 256
-                #c = c[:self.batch_size]
-                #batch_cat_one_hot = jax.nn.one_hot(c, 10)
-                
-                #batch_cat = random.randint(cat_key, (self.batch_size,), 0, self.n_classes)
+               
+                batch_cat = random.randint(cat_key, (self.batch_size,), 0, self.n_classes)
 
-                #batch_cat_one_hot = jax.nn.one_hot(batch_cat, self.n_classes)
+                batch_cat_one_hot = jax.nn.one_hot(batch_cat, self.n_classes)
 
-                c = jnp.tile(jnp.arange(10),52)
-                # remove the last 4 elements to make it 256
-                c = c[:self.batch_size]
-                batch_cat_one_hot = jax.nn.one_hot(c, 10)
-
-                batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-1.0, maxval=1.0)
+                batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-0.5, maxval=0.5)
 
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot, batch_con], axis=-1)
 
             else:
                 
-                batch_latent = random.normal(noise_key, (self.batch_size, self.noise_dim))
+                z_base_fixed = jax.random.normal(noise_key, (7, 62))  # 6 different z vectors
+                # Repeat each z 10 times for each categorical code 
+                z_base_70 = jnp.repeat(z_base_fixed, 10, axis=0)  # (70, 62)
+                # take batch size, 64, of z base
+                z_base = z_base_70[:self.batch_size]  # (64, 62)
+ 
+                #z_base = jax.random.normal(noise_key, (self.batch_size, self.noise_dim))  # (64, 62)
+                
+                codes60 = jnp.tile(jnp.arange(10), 6)  # (60,)
+                onehot60 = jax.nn.one_hot(codes60, self.n_classes)  # (60, 10)
 
-                #batch_cat = random.randint(cat_key, (self.batch_size,), 0, self.n_classes)
-                
-                #c = jnp.tile(jnp.arange(10),7)
-                # remove the last 4 elements to make it 256
-                #c = c[:self.batch_size]
-                #batch_cat_one_hot = jax.nn.one_hot(c, 10)
-                
-                #batch_cat_one_hot = jax.nn.one_hot(batch_cat, self.n_classes)
-                # FIXED categorical code (same for all 64 images in this evaluation)
-                c_cat_idx = random.randint(cat_key, (), 0, self.n_classes)
-                batch_cat_one_hot = jax.nn.one_hot(jnp.full((self.batch_size,), c_cat_idx), self.n_classes)
-                
+                codes4 = jnp.tile(jnp.arange(4), 1)  # (4,)
+                onehot4 = jax.nn.one_hot(codes4, self.n_classes)  # (4, 10)
 
-                c_cont_value = random.uniform(con_key, (2,), minval=-1.0, maxval=1.0)
-                batch_con = jnp.tile(c_cont_value, (self.batch_size,1))
-                #c1 = jnp.tile(jnp.arange(10),6)
-                #c2 = jax.random.randint(cat_key, (4,), 0, 10)
-                #c = jnp.concatenate([c1, c2])
-                #c = jax.random.permutation(cat_key, c)  # Shuffle the array
-                # remove the last 4 elements to make it 256
-                #c = c[:self.batch_size]
-                #batch_cat_one_hot = jax.nn.one_hot(c, 10)
-                #batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-1.0, maxval=1.0)
-                
-                batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot, batch_con], axis=-1)
-                #batch_latent_concat = jnp.concatenate([batch_latent, c_cat_batch, c_cont_batch], axis=-1)
+                batch_cat_one_hot = jnp.concatenate([onehot60, onehot4], axis=0)  # (64, 10)
+
+                batch_con = jax.random.uniform(con_key, (self.batch_size, 2), minval=-0.5, maxval=0.5)  # 6 different continuous codes
+
+                batch_latent_concat = jnp.concatenate([z_base, batch_cat_one_hot, batch_con], axis=-1)  # (74, 64)
+
+                noise = jax.random.normal(cat_key, (self.batch_size, 28, 28, 1))* 0.1
             
-            return State(obs=batch_latent_concat, noise=batch_latent_concat, shift_x=batch_latent_concat, shift_y=batch_latent_concat, cat_codes=batch_cat_one_hot, codes60=batch_cat_one_hot, real_centroids=batch_cat_one_hot, con_codes=batch_con, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q)
+            return State(obs=batch_latent_concat, noise=noise, cat_codes=batch_cat_one_hot, codes60=codes60, con_codes=batch_con, batch_stats_disc=self.batch_stats_disc)
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
-        def step_fn(state, action, q, mu, var, q_flat, q_flat_real, topographic_ks, fake_images):
+        def step_fn(state, action, q, mu, var, q_flat, topographic_ks):
           
 
-            #target_centroids = state.real_centroids
-            #
-            #centroid_loss = compute_hybrid_anchor_loss(
-            #    fake_features=q_flat,
-            #    target_centroids=target_centroids,
-            #    n_codes=self.n_classes
-            #)
-
-            #centroid_loss = compute_centroid_loss(
-            #    fake_features=q_flat,
-            #    target_centroids=target_centroids,
-            #    n_codes=self.n_classes
-            #)
-
-            feat_dist = jnp.abs(jnp.mean(q_flat_real, axis=0) - jnp.mean(q_flat, axis=0)).sum()
-
-            feat_loss = -feat_dist
-            
-            mmd_out = evaluate_fake_batch(
-                fake_images,
-                self.mu_classes,
-                self.rff_params,
-            )
-
-            entropy = mmd_out['entropy'].astype(jnp.float32)
-            #jax.debug.print('entropy: {ent}', ent=mmd_out['entropy'])
-            
             # normalize q_flat and topographic_ks
             q_flat_norm = jnp.linalg.norm(q_flat, axis=-1, keepdims=True)
             q_flat = q_flat / jnp.maximum(q_flat_norm, 1e-8)
@@ -520,52 +470,14 @@ class Latent_Points(VectorizedTask):
             topographic_mu = topographic_ks / jnp.maximum(topographic_ks_norm, 1e-8)
 
             B, F = q_flat.shape # B=batch size, F=features
-            K = topographic_mu.shape[0]  # K=number of topographic codes
-
-            #c = jnp.tile(jnp.arange(self.n_classes), (64 + 10 - 1) // 10 )[ :64]
+            
             q_flat60 = q_flat[:60]
-            codes_full = jnp.concatenate([state.codes60, state.codes60[:4]], axis=0)
             topo_for_sample = topographic_mu[state.codes60]  # (B, F)
 
-            #sq = jnp.sum((q_flat60 - topo_for_sample) ** 2, axis=-1)
             cos_sim = jnp.sum(q_flat60 * topo_for_sample, axis=-1)
-            #compact = jnp.mean(1.0 - cos_sim)
-            #S = topographic_ks @ topographic_ks.T  # [K, K]
             r_cons = jnp.mean(1.0 - cos_sim)
-            #cos_dist = 1.0 - S
-            #mask = jnp.triu(jnp.ones((K, K), dtype=cos_dist.dtype), k=1)
-            #sep = jnp.sum(cos_dist * mask) / jnp.maximum(jnp.sum(mask), 1.0)
-
-
-            # Aggregate per code (handles any imbalance safely)
-            #sums_per_code   = jnp.bincount(state.codes60, weights=sq, length=K)         # [K]
-            #counts_per_code = jnp.bincount(state.codes60, length=K).astype(q_flat.dtype)  # [K]
-
-            #means_per_code = jnp.where(counts_per_code > 0,
-            #                           sums_per_code / (counts_per_code + 1e-8),
-            #                           0.0)                                     # [K]
-            #num_present = jnp.maximum(1.0, jnp.sum((counts_per_code > 0).astype(q_flat.dtype)))
-            #compact = jnp.sum(means_per_code) / num_present   
-
-            #diffs = topographic_ks[:, None, :] - topographic_ks[None, :, :]  # [K, K, F] 
-
-            #dists = jnp.linalg.norm(diffs, axis=-1)  # [K, K]
-            #iu = jnp.triu_indices(K, k=1)
-            #sep = jnp.mean(jnp.exp(-dists[iu] / 2.0))  # scalar
-            
-            # JIT-safe sep (pick one)
-            #mask = jnp.triu(jnp.ones((K, K), dtype=dists.dtype), k=1)
-            #sep = jnp.sum(dists * mask) / jnp.maximum(jnp.sum(mask), 1.0)
-            
-            #r_cons = (-compact) + sep * 0.5
-       
-            # r_sense, keep first 60 samples from q_flat batch
-            #q_flat60 = q_flat[:60]
-
-            # q_flat60: (60, F)
             grouped = q_flat60.reshape((6, 10, F))        # (instances, codes, F)
             
-            # Optional: normalize individual features first (like your original code)
             n_sense = jnp.linalg.norm(grouped, axis=-1, keepdims=True)
             grouped = grouped / jnp.maximum(n_sense, 1e-8)   # (6, 10, F)
             
@@ -576,7 +488,6 @@ class Latent_Points(VectorizedTask):
             # Normalize centroids so cosine is well-behaved
             c_norm = jnp.linalg.norm(centroids, axis=-1, keepdims=True)
             centroids = centroids / jnp.maximum(c_norm, 1e-8)   # (10, F)
-            
             # ---- all-pairs cosine distances between codes ----
             # Gram matrix of cosine similarities between centroids
             cos_sim_mat = centroids @ centroids.T             # (10, 10)
@@ -585,22 +496,7 @@ class Latent_Points(VectorizedTask):
             nearest_sim = jnp.max(S, axis=1)  # (10,)
             nearest_dist = 1.0 - nearest_sim
             r_sense = jnp.mean(nearest_dist)
-            # Convert to cosine distance
-            ##cos_dist_mat = 1.0 - cos_sim_mat                  # (10, 10)
-            
-            # Take only the 45 unique pairs (upper triangle, no diagonal)
-            ##num_codes = centroids.shape[0]                    # 10
-            ##i, j = jnp.triu_indices(num_codes, k=1)
-            ##cos_dist = cos_dist_mat[i, j]                     # (45,)
-            
-            # Clip like before
-            #cos_dist = jnp.minimum(cos_dist, 0.5)
-            # take the lowest of the 45 distances
-            ##cos_dist = jnp.min(cos_dist)
-            # Final scalar regularizer
-            #r_sense = jnp.mean(cos_dist)
-            ##r_sense = cos_dist
-            #jax.debug.print('r_cons: {r}', r=r_cons)
+                        
             grouped_intra = q_flat60.reshape(6, 10, F).transpose(1,0,2)  # (10, 6, F)
 
             n_intra = jnp.linalg.norm(grouped_intra, axis=-1, keepdims=True)
@@ -624,24 +520,12 @@ class Latent_Points(VectorizedTask):
             q_cat = jax.nn.log_softmax(q, axis=-1)
 
             loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
-            #loss_q_disc = -loss_q_disc
-            #loss_q_disc = cpc_mi_loss(state.cat_codes, q_cat, negative_samples=10)
-
-            #loss_g = bce_logits(action, jnp.ones((self.batch_size,), dtype=jnp.int32))
             loss_g = optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,))).mean()
-            #loss_g = jnp.minimum(action, 10.0).mean()
-            #jax.debug.print('loss_g: {lg}', lg=loss_g)
             loss_g = -loss_g
-            #loss_con = neg_log_likelihood_normal(state.con_codes, action, jnp.zeros_like(action))
-            
-            #loss_con = normal_nll_loss(state.con_codes, mu, var)*0.1
 
-            #loss_q_disc = -loss_q_disc
             loss_con = continuous_loss(state.con_codes, mu, var)
-            #loss_con = -loss_con
-            #loss_g = -loss_g#*0.1 + loss_q_disc# + loss_q_cont*0.005
             
-            return state, loss_q_disc, loss_g, loss_con, sum_per_cat_code, count_per_code, r_cons, r_sense, r_intra, entropy, feat_loss, jnp.ones(())
+            return state, loss_q_disc, loss_g, loss_con, sum_per_cat_code, count_per_code, r_cons, r_sense, r_intra, jnp.ones(())
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
@@ -655,7 +539,5 @@ class Latent_Points(VectorizedTask):
              mu: jnp.ndarray,
              var: jnp.ndarray,
              q_flat: jnp.ndarray,
-             q_flat_real: jnp.ndarray,
-             topographic_ks: jnp.ndarray,
-             fake_imgs: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
-        return self._step_fn(state, action, disc_logits, mu, var, q_flat, q_flat_real,topographic_ks, fake_imgs)
+             topographic_ks: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
+        return self._step_fn(state, action, disc_logits, mu, var, q_flat,topographic_ks)

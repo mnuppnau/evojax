@@ -402,11 +402,9 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], r_anchor: Union[np.ndarray, jnp.ndarray], mmd: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
 
         
-        avg_r_anchor = jnp.mean(r_anchor)
-
         #if avg_r_anchor < 0.0009:
         #    w_r_anchor = 1000.0
         #elif avg_r_anchor < 0.009:
@@ -542,19 +540,21 @@ class PGPE(NEAlgorithm):
         #elif jnp.mean(fitness_mi) < -0.2:
         #    w_mi = 20
         #else:
-        if self._t < 1000: 
-            w_mi = 100
-        elif self._t < 3000:
-            w_mi = 20
-        elif self._t < 9000:
-            w_mi = 4
-        elif self._t < 35000:
-            w_mi = 2
-        elif self._t < 70000:
-            w_mi = 10
-        else:
-            w_mi = 100
-       
+        #if self._t < 1000: 
+        #    w_mi = 100
+        #elif self._t < 3000:
+        #    w_mi = 20
+        #elif self._t < 9000:
+        #    w_mi = 4
+        #elif self._t < 35000:
+        #    w_mi = 2
+        #elif self._t < 70000:
+        #    w_mi = 10
+        #else:
+        #    w_mi = 100
+      
+        # linearly ramp w_mi from 1.0 to 1000.0 over 200000 timesteps
+        #w_mi = jnp.clip((self._t / 200000) * 200.0, 0.1, 200.0)
         #if self._t < 6000:
         #    w_adv = 1.0
         #elif self._t < 8000:
@@ -619,11 +619,11 @@ class PGPE(NEAlgorithm):
         #raw_fitness_adv = fitness_adv #* w_adv
         #fitness_adv = raw_fitness_adv # * w_adv
         
-        std_adv = jnp.std(fitness_adv) + 1e-8
-        std_mi = jnp.std(fitness_mi) + 1e-8
+        #std_adv = jnp.std(fitness_adv) + 1e-8
+        #std_mi = jnp.std(fitness_mi) + 1e-8
 
 
-        max_w_mi = jnp.minimum(1000, jnp.maximum((std_adv / std_mi)//2,4))
+        #max_w_mi = jnp.minimum(1000, jnp.maximum((std_adv / std_mi)//2,4))
 
         #realism_gate = jax.nn.sigmoid(raw_fitness_adv + w_realism)
         # 2. MI is a constraint. If MI loss is high, it dominates fitness.
@@ -668,7 +668,7 @@ class PGPE(NEAlgorithm):
         #jax.debug.print('r_cons shape {} : ', r_cons.shape)
         #jax.debug.print('fitness_con shape {} : ', fitness_con.shape)
         
-        #cultural_score = (r_sense + r_intra + r_cons + fitness_con) * 0.2
+        #cultural_score = (r_sense - r_cons)
         #cultural_score = cultural_score[:, None]
         #jax.debug.print('cultural score shape {} : ', cultural_score.shape)
 
@@ -687,15 +687,17 @@ class PGPE(NEAlgorithm):
         #jax.debug.print('objectives final shape {} : ', objectives_final.shape)
 
         #ranks_final = non_dominated_sort_lax(objectives_final)
-
+        #w_mi = 100.0
+        #w_adv = 10.0
         #order = jnp.lexsort((-fitness_adv.flatten(), ranks_final))
         #if self._t < 40000:
         #fitness_scores = -fitness_adv
         #elif self._t < 40000:
             #    
+        #w_mi = 1.0
         #fitness_scores = -jnp.argsort(order)
         #    fitness_scores = fitness_adv
-        fitness_scores = fitness_adv + fitness_mi * w_mi + fitness_con
+        fitness_scores = fitness_adv + fitness_mi*0.25 + fitness_con*0.014 + r_sense*0.4 - r_cons*0.05
         #else:#if self._t < 160000:
         #cultural_score = r_sense + r_intra + r_cons + fitness_con
         #fitness_scores = fitness_adv + realism_gate * cultural_score - penalty_mi
