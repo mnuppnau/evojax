@@ -417,115 +417,187 @@ class Latent_Points(VectorizedTask):
         # Precompute once
         self.mu_classes = compute_real_class_means(self.rff_params, real_by_class)
         
-
         def reset_fn(noise_key, cat_key, con_key):
             if test:
+                # Standard random sampling for testing
                 batch_latent = random.normal(noise_key, (self.batch_size, self.noise_dim))
-                
-               
                 batch_cat = random.randint(cat_key, (self.batch_size,), 0, self.n_classes)
-
                 batch_cat_one_hot = jax.nn.one_hot(batch_cat, self.n_classes)
-
                 batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-0.5, maxval=0.5)
-
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot, batch_con], axis=-1)
-
+                
+                # For test mode, codes60 isn't strictly needed in the same way, but we construct dummies to match shape
+                codes60 = jnp.zeros((60,), dtype=jnp.int32) 
             else:
+                # --- Controlled Experiment (Latent Vector Design) ---
+                # Generate 7 base vectors, repeat 10 times -> 70 items
+                z_base_fixed = jax.random.normal(noise_key, (7, 62)) 
+                z_base_70 = jnp.repeat(z_base_fixed, 10, axis=0) # (70, 62)
                 
-                z_base_fixed = jax.random.normal(noise_key, (7, 62))  # 6 different z vectors
-                # Repeat each z 10 times for each categorical code 
-                z_base_70 = jnp.repeat(z_base_fixed, 10, axis=0)  # (70, 62)
-                # take batch size, 64, of z base
-                z_base = z_base_70[:self.batch_size]  # (64, 62)
- 
-                #z_base = jax.random.normal(noise_key, (self.batch_size, self.noise_dim))  # (64, 62)
-                
+                # Slice to batch size (e.g. 64)
+                z_base = z_base_70[:self.batch_size] 
+        
+                # Construct Discrete Codes: 6 full sets of 0-9 (60 total)
                 codes60 = jnp.tile(jnp.arange(10), 6)  # (60,)
-                onehot60 = jax.nn.one_hot(codes60, self.n_classes)  # (60, 10)
-
-                codes4 = jnp.tile(jnp.arange(4), 1)  # (4,)
-                onehot4 = jax.nn.one_hot(codes4, self.n_classes)  # (4, 10)
-
-                batch_cat_one_hot = jnp.concatenate([onehot60, onehot4], axis=0)  # (64, 10)
-
-                batch_con = jax.random.uniform(con_key, (self.batch_size, 2), minval=-0.5, maxval=0.5)  # 6 different continuous codes
-
-                batch_latent_concat = jnp.concatenate([z_base, batch_cat_one_hot, batch_con], axis=-1)  # (74, 64)
-
-                noise = jax.random.normal(cat_key, (self.batch_size, 28, 28, 1))* 0.1
+                onehot60 = jax.nn.one_hot(codes60, self.n_classes) # (60, 10)
+        
+                # Fill remaining spots (e.g. 4 spots for batch 64)
+                remainder = self.batch_size - 60
+                codes_rem = jnp.tile(jnp.arange(10), (remainder // 10) + 1)[:remainder]
+                onehot_rem = jax.nn.one_hot(codes_rem, self.n_classes)
+        
+                batch_cat_one_hot = jnp.concatenate([onehot60, onehot_rem], axis=0)
+                
+                # Continuous codes
+                batch_con = jax.random.uniform(con_key, (self.batch_size, 2), minval=-0.5, maxval=0.5)
+        
+                batch_latent_concat = jnp.concatenate([z_base, batch_cat_one_hot, batch_con], axis=-1)
+        
+                # Instance Noise for Discriminator stability
+                noise = jax.random.normal(cat_key, (self.batch_size, 28, 28, 1)) * 0.1
             
-            return State(obs=batch_latent_concat, noise=noise, cat_codes=batch_cat_one_hot, codes60=codes60, con_codes=batch_con, batch_stats_disc=self.batch_stats_disc)
+            return State(
+                obs=batch_latent_concat, 
+                noise=noise, 
+                cat_codes=batch_cat_one_hot, 
+                codes60=codes60, 
+                con_codes=batch_con, 
+                batch_stats_disc=self.batch_stats_disc
+            )
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
-
-        def step_fn(state, action, q, mu, var, q_flat, topographic_ks):
-          
-
-            # normalize q_flat and topographic_ks
+        
+        def step_fn(state, action, q, mu, var, q_flat, topographic_ks, normative_bounds=jnp.array([1.2, 0.5])):
+            """
+            normative_bounds: [min_safety_ratio, max_allowed_spread]
+            """
+            
+            # --- 1. PREP & STANDARDIZATION ---
+            # Normalize Q-features to hypersphere for Cosine Sim
             q_flat_norm = jnp.linalg.norm(q_flat, axis=-1, keepdims=True)
             q_flat = q_flat / jnp.maximum(q_flat_norm, 1e-8)
-
+            
+            # Normalize Topographic History (Belief Space)
             topographic_ks_norm = jnp.linalg.norm(topographic_ks, axis=-1, keepdims=True)
             topographic_mu = topographic_ks / jnp.maximum(topographic_ks_norm, 1e-8)
-
-            B, F = q_flat.shape # B=batch size, F=features
+        
+            B, F = q_flat.shape
             
+            # --- 2. CALCULATE CURRENT BATCH STATISTICS ---
+            # We use the full batch for centroids to get better estimates, 
+            # or just the controlled 60. Using full batch (state.cat_codes) is usually robust.
+            
+            # Sum features per code
+            sum_per_cat_code = state.cat_codes.T @ q_flat # (10, F)
+            jax.debug.print("sum_per_cat_code shape: {shape}", shape=sum_per_cat_code.shape)
+            count_per_code = state.cat_codes.sum(axis=0)[:, None] # (10, 1)
+            jax.debug.print("count_per_code shape: {shape}", shape=count_per_code.shape)
+            # Calculate Current Centroids (mu_curr)
+            current_centroids = sum_per_cat_code / jnp.maximum(count_per_code, 1e-5)
+            # Re-normalize centroids
+            c_norm = jnp.linalg.norm(current_centroids, axis=-1, keepdims=True)
+            current_centroids = current_centroids / jnp.maximum(c_norm, 1e-8)
+        
+            # --- 3. CALCULATE SPREADS (Intra-Cluster Delta) ---
+            # Get the assigned centroid for each sample in the batch
+            # (B, 10) @ (10, F) -> (B, F)
+            assigned_centroids = state.cat_codes @ current_centroids 
+            
+            # Cosine Distance = 1 - Dot Product (since vectors are normalized)
+            # (B, F) * (B, F) -> sum -> (B,)
+            dists = 1.0 - jnp.sum(q_flat * assigned_centroids, axis=-1)
+            
+            # Average distance (Spread) per code
+            # (10, B) @ (B, 1) -> (10, 1)
+            spreads = (state.cat_codes.T @ dists[:, None]) / jnp.maximum(count_per_code, 1e-5)
+            
+            # --- 4. CALCULATE SAFETY RATIOS (Inter-Cluster Separation) ---
+            # Pairwise distance between centroids
+            sim_mat = current_centroids @ current_centroids.T
+            separation_mat = 1.0 - sim_mat # Delta_ij
+            
+            # Sum of spreads (delta_i + delta_j)
+            sum_spreads = spreads + spreads.T
+            
+            # Safety Ratio = Separation / (Sum of Spreads)
+            # Add epsilon to prevent divide by zero
+            safety_ratios = separation_mat / jnp.maximum(sum_spreads, 1e-6)
+            
+            # Mask diagonal (self-comparison) with a high value so it passes checks
+            safety_ratios = safety_ratios + jnp.eye(10) * 100.0
+            
+            # --- 5. TOPOGRAPHIC CONSISTENCY (r_cons) ---
+            # Compare current samples to HISTORY (topographic_ks)
+            # Use the 60 controlled samples for this scoring
             q_flat60 = q_flat[:60]
-            topo_for_sample = topographic_mu[state.codes60]  # (B, F)
-
-            cos_sim = jnp.sum(q_flat60 * topo_for_sample, axis=-1)
-            r_cons = jnp.mean(1.0 - cos_sim)
-            grouped = q_flat60.reshape((6, 10, F))        # (instances, codes, F)
+            topo_for_sample = topographic_mu[state.codes60]
             
-            n_sense = jnp.linalg.norm(grouped, axis=-1, keepdims=True)
-            grouped = grouped / jnp.maximum(n_sense, 1e-8)   # (6, 10, F)
+            cos_sim_hist = jnp.sum(q_flat60 * topo_for_sample, axis=-1)
+            r_cons = jnp.mean(1.0 - cos_sim_hist)
             
-            # ---- per-code centroids ----
-            # Average over the 6 instances for each of the 10 codes
-            centroids = jnp.mean(grouped, axis=0)            # (10, F)
+            # --- 6. CLUSTER TIGHTNESS (r_intra / r_sense) ---
+            # (Keeping your original logic for continuity, but calculating via new centroids)
             
-            # Normalize centroids so cosine is well-behaved
-            c_norm = jnp.linalg.norm(centroids, axis=-1, keepdims=True)
-            centroids = centroids / jnp.maximum(c_norm, 1e-8)   # (10, F)
-            # ---- all-pairs cosine distances between codes ----
-            # Gram matrix of cosine similarities between centroids
-            cos_sim_mat = centroids @ centroids.T             # (10, 10)
-            
-            S = cos_sim_mat - jnp.eye(cos_sim_mat.shape[0]) * 2.0  # zero out diagonal
-            nearest_sim = jnp.max(S, axis=1)  # (10,)
-            nearest_dist = 1.0 - nearest_sim
+            # r_sense: Min separation between current centroids
+            # We can reuse separation_mat calculated above
+            # Mask diagonal for min calculation
+            sep_mat_masked = separation_mat + jnp.eye(10) * 100.0
+            nearest_dist = jnp.min(sep_mat_masked, axis=1)
             r_sense = jnp.mean(nearest_dist)
-                        
-            grouped_intra = q_flat60.reshape(6, 10, F).transpose(1,0,2)  # (10, 6, F)
-
-            n_intra = jnp.linalg.norm(grouped_intra, axis=-1, keepdims=True)
-            grouped_intra_cosine = grouped_intra / jnp.maximum(n_intra, 1e-8)
-
-            mean_k = jnp.mean(grouped_intra_cosine, axis=1, keepdims=True)  # (10, 1, F)
-            sq_dev = jnp.sum((grouped_intra_cosine - mean_k) ** 2, axis=-1)  # (10, 6)
-
-            spread_k = jnp.mean(sq_dev, axis=1)  # (10,)
-
-            below = jnp.clip((spread_k / jnp.maximum(0.05, 1e-8)),0.0,1.0)
-            above = 1 - jnp.clip((spread_k - 0.2) / jnp.maximum(0.2, 1e-8),0.0,1.0)
-
+            
+            # r_intra: Your original reward calculation
+            # (It's effectively a shaped reward based on spreads)
+            spread_flat = spreads.flatten()
+            below = jnp.clip((spread_flat / 0.05), 0.0, 1.0)
+            above = 1.0 - jnp.clip((spread_flat - 0.2) / 0.2, 0.0, 1.0)
             reward_k = jnp.minimum(below, above)
             r_intra = jnp.mean(reward_k)
-
-            sum_per_cat_code = state.cat_codes.T @ q_flat
-
-            count_per_code = state.cat_codes.sum(axis=0)
+        
+            # --- 7. NORMATIVE KS (General Use) ---
+            # Normative Knowledge defines valid "Ranges".
+            # If we violate them, we calculate a penalty.
             
+            min_safety, max_spread = normative_bounds[0], normative_bounds[1]
+            
+            # Violation 1: Safety Ratio < 1.2 (Clusters overlapping)
+            # We only care about the worst violation per code
+            min_ratio_per_code = jnp.min(safety_ratios, axis=1)
+            safety_violation = jnp.mean(jnp.maximum(0.0, min_safety - min_ratio_per_code))
+            
+            # Violation 2: Spread > 0.5 (Clusters too fuzzy)
+            spread_violation = jnp.mean(jnp.maximum(0.0, spreads - max_spread))
+            
+            normative_penalty = safety_violation + spread_violation
+       
+            # flatten normative penalty from (10,1) to (10,)
+            #normative_penalty = normative_penalty.flatten()
+            # --- 8. LOSSES ---
             q_cat = jax.nn.log_softmax(q, axis=-1)
-
             loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
+            
             loss_g = optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,))).mean()
-            loss_g = -loss_g
-
+            loss_g = -loss_g # Generator wants to minimize this
+            
             loss_con = continuous_loss(state.con_codes, mu, var)
             
-            return state, loss_q_disc, loss_g, loss_con, sum_per_cat_code, count_per_code, r_cons, r_sense, r_intra, jnp.ones(())
+            # flatten count_per_code from (10,1) to (10,)
+            count_per_code = count_per_code.flatten()
+            
+            return (
+                state, 
+                loss_q_disc, 
+                loss_g, 
+                loss_con, 
+                sum_per_cat_code, 
+                count_per_code, 
+                r_cons, 
+                r_sense, 
+                r_intra, 
+                normative_penalty, # New metric for fitness
+                jnp.ones(())
+                #safety_ratios,     # Passing out for logging/debugging
+                #spreads            # Passing out for logging/debugging
+            )
         
         self._step_fn = jax.jit(jax.vmap(step_fn))
 

@@ -244,7 +244,7 @@ class SimManager(object):
 
         def step_once_gen(carry, input_data, task):
             (task_state, policy_state, params_gen, params_disc, features, obs_params, t,
-             accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, valid_mask) = carry
+             accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, valid_mask) = carry
             if task.multi_agent_training:
                 num_tasks, num_agents = task_state.obs.shape[:2]
                 task_state = task_state.replace(
@@ -261,7 +261,7 @@ class SimManager(object):
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, loss_mi, loss_g, loss_con, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, done = task.step(task_state, actions, disc_logits, mu, var, q_flat, features)
+            task_state, loss_mi, loss_g, loss_con, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_pen, done = task.step(task_state, actions, disc_logits, mu, var, q_flat, features)
             
             reward_adv =  loss_g 
             reward_mi = loss_mi
@@ -281,7 +281,7 @@ class SimManager(object):
             valid_mask = valid_mask * (1 - done.ravel())
             
             return ((task_state, policy_state, params_gen, params_disc, features, obs_params, t,
-                     accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, valid_mask),
+                     accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_pen, valid_mask),
                     (org_obs, valid_mask))
 
         def rollout_gen(task_states, policy_states, params_gen, params_disc, features, obs_params, t,
@@ -296,15 +296,16 @@ class SimManager(object):
             r_cons = jnp.zeros(self._pop_size//2)
             r_sense = jnp.zeros(self._pop_size//2)
             r_intra = jnp.zeros(self._pop_size//2)
+            normative_penalty = jnp.zeros(self._pop_size//2)
             #fake_imgs = jnp.zeros((256,64,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, features, obs_params, t,
-              accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, valid_masks),
+              accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, valid_masks),
              (obs_set, obs_mask)) = jax.lax.scan(
                 step_once_gen_fn,
                 (task_states, policy_states, params_gen, params_disc, features, obs_params, t,
-                 accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, valid_masks), (), max_steps)
-            return accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, obs_set, obs_mask, task_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra
+                 accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, valid_masks), (), max_steps)
+            return accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, obs_set, obs_mask, task_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty
 
         def step_once_valid(carry, input_data, task):
             (task_state, policy_state, params_gen, params_disc, obs_params,
@@ -562,7 +563,7 @@ class SimManager(object):
             scores_adv, scores_mi, scores_con, all_obs, masks, final_states, fake_imgs = rollout_func(
                 task_state, policy_state, params_gen, params_disc, self.obs_params)
         else:
-            scores_adv, scores_mi, scores_con, all_obs, masks, final_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra = rollout_func(
+            scores_adv, scores_mi, scores_con, all_obs, masks, final_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty = rollout_func(
             task_state, policy_state, params_gen, params_disc, features, self.obs_params, self._i)
 
         if self._num_device > 1:
@@ -605,6 +606,8 @@ class SimManager(object):
                     r_sense.ravel().reshape((n_repeats, -1)), axis=0)
                 r_intra = jnp.mean(
                     r_intra.ravel().reshape((n_repeats, -1)), axis=0)
+                normative_penalty = jnp.mean(
+                    normative_penalty.ravel().reshape((n_repeats, -1)), axis=0)
 
                 #scores_bin = jnp.mean(
                 #    scores_bin.ravel().reshape((n_repeats, -1)), axis=0)
@@ -641,6 +644,8 @@ class SimManager(object):
                 r_sense.ravel().reshape((-1, n_repeats)), axis=-1)
             r_intra = jnp.mean(
                 r_intra.ravel().reshape((-1, n_repeats)), axis=-1)
+            normative_penalty = jnp.mean(
+                normative_penalty.ravel().reshape((-1, n_repeats)), axis=-1)
             #scores_bin = jnp.mean(
             #    scores_bin.ravel().reshape((-1, n_repeats)), axis=-1)
 
@@ -683,4 +688,4 @@ class SimManager(object):
             scores4 = None
             avg_per_code = None
         #self._key = new_key
-        return scores1, scores2, scores3, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra
+        return scores1, scores2, scores3, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra, normative_penalty
