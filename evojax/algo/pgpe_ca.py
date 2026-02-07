@@ -402,9 +402,9 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
 
-        
+       
         #if avg_r_anchor < 0.0009:
         #    w_r_anchor = 1000.0
         #elif avg_r_anchor < 0.009:
@@ -697,7 +697,7 @@ class PGPE(NEAlgorithm):
         #w_mi = 1.0
         #fitness_scores = -jnp.argsort(order)
         #    fitness_scores = fitness_adv
-        fitness_scores = fitness_adv + fitness_mi*0.25 + fitness_con*0.014 + r_sense*0.4 - r_cons*0.05
+        fitness_scores = fitness_adv + fitness_mi*0.25 + fitness_con*0.014 + r_sense*0.4 - r_cons*0.05 - normative_penalty*0.1
         #else:#if self._t < 160000:
         #cultural_score = r_sense + r_intra + r_cons + fitness_con
         #fitness_scores = fitness_adv + realism_gate * cultural_score - penalty_mi

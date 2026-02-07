@@ -1286,7 +1286,7 @@ class Trainer(object):
                 #jax.debug.print('topographic_ks shape: {} ', topographic_ks.shape)
                 avg_per_code = topographic_ks[0]
                 
-                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra = self.sim_mgr_gen.eval_params(
+                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, norm_pen = self.sim_mgr_gen.eval_params(
                 params_gen=params_hn, params_disc=flat_params_disc, batch_stats_disc=flat_batch_stats_disc, features=avg_per_code, generator=True, test=False
                 )
 
@@ -1294,7 +1294,7 @@ class Trainer(object):
                 if isinstance(self.solver_hn, QualityDiversityMethod):
                     self.solver_hn.observe_bd(bds_gen)
                 
-                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra,adv=False)
+                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, normative_penalty=norm_pen,adv=False)
 
                 
                 self.avg_mi_loss = jnp.mean(scores_gen_mi)
@@ -1349,6 +1349,13 @@ class Trainer(object):
                         'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
                             i, r_intra.size, r_intra.max(), r_intra.mean(),
                             r_intra.min(), r_intra.std()))
+
+                    norm_pen = np.array(norm_pen)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, norm_pen.size, norm_pen.max(), norm_pen.mean(),
+                            norm_pen.min(), norm_pen.std()))
 
                     self._logger.info(
                         'Iter={0}, real_fake_loss={1:.4f}'.format(
