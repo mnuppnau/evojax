@@ -54,6 +54,15 @@ def parse_args():
     parser.add_argument(
         '--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument(
+        '--checkpoint-interval', type=int, default=10000,
+        help='Save a checkpoint every N iterations (0 to disable).')
+    parser.add_argument(
+        '--checkpoint-dir', type=str, default=None,
+        help='Directory for checkpoints (defaults to <log_dir>/checkpoints).')
+    parser.add_argument(
+        '--resume-from', type=str, default=None,
+        help='Path to a checkpoint .pkl file or directory to resume from.')
+    parser.add_argument(
         '--debug', action='store_true', help='Debug mode.')
     config, _ = parser.parse_known_args()
     return config
@@ -143,6 +152,9 @@ def main(config):
         seed=config.seed,
         batch_size=config.batch_size,
         log_dir=log_dir,
+        checkpoint_dir=config.checkpoint_dir,
+        checkpoint_interval=config.checkpoint_interval,
+        resume_from=config.resume_from,
         logger=logger,
     )
     trainer.run(demo_mode=False)
