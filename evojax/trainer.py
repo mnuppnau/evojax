@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+import os
 import time
 from typing import Optional, Callable
 from jax import tree_util
@@ -35,6 +36,7 @@ from evojax.util import create_logger
 from evojax.util import load_model_gen, load_model_disc
 from evojax.util import save_model
 from evojax.util import save_lattices
+from evojax.util import save_checkpoint, load_checkpoint
 from jax.nn.initializers import normal as normal_init
 from jax.nn.initializers import he_normal
 from flax import linen as nn
@@ -1028,6 +1030,9 @@ class Trainer(object):
                  model_dir: str = None,
                  batch_size: int = 32,
                  log_dir: str = None,
+                 checkpoint_dir: str = None,
+                 checkpoint_interval: int = 0,
+                 resume_from: str = None,
                  logger: logging.Logger = None,
                  log_scores_fn: Optional[Callable[[int, jnp.ndarray, str], None]] = None):
         """Initialization.
@@ -1087,6 +1092,9 @@ class Trainer(object):
         self._max_iter = max_iter
         self.model_dir = model_dir
         self._log_dir = log_dir
+        self._checkpoint_dir = checkpoint_dir or (os.path.join(log_dir, 'checkpoints') if log_dir else None)
+        self._checkpoint_interval = checkpoint_interval
+        self._resume_from = resume_from
 
         self._log_scores_fn = log_scores_fn or (lambda x, y, z: None)
 
@@ -1167,6 +1175,22 @@ class Trainer(object):
             best_score_gen, best_score_disc, best_score_q = -float('Inf'), -float('Inf'), -float('Inf')
 
             params_disc = self.params_disc
+
+            # --- Checkpoint resume ---
+            start_iter = 0
+            if self._resume_from is not None:
+                ckpt_path = self._resume_from
+                if os.path.isdir(ckpt_path):
+                    ckpt_path = os.path.join(ckpt_path, 'checkpoint_latest.pkl')
+                start_iter, params_disc, self.batch_stats_disc, opt_disc, self._key = load_checkpoint(
+                    checkpoint_path=ckpt_path,
+                    solver_hn=self.solver_hn,
+                    disc_params_ref=params_disc,
+                    disc_batch_stats_ref=self.batch_stats_disc,
+                    opt_disc_ref=opt_disc,
+                    logger=self._logger,
+                )
+                start_iter += 1  # Resume from the next iteration
            
             num_mini_batches = self.num_mini_batches
            
@@ -1204,7 +1228,7 @@ class Trainer(object):
 
             self._key, noise_key, con_key = jax.random.split(self._key, 3)
 
-            for i in range(self._max_iter):
+            for i in range(start_iter, self._max_iter):
                 
                 shape_noise = (self.mini_batch_size, self.latent_dim-self.n_con)
                 shape_cat = (self.mini_batch_size,)
@@ -1372,6 +1396,18 @@ class Trainer(object):
                     
                     filename = f"iteration-{i}.npy"
                     np.save(filename, fake_imgs[:, :, :, :])
+
+                if self._checkpoint_interval > 0 and i > 0 and i % self._checkpoint_interval == 0:
+                    save_checkpoint(
+                        checkpoint_dir=self._checkpoint_dir,
+                        iteration=i,
+                        solver_hn=self.solver_hn,
+                        params_disc=params_disc,
+                        batch_stats_disc=self.batch_stats_disc,
+                        opt_disc=opt_disc,
+                        prng_key=self._key,
+                        logger=self._logger,
+                    )
 
             # Test and save the final model.
             best_params_hn = self.solver_hn.best_params

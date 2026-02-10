@@ -14,6 +14,7 @@
 
 import os
 import logging
+import pickle
 import jax
 import numpy as np
 from typing import Union
@@ -238,3 +239,133 @@ def get_tensorboard_log_fn(
     raise ImportError(
         "Please install the tensorboard AND (tensorflow OR pytorch) "
         "packages to log the rewards to tensorboard")
+
+
+def _to_numpy(pytree):
+    """Recursively convert all JAX arrays in a pytree to numpy arrays."""
+    return jax.tree_util.tree_map(
+        lambda x: np.array(x) if isinstance(x, jnp.ndarray) else x,
+        pytree,
+    )
+
+
+def _to_jax(pytree):
+    """Recursively convert all numpy arrays in a pytree back to JAX arrays."""
+    return jax.tree_util.tree_map(
+        lambda x: jnp.array(x) if isinstance(x, np.ndarray) else x,
+        pytree,
+    )
+
+
+def save_checkpoint(
+    checkpoint_dir: str,
+    iteration: int,
+    solver_hn,
+    params_disc,
+    batch_stats_disc,
+    opt_disc,
+    prng_key: jnp.ndarray,
+    logger: logging.Logger = None,
+) -> str:
+    """Save full training state to a pickle checkpoint.
+
+    Everything is converted to numpy before pickling so the file
+    is portable and does not depend on the JAX runtime.
+
+    Args:
+        checkpoint_dir: Directory to write the checkpoint into.
+        iteration: Current training iteration (loop index).
+        solver_hn: The PGPE_CA solver instance.
+        params_disc: Discriminator parameter pytree (Flax).
+        batch_stats_disc: Discriminator batch-stats pytree (Flax).
+        opt_disc: Discriminator optax optimizer state.
+        prng_key: Current PRNG key from the training loop.
+        logger: Optional logger.
+
+    Returns:
+        The path of the written checkpoint file.
+    """
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    checkpoint = {
+        'iteration': int(iteration),
+        # --- PGPE / HyperNet solver state ---
+        'pgpe_center': np.array(solver_hn._center),
+        'pgpe_stdev': np.array(solver_hn._stdev),
+        'pgpe_t': int(solver_hn._t),
+        'pgpe_opt_state': _to_numpy(solver_hn._opt_state),
+        'belief_space': _to_numpy(solver_hn.belief_space),
+        # --- Discriminator state ---
+        'params_disc': _to_numpy(params_disc),
+        'batch_stats_disc': _to_numpy(batch_stats_disc),
+        'opt_disc': _to_numpy(opt_disc),
+        # --- Misc ---
+        'prng_key': np.array(prng_key),
+    }
+
+    path = os.path.join(checkpoint_dir, f'checkpoint_{iteration}.pkl')
+    with open(path, 'wb') as f:
+        pickle.dump(checkpoint, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # Also write a small symlink/pointer so we can find "latest" easily.
+    latest_path = os.path.join(checkpoint_dir, 'checkpoint_latest.pkl')
+    # Atomic-ish overwrite: write tmp then rename.
+    tmp_path = latest_path + '.tmp'
+    with open(tmp_path, 'wb') as f:
+        pickle.dump(checkpoint, f, protocol=pickle.HIGHEST_PROTOCOL)
+    os.replace(tmp_path, latest_path)
+
+    if logger:
+        logger.info(f'Checkpoint saved at iteration {iteration} -> {path}')
+    return path
+
+
+def load_checkpoint(
+    checkpoint_path: str,
+    solver_hn,
+    disc_params_ref,
+    disc_batch_stats_ref,
+    opt_disc_ref,
+    logger: logging.Logger = None,
+):
+    """Restore full training state from a checkpoint.
+
+    The ``*_ref`` arguments are "reference" pytrees used only to verify
+    structural compatibility (they come from a fresh init).  The actual
+    values are overwritten from the checkpoint.
+
+    Args:
+        checkpoint_path: Path to the .pkl checkpoint file.
+        solver_hn: A freshly-created PGPE_CA solver (will be mutated).
+        disc_params_ref: Freshly-inited Discriminator params (for structure).
+        disc_batch_stats_ref: Freshly-inited batch stats (for structure).
+        opt_disc_ref: Freshly-inited optax optimizer state (for structure).
+        logger: Optional logger.
+
+    Returns:
+        (iteration, params_disc, batch_stats_disc, opt_disc, prng_key)
+    """
+    with open(checkpoint_path, 'rb') as f:
+        ckpt = pickle.load(f)
+
+    # --- Restore PGPE solver state ---
+    solver_hn._center = jnp.array(ckpt['pgpe_center'])
+    solver_hn._stdev = jnp.array(ckpt['pgpe_stdev'])
+    solver_hn._t = int(ckpt['pgpe_t'])
+    solver_hn._opt_state = _to_jax(ckpt['pgpe_opt_state'])
+    solver_hn.belief_space = _to_jax(ckpt['belief_space'])
+
+    # --- Restore Discriminator state ---
+    params_disc = _to_jax(ckpt['params_disc'])
+    batch_stats_disc = _to_jax(ckpt['batch_stats_disc'])
+    opt_disc = _to_jax(ckpt['opt_disc'])
+
+    prng_key = jnp.array(ckpt['prng_key'])
+    iteration = ckpt['iteration']
+
+    if logger:
+        logger.info(
+            f'Checkpoint loaded from {checkpoint_path}, '
+            f'resuming at iteration {iteration}')
+
+    return iteration, params_disc, batch_stats_disc, opt_disc, prng_key
