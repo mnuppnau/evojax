@@ -243,8 +243,8 @@ class SimManager(object):
                     self._n_evaluations, self._num_device))
 
         def step_once_gen(carry, input_data, task):
-            (task_state, policy_state, params_gen, params_disc, features, obs_params, t,
-             accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, valid_mask) = carry
+            (task_state, policy_state, params_gen, params_disc, obs_params, t,
+             accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, safety_ratios, spreads, valid_mask) = carry
             if task.multi_agent_training:
                 num_tasks, num_agents = task_state.obs.shape[:2]
                 task_state = task_state.replace(
@@ -261,7 +261,7 @@ class SimManager(object):
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, loss_mi, loss_g, loss_con, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_pen, done = task.step(task_state, actions, disc_logits, mu, var, q_flat, features)
+            task_state, loss_mi, loss_g, loss_con, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_pen, safety_ratios, spreads, done = task.step(task_state, actions, disc_logits, mu, var, q_flat)
             
             reward_adv =  loss_g 
             reward_mi = loss_mi
@@ -280,11 +280,11 @@ class SimManager(object):
             #jax.debug.print('accumulated_reward_con shape : {}', accumulated_reward_con.shape)
             valid_mask = valid_mask * (1 - done.ravel())
             
-            return ((task_state, policy_state, params_gen, params_disc, features, obs_params, t,
-                     accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_pen, valid_mask),
+            return ((task_state, policy_state, params_gen, params_disc, obs_params, t,
+                     accumulated_reward_adv, accumulated_reward_mi, accumulated_reward_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_pen, safety_ratios, spreads, valid_mask),
                     (org_obs, valid_mask))
 
-        def rollout_gen(task_states, policy_states, params_gen, params_disc, features, obs_params, t,
+        def rollout_gen(task_states, policy_states, params_gen, params_disc, obs_params, t,
                     step_once_gen_fn, max_steps):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
@@ -297,15 +297,17 @@ class SimManager(object):
             r_sense = jnp.zeros(self._pop_size//2)
             r_intra = jnp.zeros(self._pop_size//2)
             normative_penalty = jnp.zeros(self._pop_size//2)
+            safety_ratios = jnp.zeros((self._pop_size//2, 10,10))
+            spreads = jnp.zeros((self._pop_size//2, 10,1))
             #fake_imgs = jnp.zeros((256,64,28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
-            ((task_states, policy_states, params_gen, params_disc, features, obs_params, t,
-              accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, valid_masks),
+            ((task_states, policy_states, params_gen, params_disc, obs_params, t,
+              accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, safety_ratios, spreads, valid_masks),
              (obs_set, obs_mask)) = jax.lax.scan(
                 step_once_gen_fn,
-                (task_states, policy_states, params_gen, params_disc, features, obs_params, t,
-                 accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, valid_masks), (), max_steps)
-            return accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, obs_set, obs_mask, task_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty
+                (task_states, policy_states, params_gen, params_disc, obs_params, t,
+                 accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, safety_ratios, spreads, valid_masks), (), max_steps)
+            return accumulated_rewards_adv, accumulated_rewards_mi, accumulated_rewards_con, obs_set, obs_mask, task_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, safety_ratios, spreads
 
         def step_once_valid(carry, input_data, task):
             (task_state, policy_state, params_gen, params_disc, obs_params,
@@ -390,7 +392,7 @@ class SimManager(object):
         
         if self._num_device > 1:
             self._train_rollout_gen_fn = jax.jit(jax.pmap(
-                self._train_rollout_gen_fn, in_axes=(0, 0, 0, 0, 0, None, None)))
+                self._train_rollout_gen_fn, in_axes=(0, 0, 0, 0, None, None)))
             #self._train_rollout_disc_fn = jax.jit(jax.pmap(
             #    self._train_rollout_disc_fn, in_axes=(0, 0, 0, 0, 0, None)))
 
@@ -413,7 +415,10 @@ class SimManager(object):
                     #params_q: jnp.ndarray,
                     batch_stats_disc: dict,
                     #batch_stats_q: dict,
-                    features: jnp.ndarray,
+                    #features: jnp.ndarray,
+                    # topographic_ks tuple of two arrays
+                    topographic_ks: Tuple[jnp.ndarray, jnp.ndarray],
+                    normative_ks: Tuple[jnp.ndarray, jnp.ndarray],
                     #pop_stats: jnp.ndarray,
                     #disc_reset_keys_cat_code: jnp.ndarray,
                     generator: bool,
@@ -427,9 +432,9 @@ class SimManager(object):
             An array of fitness scores.
         """
         if self._use_for_loop:
-            return self._for_loop_eval(params_gen, params_disc, batch_stats_disc, features, generator, test)
+            return self._for_loop_eval(params_gen, params_disc, batch_stats_disc, topographic_ks, normative_ks, generator, test)
         else:
-            return self._scan_loop_eval(params_gen, params_disc, batch_stats_disc, features, generator, test)
+            return self._scan_loop_eval(params_gen, params_disc, batch_stats_disc, topographic_ks, normative_ks, generator, test)
 
     def _for_loop_eval(self,
                        params: jnp.ndarray,
@@ -485,12 +490,22 @@ class SimManager(object):
                         params_disc: jnp.ndarray,
                         #params_q: jnp.ndarray,
                         batch_stats_disc: dict,
-                        features: jnp.ndarray,
+                        #features: jnp.ndarray,
+                        topographic_ks: Tuple[jnp.ndarray, jnp.ndarray],
+                        normative_ks: Tuple[jnp.ndarray, jnp.ndarray],
                         #batch_stats_q: dict,
                         #pop_stats: jnp.ndarray,
                         #disc_reset_keys_cat_code: jnp.ndarray,
                         generator: bool,
                         test: bool) -> Tuple[jnp.ndarray, TaskState]:
+        
+
+        history_centroids, history_velocitys = topographic_ks
+        pop_avg_spread, pop_min_safety = normative_ks
+
+        history_centroids = jnp.ravel(history_centroids)
+        history_velocitys = jnp.ravel(history_velocitys)
+
         """Rollout using jax.lax.scan."""
         policy_reset_func = self._policy_reset_fn
         
@@ -507,9 +522,12 @@ class SimManager(object):
         if params_disc is not None and params_disc.shape[0] != self._pop_size:
             params_disc = jnp.repeat(params_disc[None, :], self._pop_size, axis=0)
 
+        if history_centroids.shape[0] != self._pop_size:
+            history_centroids = jnp.repeat(history_centroids[None, :], self._pop_size, axis=0)
+            history_velocitys = jnp.repeat(history_velocitys[None, :], self._pop_size, axis=0)
+            pop_avg_spread = jnp.repeat(pop_avg_spread[None, :], self._pop_size, axis=0)
+            pop_min_safety = jnp.repeat(pop_min_safety[None, :], self._pop_size, axis=0)
         
-        features = jnp.repeat(features[None, :], self._pop_size, axis=0)
-
         self.batch_stats_disc = batch_stats_disc
 
         if test: 
@@ -534,7 +552,11 @@ class SimManager(object):
         #task_state = task_state.replace(var_con=var_con)
 
         task_state = task_state.replace(batch_stats_disc=self.batch_stats_disc)
-        
+        task_state = task_state.replace(hist_centroids=history_centroids) 
+        task_state = task_state.replace(hist_velocity=history_velocitys)
+        task_state = task_state.replace(pop_avg_spread=pop_avg_spread)
+        task_state = task_state.replace(pop_min_safety=pop_min_safety)
+
         #task_state = task_state.replace(batch_stats_q=self.batch_stats_q)
 
         #if not generator:
@@ -551,7 +573,6 @@ class SimManager(object):
             params_disc = split_params_for_pmap(params_disc)
             task_state = split_states_for_pmap(task_state)
             #params_q = split_params_for_pmap(params_q)
-            features = split_params_for_pmap(features)
             policy_state = split_states_for_pmap(policy_state)
             batch_stats_disc = split_params_for_pmap(batch_stats_disc)
             #batch_stats_q = split_params_for_pmap(batch_stats_q)
@@ -563,8 +584,8 @@ class SimManager(object):
             scores_adv, scores_mi, scores_con, all_obs, masks, final_states, fake_imgs = rollout_func(
                 task_state, policy_state, params_gen, params_disc, self.obs_params)
         else:
-            scores_adv, scores_mi, scores_con, all_obs, masks, final_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty = rollout_func(
-            task_state, policy_state, params_gen, params_disc, features, self.obs_params, self._i)
+            scores_adv, scores_mi, scores_con, all_obs, masks, final_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, safety_ratios, spreads = rollout_func(
+            task_state, policy_state, params_gen, params_disc, self.obs_params, self._i)
 
         if self._num_device > 1:
             all_obs = reshape_data_from_pmap(all_obs)
@@ -608,6 +629,10 @@ class SimManager(object):
                     r_intra.ravel().reshape((n_repeats, -1)), axis=0)
                 normative_penalty = jnp.mean(
                     normative_penalty.ravel().reshape((n_repeats, -1)), axis=0)
+                safety_ratios = jnp.mean(
+                    safety_ratios.ravel().reshape((n_repeats, -1)), axis=0)
+                spreads = jnp.mean(
+                    spreads.ravel().reshape((n_repeats, -1)), axis=0)
 
                 #scores_bin = jnp.mean(
                 #    scores_bin.ravel().reshape((n_repeats, -1)), axis=0)
@@ -646,6 +671,10 @@ class SimManager(object):
                 r_intra.ravel().reshape((-1, n_repeats)), axis=-1)
             normative_penalty = jnp.mean(
                 normative_penalty.ravel().reshape((-1, n_repeats)), axis=-1)
+            safety_ratios = jnp.mean(
+                safety_ratios.ravel().reshape((-1, n_repeats)), axis=-1)
+            spreads = jnp.mean(
+                spreads.ravel().reshape((-1, n_repeats)), axis=-1)
             #scores_bin = jnp.mean(
             #    scores_bin.ravel().reshape((-1, n_repeats)), axis=-1)
 
@@ -688,4 +717,4 @@ class SimManager(object):
             scores4 = None
             avg_per_code = None
         #self._key = new_key
-        return scores1, scores2, scores3, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra, normative_penalty
+        return scores1, scores2, scores3, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra, normative_penalty, safety_ratios, spreads

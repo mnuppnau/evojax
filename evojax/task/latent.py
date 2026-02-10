@@ -39,8 +39,15 @@ class State(TaskState):
     cat_codes: jnp.ndarray
     codes60: jnp.ndarray
     con_codes: jnp.ndarray
-    batch_stats_disc: any
+    # hist_centroids is of shape (10,256)
+    hist_centroids: jnp.ndarray
+    hist_velocity: jnp.ndarray
+    pop_avg_spread: jnp.ndarray
+    pop_min_safety: jnp.ndarray
 
+
+    batch_stats_disc: any
+   
 def rff_init(
     key: jax.random.PRNGKey,
     d_in: int,
@@ -462,126 +469,130 @@ class Latent_Points(VectorizedTask):
                 cat_codes=batch_cat_one_hot, 
                 codes60=codes60, 
                 con_codes=batch_con, 
-                batch_stats_disc=self.batch_stats_disc
+                batch_stats_disc=self.batch_stats_disc,
+                hist_centroids=jnp.zeros((10, self.rff_params["W"].shape[0])),  # Placeholder, will be updated in step
+                hist_velocity=jnp.zeros((10, self.rff_params["W"].shape[0])),   # Placeholder, will be updated in step
+                pop_avg_spread=0.0,  # Placeholder, will be updated in step
+                pop_min_safety=1.1   # Placeholder, will be updated in step
             )
         
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
         
-        def step_fn(state, action, q, mu, var, q_flat, topographic_ks, normative_bounds=jnp.array([1.2, 0.5])):
+        def step_fn(state, action, q, mu, var, q_flat, lookahead_factor=5.0):
             """
-            normative_bounds: [min_safety_ratio, max_allowed_spread]
+            topographic_ks: (hist_centroids, hist_velocity)
+            normative_ks:   (pop_avg_spread, pop_min_safety) 
+                            - derived from the Elite History in update_normative_ks
             """
             
             # --- 1. PREP & STANDARDIZATION ---
-            # Normalize Q-features to hypersphere for Cosine Sim
             q_flat_norm = jnp.linalg.norm(q_flat, axis=-1, keepdims=True)
             q_flat = q_flat / jnp.maximum(q_flat_norm, 1e-8)
             
-            # Normalize Topographic History (Belief Space)
-            topographic_ks_norm = jnp.linalg.norm(topographic_ks, axis=-1, keepdims=True)
-            topographic_mu = topographic_ks / jnp.maximum(topographic_ks_norm, 1e-8)
+            # Unpack Knowledge Sources
+            #hist_centroids, hist_velocity = topographic_ks
+            #pop_avg_spread, pop_min_safety = normative_ks
+            hist_centroids = state.hist_centroids.reshape(10,256) # Ensure correct shape
+            hist_velocity = state.hist_velocity.reshape(10,256)   # Ensure correct shape
+
+            pop_avg_spread = state.pop_avg_spread
+            pop_min_safety = state.pop_min_safety
+
+            # Normalize History for consistency
+            h_norm = jnp.linalg.norm(hist_centroids, axis=-1, keepdims=True)
+            hist_centroids_norm = hist_centroids / jnp.maximum(h_norm, 1e-8)
         
             B, F = q_flat.shape
             
             # --- 2. CALCULATE CURRENT BATCH STATISTICS ---
-            # We use the full batch for centroids to get better estimates, 
-            # or just the controlled 60. Using full batch (state.cat_codes) is usually robust.
+            sum_per_cat_code = state.cat_codes.T @ q_flat 
+            count_per_code = state.cat_codes.sum(axis=0)[:, None]
             
-            # Sum features per code
-            sum_per_cat_code = state.cat_codes.T @ q_flat # (10, F)
-            jax.debug.print("sum_per_cat_code shape: {shape}", shape=sum_per_cat_code.shape)
-            count_per_code = state.cat_codes.sum(axis=0)[:, None] # (10, 1)
-            jax.debug.print("count_per_code shape: {shape}", shape=count_per_code.shape)
-            # Calculate Current Centroids (mu_curr)
             current_centroids = sum_per_cat_code / jnp.maximum(count_per_code, 1e-5)
-            # Re-normalize centroids
             c_norm = jnp.linalg.norm(current_centroids, axis=-1, keepdims=True)
             current_centroids = current_centroids / jnp.maximum(c_norm, 1e-8)
         
-            # --- 3. CALCULATE SPREADS (Intra-Cluster Delta) ---
-            # Get the assigned centroid for each sample in the batch
-            # (B, 10) @ (10, F) -> (B, F)
+            # --- 3. CALCULATE PREDICTED STATISTICS (The "Drift" Check) ---
+            # We project the CURRENT centroids forward using the HISTORICAL velocity.
+            # Logic: "If I keep moving like the population has been moving, where do I end up?"
+            predicted_centroids = current_centroids + (hist_velocity * lookahead_factor)
+            
+            # Re-normalize predicted centroids to keep them on the hypersphere
+            p_norm = jnp.linalg.norm(predicted_centroids, axis=-1, keepdims=True)
+            predicted_centroids = predicted_centroids / jnp.maximum(p_norm, 1e-8)
+        
+            # --- 4. CALCULATE SPREADS (Current State) ---
+            # Spread is a property of the current batch's tightness.
             assigned_centroids = state.cat_codes @ current_centroids 
-            
-            # Cosine Distance = 1 - Dot Product (since vectors are normalized)
-            # (B, F) * (B, F) -> sum -> (B,)
             dists = 1.0 - jnp.sum(q_flat * assigned_centroids, axis=-1)
-            
-            # Average distance (Spread) per code
-            # (10, B) @ (B, 1) -> (10, 1)
             spreads = (state.cat_codes.T @ dists[:, None]) / jnp.maximum(count_per_code, 1e-5)
+           
+            # --- 5. CALCULATE SAFETY RATIOS (Future State) ---
+            # We use PREDICTED centroids to catch collisions before they happen.
             
-            # --- 4. CALCULATE SAFETY RATIOS (Inter-Cluster Separation) ---
-            # Pairwise distance between centroids
-            sim_mat = current_centroids @ current_centroids.T
-            separation_mat = 1.0 - sim_mat # Delta_ij
+            # Pairwise distance of FUTURE positions
+            pred_sim_mat = predicted_centroids @ predicted_centroids.T
+            pred_separation_mat = 1.0 - pred_sim_mat
             
-            # Sum of spreads (delta_i + delta_j)
+            # Sum of CURRENT spreads (Assuming spread stays roughly constant)
             sum_spreads = spreads + spreads.T
             
-            # Safety Ratio = Separation / (Sum of Spreads)
-            # Add epsilon to prevent divide by zero
-            safety_ratios = separation_mat / jnp.maximum(sum_spreads, 1e-6)
+            # Safety Ratio = Predicted_Separation / Current_Spread
+            safety_ratios = pred_separation_mat / jnp.maximum(sum_spreads, 1e-6)
             
-            # Mask diagonal (self-comparison) with a high value so it passes checks
+            # Mask diagonal
             safety_ratios = safety_ratios + jnp.eye(10) * 100.0
+            # --- 6. METRICS & REWARDS (Current State) ---
             
-            # --- 5. TOPOGRAPHIC CONSISTENCY (r_cons) ---
-            # Compare current samples to HISTORY (topographic_ks)
-            # Use the 60 controlled samples for this scoring
-            q_flat60 = q_flat[:60]
-            topo_for_sample = topographic_mu[state.codes60]
-            
+            # r_cons: Consistency with History (Anchor)
+            # Compare current batch samples to historical centroids
+            q_flat60 = q_flat[:60] # Use controlled samples
+            topo_for_sample = hist_centroids_norm[state.codes60]
             cos_sim_hist = jnp.sum(q_flat60 * topo_for_sample, axis=-1)
             r_cons = jnp.mean(1.0 - cos_sim_hist)
             
-            # --- 6. CLUSTER TIGHTNESS (r_intra / r_sense) ---
-            # (Keeping your original logic for continuity, but calculating via new centroids)
-            
-            # r_sense: Min separation between current centroids
-            # We can reuse separation_mat calculated above
-            # Mask diagonal for min calculation
-            sep_mat_masked = separation_mat + jnp.eye(10) * 100.0
-            nearest_dist = jnp.min(sep_mat_masked, axis=1)
+            # r_sense: Current Separation (Reward for existing distinctness)
+            curr_sim_mat = current_centroids @ current_centroids.T
+            curr_sep_mat = 1.0 - curr_sim_mat + jnp.eye(10) * 100.0
+            nearest_dist = jnp.min(curr_sep_mat, axis=1)
             r_sense = jnp.mean(nearest_dist)
             
-            # r_intra: Your original reward calculation
-            # (It's effectively a shaped reward based on spreads)
+            # r_intra: Cluster Tightness Reward
+            # (Keeping original scaling logic)
             spread_flat = spreads.flatten()
             below = jnp.clip((spread_flat / 0.05), 0.0, 1.0)
             above = 1.0 - jnp.clip((spread_flat - 0.2) / 0.2, 0.0, 1.0)
             reward_k = jnp.minimum(below, above)
             r_intra = jnp.mean(reward_k)
         
-            # --- 7. NORMATIVE KS (General Use) ---
-            # Normative Knowledge defines valid "Ranges".
-            # If we violate them, we calculate a penalty.
+            # --- 7. NORMATIVE PENALTIES (Auto-Calibrated) ---
             
-            min_safety, max_spread = normative_bounds[0], normative_bounds[1]
+            # A. Safety Violation (Topographic Warning)
+            # Using the POPULATION AVERAGE safety (pop_min_safety) as the baseline.
+            # If this individual's predicted safety is worse than the population norm, penalize.
+            min_safety_per_code = jnp.min(safety_ratios, axis=1)
+            # Allow a small buffer (e.g. 1.2 hard limit, or relative to pop)
+            # Let's use hard limit 1.2 as the "Safety Envelope" based on clustering theory
+            raw_violation = jnp.mean(jnp.maximum(0.0, pop_min_safety - min_safety_per_code))
+            safety_violation = jnp.mean(jnp.minimum(raw_violation, 2.0))
+            # B. Spread Violation (Normative Check)
+            # Use the Auto-Calibrated Threshold: 0.75 * Population Average Spread
+            # Logic: "You must be tighter than the average historical individual."
+            tightness_threshold = 0.75 * pop_avg_spread
+            # Relaxing it slightly to avoid collapse: max(tightness, 0.05)
+            target_spread = jnp.maximum(tightness_threshold, 0.05)
             
-            # Violation 1: Safety Ratio < 1.2 (Clusters overlapping)
-            # We only care about the worst violation per code
-            min_ratio_per_code = jnp.min(safety_ratios, axis=1)
-            safety_violation = jnp.mean(jnp.maximum(0.0, min_safety - min_ratio_per_code))
-            
-            # Violation 2: Spread > 0.5 (Clusters too fuzzy)
-            spread_violation = jnp.mean(jnp.maximum(0.0, spreads - max_spread))
+            spread_violation = jnp.mean(jnp.maximum(0.0, spreads - target_spread))
             
             normative_penalty = safety_violation + spread_violation
-       
-            # flatten normative penalty from (10,1) to (10,)
-            #normative_penalty = normative_penalty.flatten()
+
+            count_per_code = count_per_code.flatten()
+            #spreads = spreads.flatten()
             # --- 8. LOSSES ---
             q_cat = jax.nn.log_softmax(q, axis=-1)
             loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
-            
-            loss_g = optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,))).mean()
-            loss_g = -loss_g # Generator wants to minimize this
-            
+            loss_g = -optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,))).mean()
             loss_con = continuous_loss(state.con_codes, mu, var)
-            
-            # flatten count_per_code from (10,1) to (10,)
-            count_per_code = count_per_code.flatten()
             
             return (
                 state, 
@@ -593,12 +604,11 @@ class Latent_Points(VectorizedTask):
                 r_cons, 
                 r_sense, 
                 r_intra, 
-                normative_penalty, # New metric for fitness
+                normative_penalty, 
+                safety_ratios,     
+                spreads,
                 jnp.ones(())
-                #safety_ratios,     # Passing out for logging/debugging
-                #spreads            # Passing out for logging/debugging
             )
-        
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
     def reset(self, key1: jnp.ndarray, key2: jnp.ndarray, key3: jnp.ndarray) -> State:
@@ -610,6 +620,5 @@ class Latent_Points(VectorizedTask):
              disc_logits: jnp.ndarray,
              mu: jnp.ndarray,
              var: jnp.ndarray,
-             q_flat: jnp.ndarray,
-             topographic_ks: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
-        return self._step_fn(state, action, disc_logits, mu, var, q_flat,topographic_ks)
+             q_flat: jnp.ndarray) -> tuple[TaskState, jnp.ndarray, jnp.ndarray]:
+        return self._step_fn(state, action, disc_logits, mu, var, q_flat)
