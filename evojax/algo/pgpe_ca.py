@@ -36,15 +36,6 @@ from evojax.algo.cultural.belief_space import (
 
 from evojax.algo.cultural.knowledge_sources import (
     update_topographic_ks,
-    update_topographic_ks_idx_one,
-    update_topographic_ks_idx_two,
-    update_topographic_ks_idx_three,
-    update_topographic_ks_idx_four,
-    update_topographic_ks_idx_five,
-    update_topographic_ks_idx_six,
-    update_topographic_ks_idx_seven,
-    update_topographic_ks_idx_eight,
-    update_topographic_ks_idx_nine,
     update_domain_ks,
     update_situational_ks,
     update_history_ks,
@@ -402,7 +393,7 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], safety_ratios: Union[np.ndarray, jnp.ndarray], spreads: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
 
        
         #if avg_r_anchor < 0.0009:
@@ -508,7 +499,8 @@ class PGPE(NEAlgorithm):
         self.belief_space = update_topographic_ks(
             self.belief_space, avg_per_code
         )
-        
+       
+
         #    fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense
 
         #fitness_scores = fitness_adv.flatten() + pop_var * 20 - penalty
@@ -694,12 +686,53 @@ class PGPE(NEAlgorithm):
         #fitness_scores = -fitness_adv
         #elif self._t < 40000:
             #    
+        # increase w_norm from 0.01 to 1.0 linearly over 20000 iterations
+        #w_norm = jnp.clip((self._t / 200000) * 1.0, 0.01, 1.0)
+        
+
+        # 1. Define the Schedule
+        # ramp_start: 140k. ramp_end: 160k.
+        # We fade CA in over 20k iterations so we don't shock the population.
+        ca_weight = jnp.clip((self._t - 140000) / 20000, 0.0, 1.0)
+        
+        # 2. Define the Metric Weights
+        w_adv = 1.0
+        w_mi = 0.18
+        w_con = 0.013
+        
+        # CA Weights (Only active after 140k)
+        w_sense = 0.1 * ca_weight       # Reward separation
+        w_cons = 0.05 * ca_weight       # Penalize drift
+        w_norm = 0.05 * ca_weight       # Penalize violation (Keep this small!)
+        
+        # 3. Calculate Fitness
+        # Note: Ensure signs are correct (Subtracting penalties)
+        fitness_scores = (
+            (fitness_adv * w_adv)
+            + (fitness_mi * w_mi)
+            - (fitness_con * w_con)
+            + (r_sense * w_sense)             # Stage 2: Push clusters apart
+            - (normative_penalty * w_norm)    # Stage 2: Enforce safety/spread limits
+            - (r_cons * w_cons)               # Stage 2: Anchor distinct digits
+        )
+
+        #w_mi = jnp.clip((self._t / 10000) * 10.0, 0.1, 0.6)
+        
         #w_mi = 1.0
         #fitness_scores = -jnp.argsort(order)
         #    fitness_scores = fitness_adv
-        fitness_scores = fitness_adv + fitness_mi*0.25 + fitness_con*0.014 + r_sense*0.4 - r_cons*0.05 - normative_penalty*0.1
+        #fitness_scores = fitness_adv + fitness_mi*0.18 + fitness_con*0.013 # + r_sense - normative_penalty*w_norm - r_cons*0.1
         #else:#if self._t < 160000:
         #cultural_score = r_sense + r_intra + r_cons + fitness_con
+        spreads = spreads.reshape(512, 10, 1)
+        safety_ratios = safety_ratios.reshape(512, 10, 10)
+                
+        self.belief_space = update_normative_ks(
+            self.belief_space,
+            fitness_scores,
+            spreads,
+            safety_ratios
+        )
         #fitness_scores = fitness_adv + realism_gate * cultural_score - penalty_mi
         #else:
         #    cultural_score = r_sense + r_intra + fitness_con

@@ -34,7 +34,7 @@ def initialize_belief_space(
         initialize_situational_ks(param_size),
         initialize_history_ks(param_size,num_iterations),
         initialize_topographic_ks(features, key, num_codes),
-        initialize_normative_ks(param_size)
+        initialize_normative_ks(param_size, population_size)
     )
     return belief_space
 

@@ -78,12 +78,6 @@ def load_model(state, path):
     restored_state = checkpointer.restore(path, item=state)
     return restored_state
 
-import jax
-import jax.numpy as jnp
-from flax import linen as nn
-from jax import tree_util
-import numpy as np
-
 # --- 1. The HyperNetwork (Now with Geometric Input) ---
 class HyperNetwork(nn.Module):
     chunk_size: int = 256
@@ -194,27 +188,7 @@ class Generator(nn.Module):
     
     @nn.compact
     def __call__(self, z):
-        # --- OLD APPROACH ---
-        # x = nn.Dense(self.features * 7 * 7)(z)  # <--- 232k Params! Too big for HyperNet.
-        
-        # --- NEW APPROACH (The Bottleneck) ---
-        # 1. Project to a manageable "Linear" space first
-        # 74 -> 256 params = ~19k parameters. 
-        # The HyperNet can easily master this!
-        x = nn.Dense(256, kernel_init=normal_init(0.02))(z)
-        x = nn.relu(x) # or tanh
-        
-        # 2. Expand to Spatial (using separate layer)
-        # 256 -> 3136 params = ~800k params? NO.
-        # We project linearly to the channel dimension of 7x7
-        # Reshape 256 -> (B, 1, 1, 256)
-        x = x.reshape((x.shape[0], 1, 1, 256))
-        
-        # Use ConvTranspose or Resize to expand spatially
-        # Project 256 channels -> 64 channels * 7 * 7 spatial?
-        # Let's just reshape to (4, 4, 16) or similar? 
-        # Actually, simpler: Project to 7x7x64 using a second Dense is still big.
-        
+                
         # BETTER: Project z -> 7*7*8 (small depth) -> Conv to 64
         x = nn.Dense(7 * 7 * 8)(z) # 74 -> 392 outputs = 29k params. Very manageable.
         x = x.reshape((x.shape[0], 7, 7, 8))

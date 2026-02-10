@@ -81,26 +81,6 @@ class Generator(nn.Module):
 
     @nn.compact
     def __call__(self, z):
-        # --- OLD APPROACH ---
-        # x = nn.Dense(self.features * 7 * 7)(z)  # <--- 232k Params! Too big for HyperNet.
-        
-        # --- NEW APPROACH (The Bottleneck) ---
-        # 1. Project to a manageable "Linear" space first
-        # 74 -> 256 params = ~19k parameters. 
-        # The HyperNet can easily master this!
-        x = nn.Dense(256, kernel_init=normal_init(0.02))(z)
-        x = nn.relu(x) # or tanh
-        
-        # 2. Expand to Spatial (using separate layer)
-        # 256 -> 3136 params = ~800k params? NO.
-        # We project linearly to the channel dimension of 7x7
-        # Reshape 256 -> (B, 1, 1, 256)
-        x = x.reshape((x.shape[0], 1, 1, 256))
-        
-        # Use ConvTranspose or Resize to expand spatially
-        # Project 256 channels -> 64 channels * 7 * 7 spatial?
-        # Let's just reshape to (4, 4, 16) or similar? 
-        # Actually, simpler: Project to 7x7x64 using a second Dense is still big.
         
         # BETTER: Project z -> 7*7*8 (small depth) -> Conv to 64
         x = nn.Dense(7 * 7 * 8)(z) # 74 -> 392 outputs = 29k params. Very manageable.
@@ -1282,19 +1262,20 @@ class Trainer(object):
                 params_hn, belief_space = self.solver_hn.ask()
                 
                 topographic_ks = belief_space[4]
+                normative_ks = belief_space[5]
 
                 #jax.debug.print('topographic_ks shape: {} ', topographic_ks.shape)
-                avg_per_code = topographic_ks[0]
+                #avg_per_code = topographic_ks[0]
                 
-                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, norm_pen = self.sim_mgr_gen.eval_params(
-                params_gen=params_hn, params_disc=flat_params_disc, batch_stats_disc=flat_batch_stats_disc, features=avg_per_code, generator=True, test=False
+                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, norm_pen, safety_ratios, spreads = self.sim_mgr_gen.eval_params(
+                params_gen=params_hn, params_disc=flat_params_disc, batch_stats_disc=flat_batch_stats_disc, topographic_ks=topographic_ks, normative_ks=normative_ks, generator=True, test=False
                 )
 
                 #jax.debug.print('fake_imgs shape: {} ', fake_imgs.shape)
                 if isinstance(self.solver_hn, QualityDiversityMethod):
                     self.solver_hn.observe_bd(bds_gen)
                 
-                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, normative_penalty=norm_pen,adv=False)
+                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, normative_penalty=norm_pen, safety_ratios=safety_ratios, spreads=spreads, adv=False)
 
                 
                 self.avg_mi_loss = jnp.mean(scores_gen_mi)
@@ -1356,6 +1337,20 @@ class Trainer(object):
                         'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
                             i, norm_pen.size, norm_pen.max(), norm_pen.mean(),
                             norm_pen.min(), norm_pen.std()))
+
+                    safety_ratios = np.array(safety_ratios)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, safety_ratios.size, safety_ratios.max(), safety_ratios.mean(),
+                            safety_ratios.min(), safety_ratios.std()))
+
+                    spreads = np.array(spreads)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, spreads.size, spreads.max(), spreads.mean(),
+                            spreads.min(), spreads.std()))
 
                     self._logger.info(
                         'Iter={0}, real_fake_loss={1:.4f}'.format(
