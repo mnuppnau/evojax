@@ -584,7 +584,11 @@ class Latent_Points(VectorizedTask):
             
             spread_violation = jnp.mean(jnp.maximum(0.0, spreads - target_spread))
             
-            normative_penalty = safety_violation + spread_violation
+            target_min_spread = 0.015
+            violation_tight = jnp.mean(jnp.maximum(0.0, target_min_spread - spreads))
+           
+            normative_penalty = spread_violation + violation_tight
+            #normative_penalty = safety_violation + spread_violation
 
             count_per_code = count_per_code.flatten()
             #spreads = spreads.flatten()

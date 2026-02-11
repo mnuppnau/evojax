@@ -279,7 +279,8 @@ class PGPE(NEAlgorithm):
 
         self._center_lr = abs(center_learning_rate)
         self._stdev_lr = abs(stdev_learning_rate)
-        self._stdev_max_change = abs(stdev_max_change)
+        #self._stdev_max_change = abs(stdev_max_change)
+        self._stdev_max_change = 0.1
         self._solution_ranking = solution_ranking
 
         if optimizer_config is None:
@@ -693,27 +694,48 @@ class PGPE(NEAlgorithm):
         # 1. Define the Schedule
         # ramp_start: 140k. ramp_end: 160k.
         # We fade CA in over 20k iterations so we don't shock the population.
-        ca_weight = jnp.clip((self._t - 140000) / 20000, 0.0, 1.0)
+        # Inside your fitness function or step_fn
+        # 1. Calculate raw components
+        
+        #ca_weight = jnp.clip((self._t - 140000) / 20000, 0.0, 1.0)
         
         # 2. Define the Metric Weights
-        w_adv = 1.0
-        w_mi = 0.18
-        w_con = 0.013
-        
+        w_adv = 0.2
+        #w_mi = 0.28
+        w_mi = 0.1
+        w_con = 0.008
+        w_sense = 1.2 
         # CA Weights (Only active after 140k)
-        w_sense = 0.1 * ca_weight       # Reward separation
-        w_cons = 0.05 * ca_weight       # Penalize drift
-        w_norm = 0.05 * ca_weight       # Penalize violation (Keep this small!)
+        #w_sense = 0.1 * ca_weight       # Reward separation
+        #w_cons = 0.05 * ca_weight       # Penalize drift
+        #w_norm = 0.05 * ca_weight       # Penalize violation (Keep this small!)
+        # gradually warm up w_sense from 0.0 to 1.2 over 1k iterations starting at 180k
+        #phase2_start = 180000
+        #w_sense = jnp.clip((self._t - 180000) / 1000, 0.0, 1.2) 
+        #w_cons = 0.0
+        #w_norm = 0.0
+        # Updated Weight Schedule (Gentler)
         
-        # 3. Calculate Fitness
+        # 1. Repulsion (w_sense): Decay SLOWLY. 
+        # Don't drop to 0.2 yet. The "8" needs the pressure from the "6" and "2" to stay an "8".
+        # Hold at 1.0 for 2k steps, then decay.
+        #w_sense = jnp.clip(1.2 - ((self._t - 183000) / 100) * 0.8, 0.4, 1.2)
+        
+        # 2. Anchor (w_cons): Cap at 2.0 (Not 20.0!)
+        # We want to prevent drift, not freeze evolution.
+        w_cons = jnp.clip((self._t - 183000) / 100, 0.0, 1.0)
+        
+        # 3. Normative (w_norm): Keep low but active
+        w_norm = jnp.clip((self._t - 183000) / 100, 0.0, 2.0)
+       # 3. Calculate Fitness
         # Note: Ensure signs are correct (Subtracting penalties)
         fitness_scores = (
             (fitness_adv * w_adv)
             + (fitness_mi * w_mi)
-            - (fitness_con * w_con)
+            + (fitness_con * w_con)
             + (r_sense * w_sense)             # Stage 2: Push clusters apart
-            - (normative_penalty * w_norm)    # Stage 2: Enforce safety/spread limits
-            - (r_cons * w_cons)               # Stage 2: Anchor distinct digits
+            #- (normative_penalty * w_norm)    # Stage 2: Enforce safety/spread limits
+            #- (r_cons * w_cons)               # Stage 2: Anchor distinct digits
         )
 
         #w_mi = jnp.clip((self._t / 10000) * 10.0, 0.1, 0.6)
