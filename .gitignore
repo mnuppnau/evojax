@@ -163,6 +163,7 @@ cython_debug/
 examples/data
 examples/log
 
+log/mnist
 mnist-classification/
 
 # Benchmark residuals
