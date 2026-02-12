@@ -90,10 +90,10 @@ class HyperNetwork(nn.Module):
         Output: (Batch, Chunk_Size)
         """
         # We start with a slightly wider first layer to handle the mixed inputs
-        x = nn.Dense(32)(inputs) 
+        x = nn.Dense(64)(inputs) 
         x = nn.tanh(x)
         
-        x = nn.Dense(32)(x)
+        x = nn.Dense(64)(x)
         x = nn.tanh(x)
         
         # Initialize output with higher variance as discussed to ensure signal strength

@@ -551,12 +551,23 @@ class Latent_Points(VectorizedTask):
             cos_sim_hist = jnp.sum(q_flat60 * topo_for_sample, axis=-1)
             r_cons = jnp.mean(1.0 - cos_sim_hist)
             
+            ## r_sense: Current Separation (Reward for existing distinctness)
+            #curr_sim_mat = current_centroids @ current_centroids.T
+            #curr_sep_mat = 1.0 - curr_sim_mat + jnp.eye(10) * 100.0
+            #nearest_dist = jnp.min(curr_sep_mat, axis=1)
+            #r_sense = jnp.mean(nearest_dist)
+                       
             # r_sense: Current Separation (Reward for existing distinctness)
+            # Use min-pair separation: targets the worst-separated pair directly.
+            # This amplifies the gradient signal for the hardest pair (e.g. 3/5)
+            # instead of diluting it across all 10 codes via averaging.
             curr_sim_mat = current_centroids @ current_centroids.T
             curr_sep_mat = 1.0 - curr_sim_mat + jnp.eye(10) * 100.0
             nearest_dist = jnp.min(curr_sep_mat, axis=1)
-            r_sense = jnp.mean(nearest_dist)
-            
+            r_min_pair = jnp.min(curr_sep_mat)
+            r_sense_mean = jnp.mean(nearest_dist)
+            r_sense = 0.7 * r_min_pair + 0.3 * r_sense_mean
+
             # r_intra: Cluster Tightness Reward
             # (Keeping original scaling logic)
             spread_flat = spreads.flatten()

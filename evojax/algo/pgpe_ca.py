@@ -700,11 +700,11 @@ class PGPE(NEAlgorithm):
         #ca_weight = jnp.clip((self._t - 140000) / 20000, 0.0, 1.0)
         
         # 2. Define the Metric Weights
-        w_adv = 0.2
-        #w_mi = 0.28
-        w_mi = 0.1
-        w_con = 0.008
-        w_sense = 1.2 
+        #w_adv = 0.2
+        ##w_mi = 0.28
+        #w_mi = 0.1
+        #w_con = 0.008
+        #w_sense = 1.2 
         # CA Weights (Only active after 140k)
         #w_sense = 0.1 * ca_weight       # Reward separation
         #w_cons = 0.05 * ca_weight       # Penalize drift
@@ -723,21 +723,50 @@ class PGPE(NEAlgorithm):
         
         # 2. Anchor (w_cons): Cap at 2.0 (Not 20.0!)
         # We want to prevent drift, not freeze evolution.
-        w_cons = jnp.clip((self._t - 183000) / 100, 0.0, 1.0)
-        
-        # 3. Normative (w_norm): Keep low but active
-        w_norm = jnp.clip((self._t - 183000) / 100, 0.0, 2.0)
-       # 3. Calculate Fitness
+        #w_cons = jnp.clip((self._t - 183000) / 100, 0.0, 1.0)
+        #
+        ## 3. Normative (w_norm): Keep low but active
+        #w_norm = jnp.clip((self._t - 183000) / 100, 0.0, 2.0)
+       ## 3. Calculate Fitness
+        ## Note: Ensure signs are correct (Subtracting penalties)
+        #fitness_scores = (
+        #    (fitness_adv * w_adv)
+        #    + (fitness_mi * w_mi)
+        #    + (fitness_con * w_con)
+        #    + (r_sense * w_sense)             # Stage 2: Push clusters apart
+        #    #- (normative_penalty * w_norm)    # Stage 2: Enforce safety/spread limits
+        #    #- (r_cons * w_cons)               # Stage 2: Anchor distinct digits
+        #)
+        # 1. Define the Schedule
+        # ramp_start: 140k. ramp_end: 160k.
+        # We fade CA in over 20k iterations so we don't shock the population.
+        ca_weight = jnp.clip((self._t - 50000) / 50000, 0.0, 1.0)
+
+        # 2. Define the Metric Weights
+        # Signal analysis at 183k (pop std): adv=0.0465, mi=0.0004, con=0.0198,
+        # r_sense=0.0092, r_cons=0.0012, normative=0.0007
+        # To give r_sense comparable gradient influence to fitness_adv:
+        #   need w_sense * 0.0092 ≈ w_adv * 0.0465 → w_sense ≈ 5.0 * w_adv
+        # With min-pair r_sense (higher variance ~0.015), w_sense ~3.0 suffices.
+        w_adv = 1.0
+        w_mi = 0.28
+        w_con = 0.013
+
+        # CA Weights (Only active after 140k)
+        w_sense = 2.0 * ca_weight       # Reward separation (dominant signal for fine-tuning)
+        w_cons = 0.3 * ca_weight        # Penalize drift
+        w_norm = 0.05 * ca_weight       # Penalize violation (Keep this small!)
+
+        # 3. Calculate Fitness
         # Note: Ensure signs are correct (Subtracting penalties)
         fitness_scores = (
             (fitness_adv * w_adv)
             + (fitness_mi * w_mi)
-            + (fitness_con * w_con)
+            #- (fitness_con * w_con)
             + (r_sense * w_sense)             # Stage 2: Push clusters apart
-            #- (normative_penalty * w_norm)    # Stage 2: Enforce safety/spread limits
-            #- (r_cons * w_cons)               # Stage 2: Anchor distinct digits
+            - (normative_penalty * w_norm)    # Stage 2: Enforce safety/spread limits
+            - (r_cons * w_cons)               # Stage 2: Anchor distinct digits
         )
-
         #w_mi = jnp.clip((self._t / 10000) * 10.0, 0.1, 0.6)
         
         #w_mi = 1.0
