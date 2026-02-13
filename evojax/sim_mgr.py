@@ -30,27 +30,6 @@ from evojax.policy.base import PolicyState
 from evojax.policy.base import PolicyNetwork
 from evojax.util import create_logger
 
-#@partial(jax.jit, static_argnums=(2, 3, 4, 5))
-#def get_task_reset_keys_latent(key1: jnp.ndarray,
-#                        key2: jnp.ndarray,
-#                        pop_size: int,
-#                        n_tests: int,
-#                        n_repeats: int,
-#                        ma_training: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
-#    # Split the first key
-#    key1, subkey1 = random.split(key=key1)
-#    
-#    # Split both keys under "if testing" condition
-#    key2, subkey2 = random.split(key=key2)
-#    
-#    reset_keys1 = random.split(subkey1, n_repeats)
-#    reset_keys1 = jnp.tile(reset_keys1, (pop_size, 1))
-#
-#    reset_keys2 = random.split(subkey2, n_repeats)
-#    reset_keys2 = jnp.tile(reset_keys2, (pop_size, 1))
-#
-#    return key1, reset_keys1, reset_keys2
-
 @partial(jax.jit, static_argnums=(1,2,3,4))
 def get_task_reset_keys(key: jnp.ndarray,
                         pop_size: int,
@@ -94,25 +73,6 @@ def get_task_reset_keys_disc(key: jnp.ndarray,
     reset_keys4 = jnp.tile(reset_keys4, (pop_size, 1))
 
     return key, reset_keys1, reset_keys2, reset_keys3, reset_keys4
-
-#@partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
-#def get_task_reset_keys(key: jnp.ndarray,
-#                        test: bool,
-#                        pop_size: int,
-#                        n_tests: int,
-#                        n_repeats: int,
-#                        ma_training: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
-#    key, subkey = random.split(key=key)
-#    if ma_training:
-#        reset_keys = random.split(subkey, n_repeats)
-#    else:
-#        if test:
-#            reset_keys = random.split(subkey, n_tests * n_repeats)
-#        else:
-#            reset_keys = random.split(subkey, n_repeats)
-#            reset_keys = jnp.tile(reset_keys, (pop_size, 1))
-#    return key, reset_keys
-
 
 @jax.jit
 def split_params_for_pmap(param: jnp.ndarray) -> jnp.ndarray:
@@ -644,16 +604,6 @@ class SimManager(object):
                     scores_mi.ravel().reshape((n_repeats, -1)), axis=1)
                 scores_con = jnp.mean(
                     scores_con.ravel().reshape((n_repeats, -1)), axis=1)
-                #mean_var_fake = jnp.mean(
-                #    mean_var_fake.ravel().reshape((n_repeats, -1)), axis=1)
-                #sum_per_cat_code = jnp.mean(
-                #    sum_per_cat_code.ravel().reshape((n_repeats, -1)), axis=1)
-                #count_per_cat_code = jnp.mean(
-                #    count_per_cat_code.ravel().reshape((n_repeats, -1)), axis=1)
-                #r_cons = jnp.mean(
-                #    r_cons.ravel().reshape((n_repeats, -1)), axis=1)
-                #scores_bin = jnp.mean(
-                #    scores_bin.ravel().reshape((n_repeats, -1)), axis=1)
         else:
             scores_adv = jnp.mean(
                 scores_adv.ravel().reshape((-1, n_repeats)), axis=-1)
@@ -675,35 +625,12 @@ class SimManager(object):
                 safety_ratios.ravel().reshape((-1, n_repeats)), axis=-1)
             spreads = jnp.mean(
                 spreads.ravel().reshape((-1, n_repeats)), axis=-1)
-            #scores_bin = jnp.mean(
-            #    scores_bin.ravel().reshape((-1, n_repeats)), axis=-1)
 
         if generator and not test:
             sum_pop = sum_per_cat_code.sum(axis=0)      # [K, F]
             cnt_pop = count_per_cat_code.sum(axis=0)    # [K]
             avg_per_code = sum_pop / jnp.maximum(cnt_pop[:, None], 0.00008)  # [K, F]
 
-
-        #jax.debug.print('scores adv after mean : {}', scores_adv.shape)
-        #jax.debug.print('mean var fake after mean : {}', mean_var_fake.shape)
-
-
-        #jax.debug.print('scores shape after mean : {} ', scores.shape)
-        # Note: QD methods do not support ma_training for now.
-        #if not self._ma_training:
-        #    final_states = tree_map(
-        #        lambda x: x.reshape((scores.shape[0], n_repeats, *x.shape[1:])),
-        #        final_states)
-
-        #if not generator:
-        #self._t = self._t + 1
-        #
-        #if self._t > 7000:
-        #    self._i = 0.8
-        #elif self._t > 15000:
-        #    self._i = 0.6
-        #elif self._t > 30000:
-        #    self._i = 0.4
 
         if generator and not test:
             scores1 = scores_adv
