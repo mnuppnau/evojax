@@ -398,7 +398,7 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray],fitness_con: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], safety_ratios: Union[np.ndarray, jnp.ndarray], spreads: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], safety_ratios: Union[np.ndarray, jnp.ndarray], spreads: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
 
        
         #if avg_r_anchor < 0.0009:
@@ -767,7 +767,6 @@ class PGPE(NEAlgorithm):
         #w_mi = jnp.where(t < 2000, ramp_up, ramp_down)
         
         w_mi = 0.2
-        w_con = 0.02
 
         # CA Weights (Only active after 140k)
         w_sense = 0.3 * ca_weight       # Reward separation (dominant signal for fine-tuning)
@@ -779,7 +778,6 @@ class PGPE(NEAlgorithm):
         fitness_scores = (
             (standardize(fitness_adv) * w_adv)
             + (standardize(fitness_mi) * w_mi)
-            - (fitness_con * w_con)
             + (standardize(r_sense) * w_sense)             # Stage 2: Push clusters apart
             - (standardize(normative_penalty) * w_norm)    # Stage 2: Enforce safety/spread limits
             - (standardize(r_cons) * w_cons)               # Stage 2: Anchor distinct digits

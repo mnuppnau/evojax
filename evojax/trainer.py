@@ -141,7 +141,7 @@ class Discriminator(nn.Module):
     """Discriminator with attached Q-network (SpectralNorm, no BatchNorm)."""
     features: int = 64
     q_cat: int = 10
-    q_cont: int = 2  # set to 0 if you only want categorical codes
+    q_cont: int = 0  # continuous codes removed
 
     @nn.compact
     def __call__(self, x):
@@ -211,19 +211,10 @@ class Discriminator(nn.Module):
             kernel_init=normal_init(0.02),
         ))(q_flat, update_stats=train)
 
-        # ----- Q continuous head -----
-        if self.q_cont and self.q_cont > 0:
-            q_cont_mu = SN(nn.Dense(
-                self.q_cont,
-                kernel_init=normal_init(0.02),
-            ))(q_flat, update_stats=train)
-
-            q_cont_logsigma = SN(nn.Dense(
-                self.q_cont,
-                kernel_init=normal_init(0.02),
-            ))(q_flat, update_stats=train)
-        else:
-            q_cont_mu, q_cont_logsigma = None, None
+        # ----- Q continuous head (disabled, q_cont=0) -----
+        # Return dummy zeros to keep return signature consistent for jax.vmap
+        q_cont_mu = jnp.zeros((x.shape[0], 1))
+        q_cont_logsigma = jnp.zeros((x.shape[0], 1))
 
         return d_logits, q_cat_logits, q_cont_mu, q_cont_logsigma, q_feat_avg
 
@@ -730,7 +721,7 @@ def reorder_real_centroids(
     return real_centroids[col_indices]
 
 @partial(jax.jit, static_argnames=['solver'])
-def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con_codes, solver):
+def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, solver):
        
         noise, shift_x, shift_y = noise_shift_tup
         params_d, batch_stats_d, opt_disc = state
@@ -759,37 +750,6 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
         #    
         #    return mse + var_reg
 
-        def continuous_loss(c_true, mu, logsigma):
-            """
-            Negative log-likelihood of c_true under N(mu, sigma^2).
-            
-            Args:
-                c_true: (B, q_cont) - the actual continuous codes used to generate
-                mu: (B, q_cont) - predicted mean from Q network
-                logsigma: (B, q_cont) - predicted log(std) from Q network
-            """
-            # Clamp logsigma for numerical stability
-            logsigma = jnp.clip(logsigma, -2.0, 2.0)
-            
-            # NLL of Gaussian: 0.5 * log(2π) + logsigma + 0.5 * ((x - mu) / sigma)^2
-            # We can drop the constant 0.5 * log(2π)
-            nll = logsigma + 0.5 * ((c_true - mu) / jnp.exp(logsigma)) ** 2
-            
-            return jnp.mean(nll)
-        
-        def normal_nll_loss(x, mu, var):
-            """
-            Calculate the negative log likelihood of a normal distribution
-            (treating Q(c_j | x) as a factored Gaussian).
-            """
-            # log-likelihood term
-            logli = -0.5 * jnp.log(var * 2.0 * jnp.pi + 1e-6) \
-                    - ((x - mu) ** 2) / (2.0 * var + 1e-6)
-            
-            # negative log-likelihood (to be minimized)
-            nll = -jnp.mean(jnp.sum(logli, axis=1))
-            return nll
-        
         def cpc_mi_loss(code_cat, q_cat, negative_samples=10):
             """Better signal for PGPE by using contrastive learning"""
             batch_size = code_cat.shape[0]
@@ -856,27 +816,10 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
                   #q_preds = q_logits.argmax(axis=-1)
                   #q_acc = jnp.mean(q_preds == labels)
                   logit_penalty = 1e-2 * jnp.mean(fake_preds ** 2)
-                  #jax.debug.print('Q accuracy: {} ', q_acc)
                   # Calculate Mutual Information loss
                   q_cat = nn.log_softmax(q_fake, axis=-1)
                   loss_mi = loss_mutual_information(fake_cat_input, q_cat)
-                  #loss_mi = cpc_mi_loss(fake_cat_input, q_cat, negative_samples=10)
-                  #loss_con = normal_nll_loss(con_codes, mu, var)
-                  loss_con = continuous_loss(con_codes, mu_fake, var_fake)
-                  #predicted_cat = jnp.argmax(q, axis=-1)
-                  
-                  #true_cat = jnp.argmax(fake_cat_input, axis=-1)
 
-                  #accuracy = jnp.mean(predicted_cat == true_cat)
-
-                  #jax.debug.print('accuracy: {} ', accuracy)
-
-                  # real_preds reshape array of shape (64, 0) (size 0) to (64,)
-                  #real_preds = real_preds.reshape((real_preds.shape[0],))
-                  #fake_preds = fake_preds.reshape((fake_preds.shape[0],))
-                  #real_loss = bce_logits(real_preds, jnp.ones((32,), dtype=jnp.int32))
-                  #fake_loss = bce_logits(fake_preds, jnp.zeros((32,), dtype=jnp.int32))
-              
                   # use 0.9 as the label for real images instead of 1.0
                   real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds))
                   # use 0.1 as the label for fake images instead of 0.0
@@ -885,13 +828,8 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
                   real_loss = jnp.mean(real_loss)
                   fake_loss = jnp.mean(fake_loss)
 
-                  #jax.debug.print('real loss: {} ', real_loss)
-                  #jax.debug.print('fake loss: {} ', fake_loss)
-
                   real_fake_loss = (real_loss + fake_loss) / 2.0
-                  #jax.debug.print('mi loss: {} ', loss_mi)
-                  #jax.debug.print('con loss: {} ', loss_con)
-                  loss = real_fake_loss + loss_mi + loss_con*0.1 #+ logit_penalty + loss_con*0.2
+                  loss = real_fake_loss + loss_mi
                 
                   return loss, (real_fake_loss, vars_d)
 
@@ -922,28 +860,25 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, con
 #        disc_logits = disc_logits.reshape((disc_logits.shape[0], -1)) 
 #
 #        return disc_logits
-def build_big_latents(key, total_size, z_dim, n_disc, n_con):
+def build_big_latents(key, total_size, z_dim, n_disc):
     k_z, k_c, k_perm = jax.random.split(key, 3)
     z = jax.random.normal(k_z, (total_size, z_dim))
     reps = (total_size + n_disc - 1) // n_disc
     codes = jnp.tile(jnp.arange(n_disc), reps)[:total_size]
     c_onehot = jax.nn.one_hot(codes, n_disc)
-    c_cont = jax.random.uniform(k_c, (total_size, n_con), minval=-0.5, maxval=0.5)
-    latent = jnp.concatenate([z, c_onehot, c_cont], axis=-1)
+    latent = jnp.concatenate([z, c_onehot], axis=-1)
     return latent[jax.random.permutation(k_perm, total_size)]
 
-def build_recal_latents(key, batch_size, z_dim, n_disc, n_con):
-    k_z, k_con, k_perm = jax.random.split(key, 3)
+def build_recal_latents(key, batch_size, z_dim, n_disc):
+    k_z, k_perm = jax.random.split(key, 2)
     # z: standard normal (or whatever you use at train time)
     z = jax.random.normal(k_z, (batch_size, z_dim))
     # categorical: balanced 0..n_disc-1 repeated
     reps = (batch_size + n_disc - 1) // n_disc
     c = jnp.tile(jnp.arange(n_disc), reps)[:batch_size]
     c_onehot = jax.nn.one_hot(c, n_disc)
-    # continuous: same range you use at train time
-    c_cont = jax.random.uniform(k_con, (batch_size, n_con), minval=-0.5, maxval=0.5)
     # concatenate
-    latent = jnp.concatenate([z, c_onehot, c_cont], axis=-1)
+    latent = jnp.concatenate([z, c_onehot], axis=-1)
     # (optional) small permutation to avoid repeating same order every batch
     perm = jax.random.permutation(k_perm, batch_size)
     return latent[perm]
@@ -951,7 +886,7 @@ def build_recal_latents(key, batch_size, z_dim, n_disc, n_con):
 # --- BN standing-stats pass ---
 def recalibrate_bn_stats(gen_module, params, batch_stats, key,
                          steps=12, batch_size=64,
-                         z_dim=62, n_disc=10, n_con=2):
+                         z_dim=64, n_disc=10):
     """
     gen_module: e.g., Generator(training=True) or Generator(use_running_average=False)
     params: generator params pytree
@@ -961,7 +896,7 @@ def recalibrate_bn_stats(gen_module, params, batch_stats, key,
     def body(i, carry):
         bs, k = carry
         k, k_lat = jax.random.split(k)
-        lat = build_recal_latents(k_lat, batch_size, z_dim, n_disc, n_con)
+        lat = build_recal_latents(k_lat, batch_size, z_dim, n_disc)
         # train-mode apply: mutate batch_stats only
         _, vars_out = gen_module.apply({'params': params, 'batch_stats': bs},
                                        lat,
@@ -973,8 +908,8 @@ def recalibrate_bn_stats(gen_module, params, batch_stats, key,
     return batch_stats_new, key_new
 
 def sample_latent(key, shape_noise, shape_cat):
-  noise_key, cat_key, con_key = jax.random.split(key, 3)
-  
+  noise_key, cat_key = jax.random.split(key, 2)
+
   # Sample irreducible noise
   noise = jax.random.normal(noise_key, shape_noise)
 
@@ -982,19 +917,9 @@ def sample_latent(key, shape_noise, shape_cat):
   code_cat = jax.random.randint(cat_key, shape_cat, 0, 10)
   code_cat = jax.nn.one_hot(code_cat, 10)
 
-  #c1 = jnp.tile(jnp.arange(10), 6)
-  #c2 = jax.random.randint(cat_key, (4,), 0, 10)  # Randomly sample some indices
-  #c = c[:64]
-  #c = jnp.concatenate([c1, c2])  # Combine the two arrays
-  #c = jax.random.permutation(cat_key, c)  # Shuffle to randomize
-  #code_cat = jax.nn.one_hot(c, 10)  # One-hot encoding for categorical code
-  #code_cat = jax.nn.one_hot(c, 10)
+  latent = jnp.concatenate([noise, code_cat], axis=-1)
 
-  con = jax.random.uniform(con_key, (shape_cat[0], 2), minval=-0.5, maxval=0.5)
-  
-  latent = jnp.concatenate([noise, code_cat, con], axis=-1)
-
-  return latent, code_cat, con
+  return latent, code_cat
 
 def sample_batch(key: jnp.ndarray,
                  data: jnp.ndarray,
@@ -1078,11 +1003,10 @@ class Trainer(object):
 
         self.latent_dim = 64
         self.n_classes = 10
-        self.n_con = 2
 
         self.decay_factor = 0.9
 
-        self.noise_dim = self.latent_dim - self.n_con
+        self.noise_dim = self.latent_dim
         self.policy_gen = policy_gen
 
         self._key = jax.random.PRNGKey(44)
@@ -1194,43 +1118,19 @@ class Trainer(object):
            
             num_mini_batches = self.num_mini_batches
            
-            self._key, noise_key, con_key = jax.random.split(self._key, 3)
+            self._key, noise_key = jax.random.split(self._key, 2)
 
-            fixed_batch_latent = jax.random.normal(noise_key, (self.batch_size, self.latent_dim-self.n_con))
+            fixed_batch_latent = jax.random.normal(noise_key, (self.batch_size, self.latent_dim))
             fixed_c = jnp.tile(jnp.arange(10), 7)
             fixed_c = fixed_c[:self.batch_size]
-            
-            # Group assignment for each index
-            group_ids = jnp.array(
-                [0]*10 + [1]*10 + [2]*10 + [3]*10 + [4]*10 + [5]*10 + [6]*4
-            )
-            
-            # Per-group ranges
-            minvals = jnp.array([-0.5, -0.4, -0.3, -0.2,  0.0,  0.2,  0.4])
-            maxvals = jnp.array([-0.4, -0.3, -0.2,  0.0,  0.2,  0.3,  0.5])
-            
-            num_groups = minvals.shape[0]
-            
-            # Sample one (2,) vector per group
-            group_values = jax.random.uniform(
-                con_key,
-                shape=(num_groups, 2),
-                minval=minvals[:, None],
-                maxval=maxvals[:, None],
-            )
 
-            fixed_con = group_values[group_ids]
-            #fixed_con = jax.random.uniform(con_key, (self.batch_size, 2), minval=-0.5, maxval=0.5) 
-                    
-            fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, 10), fixed_con], axis=-1)
+            fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, 10)], axis=-1)
 
             self.ordered_centroids = jnp.zeros((10, 256))
 
-            self._key, noise_key, con_key = jax.random.split(self._key, 3)
-
             for i in range(start_iter, self._max_iter):
-                
-                shape_noise = (self.mini_batch_size, self.latent_dim-self.n_con)
+
+                shape_noise = (self.mini_batch_size, self.latent_dim)
                 shape_cat = (self.mini_batch_size,)
                 
                 if i % 1 == 0:
@@ -1243,7 +1143,7 @@ class Trainer(object):
                         data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
                         #data = np.expand_dims(data / 255.0, axis=-1)
 
-                        latent, cat_codes, con_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
+                        latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
                       
                         noise = jax.random.normal(subkey_noise, (self.mini_batch_size, 28, 28, 1)) * 0.1
 
@@ -1270,7 +1170,6 @@ class Trainer(object):
                             (noise,shift_x, shift_y),
                             fake_images,
                             cat_codes,
-                            con_codes,
                             solver_disc,
                         )
 #jax.debug.print('loss: {} ', loss)
@@ -1291,7 +1190,7 @@ class Trainer(object):
                 #jax.debug.print('topographic_ks shape: {} ', topographic_ks.shape)
                 #avg_per_code = topographic_ks[0]
                 
-                scores_gen_adv, scores_gen_mi, scores_gen_con, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, norm_pen, safety_ratios, spreads = self.sim_mgr_gen.eval_params(
+                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, norm_pen, safety_ratios, spreads = self.sim_mgr_gen.eval_params(
                 params_gen=params_hn, params_disc=flat_params_disc, batch_stats_disc=flat_batch_stats_disc, topographic_ks=topographic_ks, normative_ks=normative_ks, generator=True, test=False
                 )
 
@@ -1299,7 +1198,7 @@ class Trainer(object):
                 if isinstance(self.solver_hn, QualityDiversityMethod):
                     self.solver_hn.observe_bd(bds_gen)
                 
-                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, fitness_con=scores_gen_con, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, normative_penalty=norm_pen, safety_ratios=safety_ratios, spreads=spreads, adv=False)
+                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, normative_penalty=norm_pen, safety_ratios=safety_ratios, spreads=spreads, adv=False)
 
                 
                 self.avg_mi_loss = jnp.mean(scores_gen_mi)
@@ -1326,13 +1225,6 @@ class Trainer(object):
                         'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
                             i, scores_mi.size, scores_mi.max(), scores_mi.mean(),
                             scores_mi.min(), scores_mi.std()))
-
-                    scores_con = np.array(scores_gen_con)
-                    self._logger.info(
-                        'Iter={0}, size={1}, max={2:.4f}, '
-                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
-                            i, scores_con.size, scores_con.max(), scores_con.mean(),
-                            scores_con.min(), scores_con.std()))
 
                     r_cons = np.array(r_cons)
                     self._logger.info(
