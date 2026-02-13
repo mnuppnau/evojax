@@ -456,9 +456,13 @@ class Latent_Points(VectorizedTask):
                 batch_cat_one_hot = jnp.concatenate([onehot60, onehot_rem], axis=0)
                 
                 # Continuous codes
-                batch_con = jax.random.uniform(con_key, (self.batch_size, 2), minval=-0.5, maxval=0.5)
-        
-                batch_latent_concat = jnp.concatenate([z_base, batch_cat_one_hot, batch_con], axis=-1)
+                #batch_con = jax.random.uniform(con_key, (self.batch_size, 2), minval=-0.5, maxval=0.5)
+                con_base_fixed = jax.random.uniform(con_key, (7, 2), minval=-0.5, maxval=0.5)
+                con_base_70 = jnp.repeat(con_base_fixed, 10, axis=0)
+
+                con_base = con_base_70[:self.batch_size]
+
+                batch_latent_concat = jnp.concatenate([z_base, batch_cat_one_hot, con_base], axis=-1)
         
                 # Instance Noise for Discriminator stability
                 noise = jax.random.normal(cat_key, (self.batch_size, 28, 28, 1)) * 0.1
@@ -468,7 +472,7 @@ class Latent_Points(VectorizedTask):
                 noise=noise, 
                 cat_codes=batch_cat_one_hot, 
                 codes60=codes60, 
-                con_codes=batch_con, 
+                con_codes=con_base, 
                 batch_stats_disc=self.batch_stats_disc,
                 hist_centroids=jnp.zeros((10, self.rff_params["W"].shape[0])),  # Placeholder, will be updated in step
                 hist_velocity=jnp.zeros((10, self.rff_params["W"].shape[0])),   # Placeholder, will be updated in step

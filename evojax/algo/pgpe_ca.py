@@ -142,6 +142,10 @@ def compute_reinforce_update(
     return total_mu.mean(axis=0), total_sigma.mean(axis=0)
 
 @jax.jit
+def standardize(x):
+    return (x - jnp.mean(x)) / jnp.maximum(jnp.std(x), 1e-6)
+
+@jax.jit
 def mi_penalty(fitness_mi, fitness_adv, mi_thr=-0.01, v_ref=0.01, M=5.0, eps=1e-8):
     # violation
     v = jnp.maximum(0.0, mi_thr - fitness_mi)
@@ -616,7 +620,7 @@ class PGPE(NEAlgorithm):
         #std_mi = jnp.std(fitness_mi) + 1e-8
 
 
-        #max_w_mi = jnp.minimum(1000, jnp.maximum((std_adv / std_mi)//2,4))
+        #max_w_mi = jnp.minimum(2.0, jnp.maximum((std_adv / std_mi)//2,0.05))
 
         #realism_gate = jax.nn.sigmoid(raw_fitness_adv + w_realism)
         # 2. MI is a constraint. If MI loss is high, it dominates fitness.
@@ -740,7 +744,7 @@ class PGPE(NEAlgorithm):
         # 1. Define the Schedule
         # ramp_start: 140k. ramp_end: 160k.
         # We fade CA in over 20k iterations so we don't shock the population.
-        ca_weight = jnp.clip((self._t - 50000) / 50000, 0.0, 1.0)
+        ca_weight = jnp.clip((self._t - 170000) / 170000, 0.0, 1.0)
 
         # 2. Define the Metric Weights
         # Signal analysis at 183k (pop std): adv=0.0465, mi=0.0004, con=0.0198,
@@ -749,23 +753,36 @@ class PGPE(NEAlgorithm):
         #   need w_sense * 0.0092 ≈ w_adv * 0.0465 → w_sense ≈ 5.0 * w_adv
         # With min-pair r_sense (higher variance ~0.015), w_sense ~3.0 suffices.
         w_adv = 1.0
-        w_mi = 0.28
-        w_con = 0.013
+        # decrease w_mi from 10 to 0.3 over the course of 5k iterations
+        t = self._t
+        
+        # Up phase (0 → 2000)
+        #progress_up = jnp.clip(t / 2000.0, 0.0, 1.0)
+        #ramp_up = 0.05 + (0.5 - 0.05) * 0.5 * (1 - jnp.cos(jnp.pi * progress_up))
+        
+        # Down phase (2000 → 2800)  <-- shorter = faster drop
+        #progress_down = jnp.clip((t - 2000.0) / 800.0, 0.0, 1.0)
+        #ramp_down = 0.05 + (0.5 - 0.05) * 0.5 * (1 + jnp.cos(jnp.pi * progress_down))
+        
+        #w_mi = jnp.where(t < 2000, ramp_up, ramp_down)
+        
+        w_mi = 0.2
+        w_con = 0.02
 
         # CA Weights (Only active after 140k)
-        w_sense = 2.0 * ca_weight       # Reward separation (dominant signal for fine-tuning)
-        w_cons = 0.3 * ca_weight        # Penalize drift
-        w_norm = 0.05 * ca_weight       # Penalize violation (Keep this small!)
+        w_sense = 0.3 * ca_weight       # Reward separation (dominant signal for fine-tuning)
+        w_cons = 0.1 * ca_weight        # Penalize drift
+        w_norm = 0.04 * ca_weight       # Penalize violation (Keep this small!)
 
         # 3. Calculate Fitness
         # Note: Ensure signs are correct (Subtracting penalties)
         fitness_scores = (
-            (fitness_adv * w_adv)
-            + (fitness_mi * w_mi)
-            #- (fitness_con * w_con)
-            + (r_sense * w_sense)             # Stage 2: Push clusters apart
-            - (normative_penalty * w_norm)    # Stage 2: Enforce safety/spread limits
-            - (r_cons * w_cons)               # Stage 2: Anchor distinct digits
+            (standardize(fitness_adv) * w_adv)
+            + (standardize(fitness_mi) * w_mi)
+            - (fitness_con * w_con)
+            + (standardize(r_sense) * w_sense)             # Stage 2: Push clusters apart
+            - (standardize(normative_penalty) * w_norm)    # Stage 2: Enforce safety/spread limits
+            - (standardize(r_cons) * w_cons)               # Stage 2: Anchor distinct digits
         )
         #w_mi = jnp.clip((self._t / 10000) * 10.0, 0.1, 0.6)
         
@@ -791,7 +808,7 @@ class PGPE(NEAlgorithm):
         #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*100 #+ r_sense + fitness_con.flatten()*0.6 + r_intra + r_cons
 
         #fitness_scores = -jnp.argsort(order+1)
-        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,True)
+        fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,False)
 
         grad_center, grad_stdev = compute_reinforce_update(
                 fitness_scores=fitness_scores,

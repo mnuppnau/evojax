@@ -239,16 +239,16 @@ class HyperNetwork(nn.Module):
         Output: (Batch, Chunk_Size)
         """
         # We start with a slightly wider first layer to handle the mixed inputs
-        x = nn.Dense(64)(inputs) 
-        x = nn.tanh(x)
+        x = nn.Dense(48)(inputs) 
+        x = nn.gelu(x)
         
-        x = nn.Dense(64)(x)
-        x = nn.tanh(x)
+        x = nn.Dense(48)(x)
+        x = nn.gelu(x)
         
         # Initialize output with higher variance as discussed to ensure signal strength
         weights = nn.Dense(
             self.chunk_size, 
-            kernel_init=jax.nn.initializers.normal(stddev=0.05) 
+            kernel_init=jax.nn.initializers.normal(stddev=0.025) 
         )(x)
         
         return weights
