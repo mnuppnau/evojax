@@ -211,12 +211,7 @@ class Discriminator(nn.Module):
             kernel_init=normal_init(0.02),
         ))(q_flat, update_stats=train)
 
-        # ----- Q continuous head (disabled, q_cont=0) -----
-        # Return dummy zeros to keep return signature consistent for jax.vmap
-        q_cont_mu = jnp.zeros((x.shape[0], 1))
-        q_cont_logsigma = jnp.zeros((x.shape[0], 1))
-
-        return d_logits, q_cat_logits, q_cont_mu, q_cont_logsigma, q_feat_avg
+        return d_logits, q_cat_logits, q_feat_avg
 
 # --- 1. The HyperNetwork (Now with Geometric Input) ---
 class HyperNetwork(nn.Module):
@@ -802,12 +797,12 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, sol
                   #fake_images_with_noise_perturbed = jnp.roll(fake_images_with_noise, shift=(shift_x, shift_y), axis=(1,2))
                   #real_images_with_noise_perturbed = jnp.roll(real_images_with_noise, shift=(shift_x, shift_y), axis=(1,2))
                   
-                  (fake_preds, q_fake, mu_fake, var_fake, _), vars_d = Discriminator().apply(
+                  (fake_preds, q_fake, _), vars_d = Discriminator().apply(
                       {'params': params_d, 'batch_stats': vars_d_batch_stats},
                       fake_images_with_noise, mutable=['batch_stats']
                   )
                   
-                  (real_preds, _, _, _, _), vars_d = Discriminator().apply(
+                  (real_preds, _, _), vars_d = Discriminator().apply(
                       {'params': params_d, 'batch_stats': vars_d['batch_stats']},
                       real_images_with_noise, mutable=['batch_stats']
                   )
@@ -1058,7 +1053,7 @@ class Trainer(object):
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.solver_disc = optax.adam(learning_rate=0.00001, b1=0.5, b2=0.999)
+        self.solver_disc = optax.adam(learning_rate=0.0001, b1=0.5, b2=0.999)
 
     def run(self, demo_mode: bool = False) -> float:
 
@@ -1173,8 +1168,8 @@ class Trainer(object):
                             solver_disc,
                         )
 #jax.debug.print('loss: {} ', loss)
-                        if real_fake_loss > 0.50: #or i % 100 == 0: 
-                            params_disc, self.batch_stats_disc, opt_disc = state 
+                        if i < 5000 or real_fake_loss > 0.3:
+                            params_disc, self.batch_stats_disc, opt_disc = state
 
                 leaves_params, _ = jax.tree_flatten(params_disc) 
                 flat_params_disc = jnp.concatenate([p.flatten() for p in leaves_params])

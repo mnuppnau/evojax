@@ -252,7 +252,7 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            actions, disc_logits, mu, var, mean_var_fake, q_flat, policy_state = policy_net.get_actions(
+            actions, disc_logits, mean_var_fake, q_flat, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
 
             if task.multi_agent_training:

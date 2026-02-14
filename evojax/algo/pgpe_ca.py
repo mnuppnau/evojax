@@ -744,7 +744,7 @@ class PGPE(NEAlgorithm):
         # 1. Define the Schedule
         # ramp_start: 140k. ramp_end: 160k.
         # We fade CA in over 20k iterations so we don't shock the population.
-        ca_weight = jnp.clip((self._t - 170000) / 170000, 0.0, 1.0)
+        #ca_weight = jnp.clip((self._t - 170000) / 170000, 0.0, 1.0)
 
         # 2. Define the Metric Weights
         # Signal analysis at 183k (pop std): adv=0.0465, mi=0.0004, con=0.0198,
@@ -754,7 +754,7 @@ class PGPE(NEAlgorithm):
         # With min-pair r_sense (higher variance ~0.015), w_sense ~3.0 suffices.
         w_adv = 1.0
         # decrease w_mi from 10 to 0.3 over the course of 5k iterations
-        t = self._t
+        #t = self._t
         
         # Up phase (0 → 2000)
         #progress_up = jnp.clip(t / 2000.0, 0.0, 1.0)
@@ -766,12 +766,32 @@ class PGPE(NEAlgorithm):
         
         #w_mi = jnp.where(t < 2000, ramp_up, ramp_down)
         
-        w_mi = 0.2
+        #w_mi = 0.16
 
-        # CA Weights (Only active after 140k)
-        w_sense = 0.3 * ca_weight       # Reward separation (dominant signal for fine-tuning)
-        w_cons = 0.1 * ca_weight        # Penalize drift
-        w_norm = 0.04 * ca_weight       # Penalize violation (Keep this small!)
+        ## CA Weights (Only active after 140k)
+        #w_sense = 0.3 * ca_weight       # Reward separation (dominant signal for fine-tuning)
+        #w_cons = 0.1 * ca_weight        # Penalize drift
+        #w_norm = 0.04 * ca_weight       # Penalize violation (Keep this small!)
+
+        # CA starts NOW, not at 170k. Ramp over 30k iterations.
+        ca_weight = jnp.clip((self._t - 115000) / 30000, 0.0, 1.0)
+        
+        # MI: gentle ramp from 0.16 → 0.25 over 50k
+        # (stronger MI to push remaining codes, CA anchors prevent quality loss)
+        mi_ramp = jnp.clip((self._t - 120000) / 50000, 0.0, 1.0)
+        #w_mi = 0.16 + 0.09 * mi_ramp
+        
+        # Separation: higher than before (0.5 vs 0.3) - the main lever for unseparated codes
+        #w_sense = 0.5 * ca_weight
+        transition = jnp.clip((self._t - 195000) / 5000, 0.0, 1.0)
+        w_mi = 0.24 - 0.16 * transition       # 0.24 → 0.08
+        w_sense = (0.5 + 0.2 * transition) * ca_weight  # 0.5 → 0.7
+
+        # Anchoring: prevent the 4 locked codes from drifting
+        w_cons = 0.15 * ca_weight
+        
+        # Normative: keep low
+        w_norm = 0.04 * ca_weight
 
         # 3. Calculate Fitness
         # Note: Ensure signs are correct (Subtracting penalties)

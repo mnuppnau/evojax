@@ -319,21 +319,7 @@ class Discriminator(nn.Module):
             kernel_init=normal_init(0.02),
         ))(q_flat, update_stats=train)
 
-        # ----- Q continuous head -----
-        if self.q_cont and self.q_cont > 0:
-            q_cont_mu = SN(nn.Dense(
-                self.q_cont,
-                kernel_init=normal_init(0.02),
-            ))(q_flat, update_stats=train)
-
-            q_cont_logsigma = SN(nn.Dense(
-                self.q_cont,
-                kernel_init=normal_init(0.02),
-            ))(q_flat, update_stats=train)
-        else:
-            q_cont_mu, q_cont_logsigma = None, None
-
-        return d_logits, q_cat_logits, q_cont_mu, q_cont_logsigma, q_feat_avg
+        return d_logits, q_cat_logits, q_feat_avg
 
 
 #class Generator(nn.Module):
@@ -732,7 +718,7 @@ class GenPolicy(PolicyNetwork):
             fake_data_with_noise = fake_data + noise
           
             
-            (preds, q, mu, var, q_flat) = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data_with_noise, mutable=False)
+            (preds, q, q_flat) = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data_with_noise, mutable=False)
 
             # calculate variance of fake data
             var_fake = jnp.var(fake_data[:, 4:24, 4:24, :], axis=0)
@@ -740,7 +726,7 @@ class GenPolicy(PolicyNetwork):
             # take mean of variance
             mean_var_fake = jnp.mean(var_fake)
 
-            return preds, q, mu, var, mean_var_fake, q_flat
+            return preds, q, mean_var_fake, q_flat
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -767,9 +753,9 @@ class GenPolicy(PolicyNetwork):
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        preds, disc_logits, mu, var, mean_var_fake, q_flat = self._forward_fn_gen(params_hn, params_disc, batch_stats_disc, t_states.obs, t_states.noise)
+        preds, disc_logits, mean_var_fake, q_flat = self._forward_fn_gen(params_hn, params_disc, batch_stats_disc, t_states.obs, t_states.noise)
         
-        return preds, disc_logits, mu, var, mean_var_fake, q_flat, p_states
+        return preds, disc_logits, mean_var_fake, q_flat, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
