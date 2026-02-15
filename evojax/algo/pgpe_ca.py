@@ -820,13 +820,72 @@ class PGPE(NEAlgorithm):
             spreads,
             safety_ratios
         )
-        #fitness_scores = fitness_adv + realism_gate * cultural_score - penalty_mi
-        #else:
-        #    cultural_score = r_sense + r_intra + fitness_con
-        #fitness_scores = fitness_adv.flatten() + (fitness_mi.flatten() * w_mi) + (realism_gate * cultural_score)
-        #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*100 #+ r_sense + fitness_con.flatten()*0.6 + r_intra + r_cons
 
-        #fitness_scores = -jnp.argsort(order+1)
+        # --- Update Domain, Situational, and Historical KS ---
+        # Find the best individual from the composite fitness scores
+        best_idx = jnp.argmax(fitness_scores)
+        best_solution = self._solutions[best_idx].reshape(1, -1)
+
+        # Get the scaled noise for this individual.
+        # Solutions are arranged as [center+noise_0..center+noise_{n-1},
+        #                            center-noise_0..center-noise_{n-1}]
+        # For idx < num_directions: noise = +scaled_noises[idx]
+        # For idx >= num_directions: noise = -scaled_noises[idx - num_directions]
+        noise_idx = best_idx % self._num_directions
+        best_scaled_noise = self._scaled_noises[noise_idx].reshape(1, -1)
+
+        best_fitness_adv = fitness_adv.flatten()[best_idx].reshape(1)
+        best_fitness_mi = fitness_mi.flatten()[best_idx].reshape(1)
+
+        # Tchebycheff score: weighted max of normalized objectives
+        # (lower is better for each objective, so negate for consistency)
+        tchebycheff = jnp.maximum(
+            jnp.abs(best_fitness_adv), jnp.abs(best_fitness_mi)
+        ).reshape(1)
+
+        # Compute entropy from disc_logits for the best individual.
+        # disc_logits may have shape (pop_size//2, batch_size, n_classes) or
+        # (pop_size, batch_size, n_classes). Use noise_idx to index safely.
+        # Mean over batch dimension, then compute entropy of the avg prediction.
+        best_disc_logit = jnp.mean(
+            disc_logits[noise_idx], axis=0
+        )  # (n_classes,)
+        # Normalize to probability distribution for entropy
+        best_disc_prob = jax.nn.softmax(best_disc_logit)
+
+        self.belief_space = update_domain_ks(
+            self.belief_space,
+            best_solution,
+            self._stdev,
+            best_scaled_noise,
+            best_fitness_adv,
+            best_fitness_mi,
+            tchebycheff,
+            best_disc_prob,
+        )
+
+        self.belief_space = update_situational_ks(
+            self.belief_space,
+            best_solution,
+            self._stdev,
+            best_scaled_noise,
+            best_fitness_adv,
+            best_fitness_mi,
+            tchebycheff,
+            best_disc_prob,
+        )
+
+        self.belief_space = update_history_ks(
+            self.belief_space,
+            best_solution,
+            self._stdev,
+            best_scaled_noise,
+            best_fitness_adv,
+            best_fitness_mi,
+            tchebycheff,
+            best_disc_prob,
+        )
+
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,False)
 
         grad_center, grad_stdev = compute_reinforce_update(

@@ -23,14 +23,22 @@ from evojax.algo.cultural.helper_functions import (
 )
 
 
-def initialize_domain_ks(num_clusters: int, num_pixels: int, num_images_per_cluster: int):
-    cluster_images = tuple(
-        jnp.zeros((num_images_per_cluster, num_pixels))
-        for _ in range(num_clusters)
-    )
+def initialize_domain_ks(param_size: int, num_solutions: int = 20):
+    """Initialize Domain KS as a Pareto archive of non-dominated solutions.
+
+    Stores the top non-dominated solutions across multiple objectives
+    (adversarial, MI, entropy). This matches the structure expected by
+    update_domain_ks which maintains a multi-objective Pareto front.
+    """
     return (
-        jnp.zeros((num_clusters, num_pixels)),  # centroids
-    ) + cluster_images
+        jnp.zeros((num_solutions, param_size)),  # best solutions (centers)
+        jnp.zeros((num_solutions, param_size)),  # stdevs
+        jnp.zeros((num_solutions, param_size)),  # scaled noises
+        jnp.full((num_solutions,), 1000.0),      # adversarial fitness
+        jnp.full((num_solutions,), 1000.0),      # MI fitness
+        jnp.full((num_solutions,), 1000.0),      # Tchebycheff fitness
+        jnp.full((num_solutions,), 1000.0),      # entropy
+    )
 
 
 def initialize_situational_ks(param_size: int):
@@ -402,151 +410,108 @@ def update_normative_ks(belief_space, fitness_scores, all_spreads, all_safety_ra
 
 @jax.jit
 def get_center_guidance(belief_space, t, center):
+    """Compute center guidance from all knowledge sources.
+
+    Uses winner-take-all KS selection based on scoring functions.
+    The KS scoring currently uses neutral slope defaults (0.0) since
+    slope tracking is not yet stored in the normative KS. Once slope
+    tracking is added, these should be replaced with real trend data.
+    """
     domain_ks = belief_space[1]
     situational_ks = belief_space[2]
     history_ks = belief_space[3]
     topographic_ks = belief_space[4]
-    normative_ks = belief_space[5]
 
-    best_fitness_variance_ratio = normative_ks[13]
-    best_fitness_adv_short_slope = normative_ks[10]
-    best_fitness_mi_short_slope = normative_ks[11]
-    entropy_short_slope = normative_ks[12]
-    stagnation_slope = normative_ks[10]
+    # Neutral slope defaults — slope tracking not yet in normative KS.
+    # These produce baseline scores so the winner-take-all still functions.
+    adv_slope_short = jnp.float32(0.0)
+    mi_slope_short = jnp.float32(0.0)
+    adv_slope_med = jnp.float32(0.0)
+    mi_slope_med = jnp.float32(0.0)
+    entropy_long = jnp.float32(0.0)
 
-    best_fitness_adv_med_slope = normative_ks[21]
-    best_fitness_mi_med_slope = normative_ks[22]
-    entropy_med_slope = normative_ks[23]
-    entropy_long_slope = normative_ks[24]
-
-    sit_score = situational_score(best_fitness_adv_short_slope, best_fitness_mi_short_slope)
-    hist_score = historical_score(entropy_long_slope, best_fitness_adv_short_slope)
-    topo_score = topographic_score(entropy_long_slope, best_fitness_adv_med_slope)
-    dom_score = domain_score(best_fitness_adv_med_slope, best_fitness_mi_med_slope, entropy_long_slope)
+    sit_score = situational_score(adv_slope_short, mi_slope_short)
+    hist_score = historical_score(entropy_long, adv_slope_short)
+    topo_score = topographic_score(entropy_long, adv_slope_med)
+    dom_score = domain_score(adv_slope_med, mi_slope_med, entropy_long)
 
     ks_weights = jnp.array([dom_score, sit_score, hist_score, topo_score])
 
-    #jax.debug.print('ks weights {} : ', ks_weights)
-    #ks_weights = update_ks_weights(
-    #    best_fitness_slope,
-    #    best_fitness_slope_mi,
-    #    norm_entropy_slope,
-    #    stagnation_slope,
-    #    best_fitness_variance_ratio,
-    #)
+    # Winner-take-all: only the highest-scoring KS contributes
+    max_index = jnp.argmax(ks_weights)
+    ks_weights = jnp.zeros(4, dtype=jnp.int32).at[max_index].set(1)
 
-    min_index = jnp.argmax(ks_weights)
-    result = jnp.zeros_like(ks_weights, dtype=jnp.int32)
-
-     
-    ks_weights = result.at[min_index].set(1)
-
+    # Extract center guidance from each KS
+    # Domain: best Pareto solution center
     domain_ks_center = domain_ks[0][0]
-    situational_ks_center = situational_ks[0] # [:,:n]
-
+    # Situational: best overall solution center
+    situational_ks_center = situational_ks[0]
+    # Historical: solution with highest entropy (most diverse)
     history_max_entropy_idx = jnp.argmax(history_ks[6])
-    
     history_ks_center = history_ks[0][history_max_entropy_idx]
+    # Topographic: use the current PGPE center (topographic KS tracks
+    # code centroids in feature space, not parameter space)
+    topographic_ks_center = center
 
-    #normative_ks_rolling_digits = normative_ks[5]
-    
-    # find all unique digits in normative_ks_rolling_digits and order them based on their first occurrence
-    #unique_digits = jnp.unique(normative_ks_rolling_digits)
-
-    # find the first digit, 0-9, missing from the unique_digits without for loop
-    #missing_digits = jnp.setdiff1d(jnp.arange(10), unique_digits)
-
-    topographic_ks_center = normative_ks[15]
-    #domain_ks_center_weighted = domain_ks_center * ks_weights[0]
-    domain_ks_center_weighted = domain_ks_center * 0
-    situational_row_averages_weighted = situational_ks_center * ks_weights[1]
-    history_row_averages_weighted = history_ks_center * ks_weights[2]
+    domain_ks_center_weighted = domain_ks_center * ks_weights[0]
+    situational_ks_center_weighted = situational_ks_center * ks_weights[1]
+    history_ks_center_weighted = history_ks_center * ks_weights[2]
     topographic_ks_center_weighted = topographic_ks_center * ks_weights[3]
 
     return (
-        jnp.sum(
-            jnp.array(
-                [
-                    domain_ks_center_weighted +
-                    situational_row_averages_weighted +
-                    history_row_averages_weighted +
-                    topographic_ks_center_weighted
-                ]
-            ),
-            axis=0,
-        )
+        domain_ks_center_weighted +
+        situational_ks_center_weighted +
+        history_ks_center_weighted +
+        topographic_ks_center_weighted
     )
 
 @jax.jit
 def get_stdev_guidance(belief_space, t, stdev):
-   
+    """Compute stdev guidance from all knowledge sources.
+
+    Uses winner-take-all KS selection based on scoring functions.
+    See get_center_guidance for notes on slope defaults.
+    """
     domain_ks = belief_space[1]
     situational_ks = belief_space[2]
     history_ks = belief_space[3]
     topographic_ks = belief_space[4]
-    normative_ks = belief_space[5]
 
-    best_fitness_variance_ratio = normative_ks[13]
-    best_fitness_adv_short_slope = normative_ks[10]
-    best_fitness_mi_short_slope = normative_ks[11]
-    entropy_short_slope = normative_ks[12]
-    stagnation_slope = normative_ks[10]
- 
-    best_fitness_adv_med_slope = normative_ks[21]
-    best_fitness_mi_med_slope = normative_ks[22]
-    entropy_med_slope = normative_ks[23]
-    entropy_long_slope = normative_ks[24]
+    # Neutral slope defaults
+    adv_slope_short = jnp.float32(0.0)
+    mi_slope_short = jnp.float32(0.0)
+    adv_slope_med = jnp.float32(0.0)
+    mi_slope_med = jnp.float32(0.0)
+    entropy_long = jnp.float32(0.0)
 
-    sit_score = situational_score(best_fitness_adv_short_slope, best_fitness_mi_short_slope)
-    hist_score = historical_score(entropy_long_slope, best_fitness_adv_short_slope)
-    topo_score = topographic_score(entropy_long_slope, best_fitness_adv_med_slope)
-    dom_score = domain_score(best_fitness_adv_med_slope, best_fitness_mi_med_slope, entropy_long_slope)
+    sit_score = situational_score(adv_slope_short, mi_slope_short)
+    hist_score = historical_score(entropy_long, adv_slope_short)
+    topo_score = topographic_score(entropy_long, adv_slope_med)
+    dom_score = domain_score(adv_slope_med, mi_slope_med, entropy_long)
 
     ks_weights = jnp.array([dom_score, sit_score, hist_score, topo_score])
 
+    max_index = jnp.argmax(ks_weights)
+    ks_weights = jnp.zeros(4, dtype=jnp.int32).at[max_index].set(1)
 
-    #ks_weights = update_ks_weights(
-    #    best_fitness_slope,
-    #    best_fitness_slope_mi,
-    #    norm_entropy_slope,
-    #    stagnation_slope,
-    #    best_fitness_variance_ratio,
-    #)
-
-    min_index = jnp.argmax(ks_weights)
-    result = jnp.zeros_like(ks_weights, dtype=jnp.int32)
-
-    ks_weights = result.at[min_index].set(1)
-
+    # Extract stdev guidance from each KS
     domain_ks_stdev = domain_ks[1][0]
-
     situational_ks_stdev = situational_ks[1]
-
     history_ks_max_entropy_idx = jnp.argmax(history_ks[6])
-
     history_ks_stdev = history_ks[1][history_ks_max_entropy_idx]
+    # Topographic: use current PGPE stdev as pass-through
+    topographic_ks_stdev = stdev
 
-    normative_ks_rolling_digits = normative_ks[5]
+    domain_ks_stdev_weighted = domain_ks_stdev * ks_weights[0]
+    situational_ks_stdev_weighted = situational_ks_stdev * ks_weights[1]
+    history_ks_stdev_weighted = history_ks_stdev * ks_weights[2]
+    topographic_ks_stdev_weighted = topographic_ks_stdev * ks_weights[3]
 
-    #unique_digits = jnp.unique(normative_ks_rolling_digits)
+    combined = (
+        domain_ks_stdev_weighted +
+        situational_ks_stdev_weighted +
+        history_ks_stdev_weighted +
+        topographic_ks_stdev_weighted
+    )
 
-    #missing_digits = jnp.setdiff1d(jnp.arange(10), unique_digits)
-    #first_missing_digit = missing_digits[0]
-
-    topographic_ks_stdev = normative_ks[16] 
-
-    domain_ks_stdev_weighted = domain_ks_stdev * 0
-    situational_row_averages_weighted = situational_ks_stdev * ks_weights[1]
-    history_row_averages_weighted = history_ks_stdev * ks_weights[2]
-
-    topographic_ks_stdev = topographic_ks_stdev * ks_weights[3]
-
-    return (jnp.sum(
-        jnp.array([
-        domain_ks_stdev_weighted
-        + situational_row_averages_weighted
-        + history_row_averages_weighted
-        + topographic_ks_stdev
-        ]
-        ), axis=0
-    )), min_index
+    return combined, max_index

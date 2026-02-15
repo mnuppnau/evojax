@@ -17,22 +17,15 @@ def initialize_belief_space(
     param_size: int,
     population_size: int,
     key: jax.Array,
-    #num_imgs_per_cluster: List[int],
-    num_imgs_per_cluster: int = 800,
     num_iterations: int = 40,
-    max_individuals: int = 6,
     features: int = 256,
     num_codes: int = 11,
-    num_clusters: int = 11,
-    num_pixels: int = 784,
 ):
-    #key, subkey = jax.random.split(key)
-    
     belief_space = (
         jnp.array([population_size]),
-        initialize_domain_ks(num_clusters, num_pixels, num_imgs_per_cluster),
+        initialize_domain_ks(param_size),
         initialize_situational_ks(param_size),
-        initialize_history_ks(param_size,num_iterations),
+        initialize_history_ks(param_size, num_iterations),
         initialize_topographic_ks(features, key, num_codes),
         initialize_normative_ks(param_size, population_size)
     )
