@@ -40,7 +40,7 @@ from evojax.util import save_checkpoint, load_checkpoint
 from jax.nn.initializers import normal as normal_init
 from jax.nn.initializers import he_normal
 from flax import linen as nn
-from torchvision import datasets
+from medmnist import OrganSMNIST
 from optax.assignment import hungarian_algorithm
 # import Tuple
 from typing import Tuple
@@ -140,7 +140,7 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     """Discriminator with attached Q-network (SpectralNorm, no BatchNorm)."""
     features: int = 64
-    q_cat: int = 10
+    q_cat: int = 11
     q_cont: int = 0  # continuous codes removed
 
     @nn.compact
@@ -601,21 +601,21 @@ def compute_real_centroids(real_features: jnp.ndarray) -> jnp.ndarray:
 
 
 @partial(jax.jit, static_argnums=(1,))
-def compute_fake_centroids(fake_features: jnp.ndarray, n_codes: int = 10) -> jnp.ndarray:
+def compute_fake_centroids(fake_features: jnp.ndarray, n_codes: int = 11) -> jnp.ndarray:
     """
     Compute centroids from interleaved fake features.
-    
+
     Features are interleaved by code:
-        - Indices 0, 10, 20, 30, ... -> code 0
-        - Indices 1, 11, 21, 31, ... -> code 1
+        - Indices 0, n_codes, 2*n_codes, ... -> code 0
+        - Indices 1, n_codes+1, 2*n_codes+1, ... -> code 1
         - etc.
-    
+
     Args:
         fake_features: (batch_size, feature_dim) e.g. (128, 256)
-        n_codes: Number of codes (default 10)
-    
+        n_codes: Number of codes (default 11)
+
     Returns:
-        (n_codes, feature_dim) e.g. (10, 256)
+        (n_codes, feature_dim) e.g. (11, 256)
     """
     batch_size = fake_features.shape[0]
     indices = jnp.arange(batch_size)
@@ -689,7 +689,7 @@ def assign_fake_to_real(
             fake_code[row_indices[i]] -> real_cluster[col_indices[i]]
     """
     real_centroids = compute_real_centroids(real_features)
-    fake_centroids = compute_fake_centroids(fake_features, n_codes=10)
+    fake_centroids = compute_fake_centroids(fake_features, n_codes=11)
     cost_matrix = compute_cost_matrix(real_centroids, fake_centroids)
     row_idx, col_idx = optimal_assignment(cost_matrix)
     return row_idx, col_idx, cost_matrix
@@ -881,7 +881,7 @@ def build_recal_latents(key, batch_size, z_dim, n_disc):
 # --- BN standing-stats pass ---
 def recalibrate_bn_stats(gen_module, params, batch_stats, key,
                          steps=12, batch_size=64,
-                         z_dim=64, n_disc=10):
+                         z_dim=63, n_disc=11):
     """
     gen_module: e.g., Generator(training=True) or Generator(use_running_average=False)
     params: generator params pytree
@@ -909,8 +909,8 @@ def sample_latent(key, shape_noise, shape_cat):
   noise = jax.random.normal(noise_key, shape_noise)
 
   # Sample categorical latent code
-  code_cat = jax.random.randint(cat_key, shape_cat, 0, 10)
-  code_cat = jax.nn.one_hot(code_cat, 10)
+  code_cat = jax.random.randint(cat_key, shape_cat, 0, 11)
+  code_cat = jax.nn.one_hot(code_cat, 11)
 
   latent = jnp.concatenate([noise, code_cat], axis=-1)
 
@@ -996,8 +996,8 @@ class Trainer(object):
         self.fake_imgs = None
         self.cat_codes = None
 
-        self.latent_dim = 64
-        self.n_classes = 10
+        self.latent_dim = 63
+        self.n_classes = 11
 
         self.decay_factor = 0.9
 
@@ -1042,12 +1042,15 @@ class Trainer(object):
 
         self._key, subkey = jax.random.split(self._key)
         
-        dataset = datasets.MNIST('./data', train=True, download=True)
-        self.data = np.expand_dims(dataset.data.numpy() / 127.5 - 1.0, axis=-1)
-       
+        dataset = OrganSMNIST(split='train', download=True, root='./data')
+        data_raw = np.array(dataset.imgs, dtype=np.float32)
+        if data_raw.ndim == 3:  # (N, 28, 28) -> (N, 28, 28, 1)
+            data_raw = np.expand_dims(data_raw, axis=-1)
+        self.data = data_raw / 127.5 - 1.0
+
         self._key, subkey = jax.random.split(self._key)
 
-        self.labels = dataset.targets.numpy()
+        self.labels = dataset.labels.flatten()
 
         # initialize the discriminator
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
@@ -1116,12 +1119,12 @@ class Trainer(object):
             self._key, noise_key = jax.random.split(self._key, 2)
 
             fixed_batch_latent = jax.random.normal(noise_key, (self.batch_size, self.latent_dim))
-            fixed_c = jnp.tile(jnp.arange(10), 7)
+            fixed_c = jnp.tile(jnp.arange(self.n_classes), 7)
             fixed_c = fixed_c[:self.batch_size]
 
-            fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, 10)], axis=-1)
+            fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, self.n_classes)], axis=-1)
 
-            self.ordered_centroids = jnp.zeros((10, 256))
+            self.ordered_centroids = jnp.zeros((self.n_classes, 256))
 
             for i in range(start_iter, self._max_iter):
 

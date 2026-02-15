@@ -115,7 +115,7 @@ def compute_real_class_means(
     return jnp.stack(mus, axis=0)
 
 @partial(jax.jit, static_argnums=(1,))
-def compute_fake_centroids(fake_features: jnp.ndarray, n_codes: int = 10) -> jnp.ndarray:
+def compute_fake_centroids(fake_features: jnp.ndarray, n_codes: int = 11) -> jnp.ndarray:
     """
     Compute centroids from interleaved fake features.
     
@@ -146,7 +146,7 @@ def compute_fake_centroids(fake_features: jnp.ndarray, n_codes: int = 10) -> jnp
 def compute_centroid_loss(
     fake_features: jnp.ndarray,
     target_centroids: jnp.ndarray,
-    n_codes: int = 10
+    n_codes: int = 11
 ) -> jnp.ndarray:
     # Truncate to largest multiple of n_codes (64 -> 60)
     batch_size = fake_features.shape[0]
@@ -164,7 +164,7 @@ def compute_centroid_loss(
 def compute_hybrid_anchor_loss(
     fake_features: jnp.ndarray,
     target_centroids: jnp.ndarray,
-    n_codes: int = 10
+    n_codes: int = 11
 ) -> jnp.ndarray:
     
     # ... (slicing and centroid computation as before) ...
@@ -194,7 +194,7 @@ def compute_hybrid_anchor_loss(
     return avg_loss + max_loss
 
 @partial(jax.jit, static_argnums=(2,))
-def compute_cosine_anchor_loss(fake_features, target_centroids, n_codes=10):
+def compute_cosine_anchor_loss(fake_features, target_centroids, n_codes=11):
     # 1. Compute Centroids as before
     batch_size = fake_features.shape[0]
     usable_size = (batch_size // n_codes) * n_codes
@@ -269,30 +269,28 @@ def build_real_by_class_mnist(
     root="./data",
     train=True,
     download=True,
+    n_classes=11,
 ):
     """
     Returns:
-        real_by_class: list of 10 JAX arrays
+        real_by_class: list of n_classes JAX arrays
                        real_by_class[c].shape == (Nc, 28, 28)
     """
-    transform = T.Compose([
-        T.ToTensor(),  # -> [1,28,28], float32 in [0,1]
-    ])
+    from medmnist import OrganSMNIST
 
-    dataset = torchvision.datasets.MNIST(
-        root=root,
-        train=train,
-        transform=transform,
-        download=download,
-    )
+    split = 'train' if train else 'test'
+    dataset = OrganSMNIST(split=split, download=download, root=root)
 
     # Buckets for each class
-    buckets = [[] for _ in range(10)]
+    buckets = [[] for _ in range(n_classes)]
 
-    for img, label in dataset:
-        # img: torch tensor [1,28,28]
-        img_np = img.squeeze(0).numpy()  # -> [28,28]
-        buckets[label].append(img_np)
+    for i in range(len(dataset)):
+        img, label = dataset[i]
+        # img: PIL Image 28x28, label: numpy array shape (1,)
+        img_np = np.array(img, dtype=np.float32) / 255.0  # -> [28,28]
+        lbl = int(label.item() if hasattr(label, 'item') else label[0])
+        if lbl < n_classes:
+            buckets[lbl].append(img_np)
 
     # Stack and convert to JAX arrays
     real_by_class = [
@@ -392,8 +390,8 @@ class Latent_Points(VectorizedTask):
     def __init__(self,
                  batch_size: int = 1024,
                  dataset_size: int = 800,  # Similar to MNIST
-                 latent_dim: int = 64,
-                 n_classes: int = 10,
+                 latent_dim: int = 63,
+                 n_classes: int = 11,
                  test: bool = False):
         self.max_steps = 1
         self.obs_shape = (latent_dim + n_classes,)
@@ -428,25 +426,29 @@ class Latent_Points(VectorizedTask):
                 batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=-1)
 
                 # For test mode, codes60 isn't strictly needed in the same way, but we construct dummies to match shape
-                codes60 = jnp.zeros((60,), dtype=jnp.int32)
+                n_ctrl = (self.batch_size // self.n_classes) * self.n_classes  # 5*11=55 for batch=64
+                codes60 = jnp.zeros((n_ctrl,), dtype=jnp.int32)
                 # Instance Noise for Discriminator stability
                 noise = jax.random.normal(con_key, (self.batch_size, 28, 28, 1)) * 0.1
             else:
                 # --- Controlled Experiment (Latent Vector Design) ---
-                # Generate 7 base vectors, repeat 10 times -> 70 items
-                z_base_fixed = jax.random.normal(noise_key, (7, self.noise_dim))
-                z_base_70 = jnp.repeat(z_base_fixed, 10, axis=0) # (70, noise_dim)
+                # Generate base vectors, repeat n_classes times -> enough to fill batch
+                n_sets = self.batch_size // self.n_classes  # 5 for batch=64, n_classes=11
+                n_ctrl = n_sets * self.n_classes             # 55 controlled samples
+                n_base = n_sets + 1  # extra to cover remainder
+                z_base_fixed = jax.random.normal(noise_key, (n_base, self.noise_dim))
+                z_base_rep = jnp.repeat(z_base_fixed, self.n_classes, axis=0)
 
                 # Slice to batch size (e.g. 64)
-                z_base = z_base_70[:self.batch_size]
+                z_base = z_base_rep[:self.batch_size]
 
-                # Construct Discrete Codes: 6 full sets of 0-9 (60 total)
-                codes60 = jnp.tile(jnp.arange(10), 6)  # (60,)
-                onehot60 = jax.nn.one_hot(codes60, self.n_classes) # (60, 10)
+                # Construct Discrete Codes: n_sets full sets of 0..n_classes-1
+                codes60 = jnp.tile(jnp.arange(self.n_classes), n_sets)  # (55,) for 5*11
+                onehot60 = jax.nn.one_hot(codes60, self.n_classes) # (55, 11)
 
-                # Fill remaining spots (e.g. 4 spots for batch 64)
-                remainder = self.batch_size - 60
-                codes_rem = jnp.tile(jnp.arange(10), (remainder // 10) + 1)[:remainder]
+                # Fill remaining spots (e.g. 9 spots for batch 64)
+                remainder = self.batch_size - n_ctrl
+                codes_rem = jnp.tile(jnp.arange(self.n_classes), (remainder // self.n_classes) + 1)[:remainder]
                 onehot_rem = jax.nn.one_hot(codes_rem, self.n_classes)
 
                 batch_cat_one_hot = jnp.concatenate([onehot60, onehot_rem], axis=0)
@@ -462,8 +464,8 @@ class Latent_Points(VectorizedTask):
                 cat_codes=batch_cat_one_hot,
                 codes60=codes60,
                 batch_stats_disc=self.batch_stats_disc,
-                hist_centroids=jnp.zeros((10, self.rff_params["W"].shape[0])),  # Placeholder, will be updated in step
-                hist_velocity=jnp.zeros((10, self.rff_params["W"].shape[0])),   # Placeholder, will be updated in step
+                hist_centroids=jnp.zeros((self.n_classes, self.rff_params["W"].shape[0])),  # Placeholder, will be updated in step
+                hist_velocity=jnp.zeros((self.n_classes, self.rff_params["W"].shape[0])),   # Placeholder, will be updated in step
                 pop_avg_spread=0.0,  # Placeholder, will be updated in step
                 pop_min_safety=1.1   # Placeholder, will be updated in step
             )
@@ -484,8 +486,8 @@ class Latent_Points(VectorizedTask):
             # Unpack Knowledge Sources
             #hist_centroids, hist_velocity = topographic_ks
             #pop_avg_spread, pop_min_safety = normative_ks
-            hist_centroids = state.hist_centroids.reshape(10,256) # Ensure correct shape
-            hist_velocity = state.hist_velocity.reshape(10,256)   # Ensure correct shape
+            hist_centroids = state.hist_centroids.reshape(self.n_classes,256) # Ensure correct shape
+            hist_velocity = state.hist_velocity.reshape(self.n_classes,256)   # Ensure correct shape
 
             pop_avg_spread = state.pop_avg_spread
             pop_min_safety = state.pop_min_safety
@@ -533,19 +535,20 @@ class Latent_Points(VectorizedTask):
             safety_ratios = pred_separation_mat / jnp.maximum(sum_spreads, 1e-6)
             
             # Mask diagonal
-            safety_ratios = safety_ratios + jnp.eye(10) * 100.0
+            safety_ratios = safety_ratios + jnp.eye(self.n_classes) * 100.0
             # --- 6. METRICS & REWARDS (Current State) ---
             
             # r_cons: Consistency with History (Anchor)
             # Compare current batch samples to historical centroids
-            q_flat60 = q_flat[:60] # Use controlled samples
+            n_ctrl = state.codes60.shape[0]  # number of controlled samples (e.g. 55 for 5*11)
+            q_flat60 = q_flat[:n_ctrl] # Use controlled samples
             topo_for_sample = hist_centroids_norm[state.codes60]
             cos_sim_hist = jnp.sum(q_flat60 * topo_for_sample, axis=-1)
             r_cons = jnp.mean(1.0 - cos_sim_hist)
             
             ## r_sense: Current Separation (Reward for existing distinctness)
             #curr_sim_mat = current_centroids @ current_centroids.T
-            #curr_sep_mat = 1.0 - curr_sim_mat + jnp.eye(10) * 100.0
+            #curr_sep_mat = 1.0 - curr_sim_mat + jnp.eye(self.n_classes) * 100.0
             #nearest_dist = jnp.min(curr_sep_mat, axis=1)
             #r_sense = jnp.mean(nearest_dist)
                        
@@ -554,7 +557,7 @@ class Latent_Points(VectorizedTask):
             # This amplifies the gradient signal for the hardest pair (e.g. 3/5)
             # instead of diluting it across all 10 codes via averaging.
             curr_sim_mat = current_centroids @ current_centroids.T
-            curr_sep_mat = 1.0 - curr_sim_mat + jnp.eye(10) * 100.0
+            curr_sep_mat = 1.0 - curr_sim_mat + jnp.eye(self.n_classes) * 100.0
             nearest_dist = jnp.min(curr_sep_mat, axis=1)
             r_min_pair = jnp.min(curr_sep_mat)
             r_sense_mean = jnp.mean(nearest_dist)

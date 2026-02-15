@@ -22,8 +22,8 @@ def initialize_belief_space(
     num_iterations: int = 40,
     max_individuals: int = 6,
     features: int = 256,
-    num_codes: int = 10,
-    num_clusters: int = 10,
+    num_codes: int = 11,
+    num_clusters: int = 11,
     num_pixels: int = 784,
 ):
     #key, subkey = jax.random.split(key)

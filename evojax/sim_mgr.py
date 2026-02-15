@@ -282,16 +282,16 @@ class SimManager(object):
                     step_once_gen_fn, max_steps):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
-            disc_logits = jnp.zeros((256,64,10))
+            disc_logits = jnp.zeros((256,64,11))
             mean_var_fake = jnp.zeros(self._pop_size//2) #//2
-            sum_per_cat_code = jnp.zeros((self._pop_size//2,10, 256))
-            count_per_cat_code = jnp.zeros((self._pop_size//2,10))
+            sum_per_cat_code = jnp.zeros((self._pop_size//2,11, 256))
+            count_per_cat_code = jnp.zeros((self._pop_size//2,11))
             r_cons = jnp.zeros(self._pop_size//2)
             r_sense = jnp.zeros(self._pop_size//2)
             r_intra = jnp.zeros(self._pop_size//2)
             normative_penalty = jnp.zeros(self._pop_size//2)
-            safety_ratios = jnp.zeros((self._pop_size//2, 10,10))
-            spreads = jnp.zeros((self._pop_size//2, 10,1))
+            safety_ratios = jnp.zeros((self._pop_size//2, 11,11))
+            spreads = jnp.zeros((self._pop_size//2, 11,1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params, t,
               accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, normative_penalty, safety_ratios, spreads, valid_masks),

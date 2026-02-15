@@ -319,7 +319,7 @@ class PGPE(NEAlgorithm):
         self._opt_update = jax.jit(opt_update)
         self._get_params = jax.jit(get_params)
 
-        self._arr = jnp.arange(10)
+        self._arr = jnp.arange(11)
         self._key = random.PRNGKey(seed=seed)
         self._key, self._subkey = random.split(self._key)
         self._solutions = None
@@ -810,8 +810,8 @@ class PGPE(NEAlgorithm):
         #fitness_scores = fitness_adv + fitness_mi*0.18 + fitness_con*0.013 # + r_sense - normative_penalty*w_norm - r_cons*0.1
         #else:#if self._t < 160000:
         #cultural_score = r_sense + r_intra + r_cons + fitness_con
-        spreads = spreads.reshape(512, 10, 1)
-        safety_ratios = safety_ratios.reshape(512, 10, 10)
+        spreads = spreads.reshape(512, 11, 1)
+        safety_ratios = safety_ratios.reshape(512, 11, 11)
                 
         self.belief_space = update_normative_ks(
             self.belief_space,

@@ -53,8 +53,8 @@ class CNN(nn.Module):
 def generate_latent_points(rng, latent_dim, n_samples):
       rng, latent_rng, cat_rng = jrandom.split(rng, num=3)
       latent_inputs = jrandom.normal(latent_rng, (n_samples, latent_dim))
-      cat_codes = jrandom.randint(cat_rng, (n_samples,), 0, 10)
-      cat_codes = nn.one_hot(cat_codes, 10) 
+      cat_codes = jrandom.randint(cat_rng, (n_samples,), 0, 11)
+      cat_codes = nn.one_hot(cat_codes, 11) 
       z_input = jnp.concatenate((latent_inputs, cat_codes), axis=1)
     
       return z_input, cat_codes
@@ -247,7 +247,7 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     """Discriminator with attached Q-network (SpectralNorm, no BatchNorm)."""
     features: int = 64
-    q_cat: int = 10
+    q_cat: int = 11
     train: bool = False
     q_cont: int = 2  # set to 0 if you only want categorical codes
 
@@ -614,7 +614,7 @@ class QNetwork(nn.Module):
     features: int = 64
     training: bool = True
 
-    q_cat: int = 10
+    q_cat: int = 11
 
     @nn.compact
     def __call__(self, x):

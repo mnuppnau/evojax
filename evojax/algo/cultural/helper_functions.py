@@ -10,7 +10,7 @@ from jax.lax import scan, fori_loop
 
 @jit
 def initialize_centroids(embeddings, k, key):
-    indices = random.choice(key, jnp.arange(embeddings.shape[0]), shape=(10,), replace=False)
+    indices = random.choice(key, jnp.arange(embeddings.shape[0]), shape=(k,), replace=False)
     return jnp.take(embeddings, indices, axis=0)
 
 @jit
@@ -29,7 +29,7 @@ def update_centroids(embeddings, assignments, k):
         masked_embeddings = jnp.where(mask[:, None], embeddings, 0)
         return jnp.sum(masked_embeddings, axis=0) / jnp.sum(mask)
 
-    return vmap(update_centroid)(jnp.arange(10))
+    return vmap(update_centroid)(jnp.arange(k))
 
 def kmeans_step(state, _):
     centroids, embeddings, k = state

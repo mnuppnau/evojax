@@ -24,26 +24,13 @@ from evojax.algo.cultural.helper_functions import (
 
 
 def initialize_domain_ks(num_clusters: int, num_pixels: int, num_images_per_cluster: int):
-    return (
-        jnp.zeros((num_clusters, num_pixels)),  # mnist centroids
-        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 0
-        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 1
-        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 2
-        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 3
-        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 4
-        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 5
-        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 6
-        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 7
-        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 8
-        jnp.zeros((num_images_per_cluster, num_pixels)),  # images in cluster 9
-        #jnp.zeros((20,param_size)),  # parameter sets
-        #jnp.zeros((20,param_size)),  # standard deviations
-        #jnp.zeros((20,param_size)),  # scaled noises
-        #jnp.full((20,),1000),  # fitness values, adversarial
-        #jnp.full((20,),1000),  # fitness values, mutual information
-        #jnp.full((20,),1000),  # Tchebyschev fitness values
-        #jnp.full((20,),1000),  # entropy
+    cluster_images = tuple(
+        jnp.zeros((num_images_per_cluster, num_pixels))
+        for _ in range(num_clusters)
     )
+    return (
+        jnp.zeros((num_clusters, num_pixels)),  # centroids
+    ) + cluster_images
 
 
 def initialize_situational_ks(param_size: int):
@@ -77,7 +64,7 @@ def initialize_history_ks(
 
 
 def initialize_topographic_ks(
-    features: int, key: jax.Array, num_codes: int = 10
+    features: int, key: jax.Array, num_codes: int = 11
 ):
         random_matrix = jax.random.normal(key, (features, num_codes))
         q_matrix, _ = jnp.linalg.qr(random_matrix)
@@ -97,8 +84,8 @@ def initialize_topographic_ks(
 
 def initialize_normative_ks(param_size: int, pop_size: int = 64):
     return (
-        jnp.ones((pop_size,10,1)),  # pop_avg_spread
-        jnp.ones((pop_size,10,10)),  # pop_min_safety
+        jnp.ones((pop_size,11,1)),  # pop_avg_spread
+        jnp.ones((pop_size,11,11)),  # pop_min_safety
 
     )
 
