@@ -324,9 +324,16 @@ def update_topographic_ks(belief_space, avg_per_code, momentum=0.7):
     hist_velocity = topographic_ks[1]         # Velocity at t-1 (Need to add this to state!)
 
     # 2. Update Position (EMA with configurable momentum)
+    # Detect uninitialized state: velocity is all zeros after initialize_topographic_ks.
+    # On first call (or after checkpoint restart), snap centroids to avg_per_code directly
+    # so they reflect actual digit clusters, then use configured momentum afterward.
+    is_initialized = jnp.any(hist_velocity != 0.0)
+    effective_momentum = jnp.where(is_initialized, momentum, 0.0)
+
     # momentum=0.7 (default): 30% new data blended in each step (fast adaptation)
     # momentum=0.97+: centroids nearly frozen (prevents drift of locked codes)
-    updated_hist_avg_per_code = momentum * hist_avg_per_code + (1.0 - momentum) * avg_per_code
+    # momentum=0.0 (first call): snap to current avg_per_code
+    updated_hist_avg_per_code = effective_momentum * hist_avg_per_code + (1.0 - effective_momentum) * avg_per_code
 
     # 3. Calculate Trend/Velocity (The "Prediction" Component)
     # How much did the centroid move this step?
