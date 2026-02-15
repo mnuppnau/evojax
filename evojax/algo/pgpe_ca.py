@@ -784,7 +784,8 @@ class PGPE(NEAlgorithm):
         # Separation: higher than before (0.5 vs 0.3) - the main lever for unseparated codes
         #w_sense = 0.5 * ca_weight
         transition = jnp.clip((self._t - 195000) / 5000, 0.0, 1.0)
-        w_mi = 0.24 - 0.16 * transition       # 0.24 → 0.08
+        #w_mi = 0.24 - 0.16 * transition       # 0.24 → 0.08
+        w_mi = 0.15 + jnp.clip((self._t - 5000) / 80000, 0.0, 0.30)  # 0.15 → 0.45 ramp-up
         w_sense = (0.5 + 0.2 * transition) * ca_weight  # 0.5 → 0.7
 
         # Anchoring: prevent the 4 locked codes from drifting
@@ -863,6 +864,7 @@ class PGPE(NEAlgorithm):
                 max_change=self._stdev_max_change,
                 grad=grad_stdev,
             )
+        self._stdev = jnp.maximum(self._stdev, 0.005)  # Floor: prevent exploration collapse
 
         #self.belief_space = update_knowledge_sources(
         #    self.belief_space,
