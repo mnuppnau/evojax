@@ -502,7 +502,8 @@ class PGPE(NEAlgorithm):
 
 
         # CA activation schedule (used for topographic momentum and fitness weights)
-        ca_weight = jnp.clip((self._t - 170000) / 170000, 0.0, 1.0)
+        # Must match the ca_weight used for fitness weights below.
+        ca_weight = jnp.clip((self._t - 115000) / 30000, 0.0, 1.0)
 
         # Centroid momentum: when CA is active, nearly freeze topographic centroids
         # to prevent locked codes from drifting. 0.7 (early) → 0.97 (full CA).
@@ -775,9 +776,6 @@ class PGPE(NEAlgorithm):
         #w_cons = 0.1 * ca_weight        # Penalize drift
         #w_norm = 0.04 * ca_weight       # Penalize violation (Keep this small!)
 
-        # CA starts NOW, not at 170k. Ramp over 30k iterations.
-        ca_weight = jnp.clip((self._t - 115000) / 30000, 0.0, 1.0)
-        
         # MI: gentle ramp from 0.16 → 0.25 over 50k
         # (stronger MI to push remaining codes, CA anchors prevent quality loss)
         mi_ramp = jnp.clip((self._t - 120000) / 50000, 0.0, 1.0)
