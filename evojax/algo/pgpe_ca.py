@@ -501,8 +501,15 @@ class PGPE(NEAlgorithm):
         #w_mi = 1 - w_adv
 
 
+        # CA activation schedule (used for topographic momentum and fitness weights)
+        ca_weight = jnp.clip((self._t - 170000) / 170000, 0.0, 1.0)
+
+        # Centroid momentum: when CA is active, nearly freeze topographic centroids
+        # to prevent locked codes from drifting. 0.7 (early) → 0.97 (full CA).
+        topo_momentum = 0.7 + 0.27 * ca_weight
+
         self.belief_space = update_topographic_ks(
-            self.belief_space, avg_per_code
+            self.belief_space, avg_per_code, topo_momentum
         )
        
 
@@ -741,11 +748,6 @@ class PGPE(NEAlgorithm):
         #    #- (normative_penalty * w_norm)    # Stage 2: Enforce safety/spread limits
         #    #- (r_cons * w_cons)               # Stage 2: Anchor distinct digits
         #)
-        # 1. Define the Schedule
-        # ramp_start: 140k. ramp_end: 160k.
-        # We fade CA in over 20k iterations so we don't shock the population.
-        #ca_weight = jnp.clip((self._t - 170000) / 170000, 0.0, 1.0)
-
         # 2. Define the Metric Weights
         # Signal analysis at 183k (pop std): adv=0.0465, mi=0.0004, con=0.0198,
         # r_sense=0.0092, r_cons=0.0012, normative=0.0007

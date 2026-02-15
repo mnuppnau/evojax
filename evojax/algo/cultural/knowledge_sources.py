@@ -316,21 +316,22 @@ def update_history_ks(
     return updated_belief_space_history
 
 @jax.jit
-def update_topographic_ks(belief_space, avg_per_code):
+def update_topographic_ks(belief_space, avg_per_code, momentum=0.7):
     topographic_ks = belief_space[4]
-    
+
     # 1. Retrieve History
     hist_avg_per_code = topographic_ks[0]     # Position at t-1
     hist_velocity = topographic_ks[1]         # Velocity at t-1 (Need to add this to state!)
-    
-    # 2. Update Position (Standard EMA)
-    # Your current logic: 0.6 history + 0.4 new
-    updated_hist_avg_per_code = 0.7 * hist_avg_per_code + 0.3 * avg_per_code
-    
+
+    # 2. Update Position (EMA with configurable momentum)
+    # momentum=0.7 (default): 30% new data blended in each step (fast adaptation)
+    # momentum=0.97+: centroids nearly frozen (prevents drift of locked codes)
+    updated_hist_avg_per_code = momentum * hist_avg_per_code + (1.0 - momentum) * avg_per_code
+
     # 3. Calculate Trend/Velocity (The "Prediction" Component)
     # How much did the centroid move this step?
     current_velocity = updated_hist_avg_per_code - hist_avg_per_code
-    
+
     # Smooth the velocity to ignore jitter
     updated_velocity = 0.8 * hist_velocity + 0.2 * current_velocity
     
