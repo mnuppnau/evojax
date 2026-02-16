@@ -92,7 +92,7 @@ def main(config):
     test_task_mnist = MNIST(batch_size=config.batch_size, test=True)
 
     belief_space_key = random.PRNGKey(config.seed+12)
-    belief_space = initialize_belief_space(population_size=config.pop_size, param_size=policy_gen.num_params, key=belief_space_key)
+    belief_space = initialize_belief_space(population_size=config.pop_size, param_size=policy_gen.num_params_hypernet, key=belief_space_key)
 
     train_task_latent = Latent_Points(batch_size=config.batch_size, test=False)
     test_task_latent = Latent_Points(batch_size=config.batch_size, test=True)
