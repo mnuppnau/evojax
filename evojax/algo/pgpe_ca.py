@@ -347,10 +347,6 @@ class PGPE(NEAlgorithm):
     def ask(self) -> jnp.ndarray:
         center, stdev = self._center, self._stdev
 
-        # CA activation: ramp from 0→1 between iterations 115k-145k
-        # (matches the ca_weight schedule in tell())
-        ca_weight = jnp.clip((self._t - 115000) / 30000, 0.0, 1.0)
-
         # Get CA-guided center/stdev from the belief space.
         # Knowledge Sources score themselves based on metric slopes and
         # contribute proportionally (CATGAME-style weighted distribution).
@@ -360,16 +356,14 @@ class PGPE(NEAlgorithm):
         ca_center = ca_center.flatten()
         ca_stdev = jnp.clip(ca_stdev.flatten(), 1e-4, 1e1)
 
-        # Blend CA guidance into the PGPE sampling distribution.
-        # At 5% max influence the CA nudges rather than overrides — PGPE
-        # gradients in tell() remain the primary driver, while the belief
-        # space provides directional hints from accumulated domain knowledge
-        # about GAN training dynamics (mode collapse, stagnation, etc.).
-        blend = 0.05 * ca_weight
-
-        # Guard: skip blend if archives are still uninitialized (all zeros)
+        # Blend CA guidance into the PGPE sampling distribution from the start.
+        # The CA's primary purpose is preventing mode collapse, which on complex
+        # datasets like OrganSMNIST happens almost immediately — so waiting for
+        # a late activation ramp defeats the purpose.  The 5% blend is gentle
+        # enough to activate as soon as KS archives have real data (after the
+        # first tell() call).  The has_ca_data guard handles the natural warmup.
         has_ca_data = jnp.any(ca_center != 0.0)
-        blend = blend * jnp.float32(has_ca_data)
+        blend = 0.05 * jnp.float32(has_ca_data)
 
         center = (1.0 - blend) * center + blend * ca_center
         stdev = (1.0 - blend) * stdev + blend * ca_stdev
