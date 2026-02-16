@@ -40,6 +40,8 @@ from evojax.algo.cultural.knowledge_sources import (
     update_situational_ks,
     update_history_ks,
     update_normative_ks,
+    update_metric_history,
+    compute_metric_slopes,
 )
 
 from evojax.algo.cultural.helper_functions import non_dominated_sort_lax
@@ -835,15 +837,27 @@ class PGPE(NEAlgorithm):
         best_fitness_adv = jnp.array([fitness_adv.flatten()[best_idx]])
         best_fitness_mi = jnp.array([fitness_mi.flatten()[best_idx]])
         best_fitness_combined = jnp.array([fitness_scores.flatten()[best_idx]])
+        best_r_sense = jnp.array([r_sense.flatten()[best_idx]])
+        best_r_cons = jnp.array([r_cons.flatten()[best_idx]])
 
         # Population-level entropy proxy from disc_logits (averaged across individuals and samples)
         mean_disc_logit = jnp.mean(disc_logits, axis=(0, 1))  # (11,) avg class probs
+        pop_entropy = jnp.sum(-jnp.log(mean_disc_logit + 1e-8) * mean_disc_logit)
 
-        # Domain KS: maintains Pareto front of non-dominated solutions
+        # Update metric history (rolling buffer for slope computation)
+        self.belief_space = update_metric_history(
+            self.belief_space,
+            jnp.max(fitness_adv),
+            jnp.max(fitness_mi),
+            pop_entropy,
+            jnp.max(r_sense)
+        )
+
+        # Domain KS: Pareto front with GAN diagnostic metadata (r_sense, r_cons)
         self.belief_space = update_domain_ks(
             self.belief_space, best_solution, self._stdev,
             best_scaled_noise, best_fitness_adv, best_fitness_mi,
-            best_fitness_combined, mean_disc_logit
+            best_fitness_combined, mean_disc_logit, best_r_sense, best_r_cons
         )
 
         # Situational KS: tracks the single best solution (most exploitative)

@@ -9,6 +9,7 @@ from evojax.algo.cultural.knowledge_sources import (
     initialize_history_ks,
     initialize_topographic_ks,
     initialize_normative_ks,
+    initialize_metric_history,
     get_center_guidance,
     get_stdev_guidance,
 )
@@ -29,12 +30,13 @@ def initialize_belief_space(
     #key, subkey = jax.random.split(key)
     
     belief_space = (
-        jnp.array([population_size]),
-        initialize_domain_ks(param_size),
-        initialize_situational_ks(param_size),
-        initialize_history_ks(param_size,num_iterations),
-        initialize_topographic_ks(features, key, num_codes),
-        initialize_normative_ks(param_size, population_size)
+        jnp.array([population_size]),       # [0] meta
+        initialize_domain_ks(param_size),    # [1] domain KS
+        initialize_situational_ks(param_size),  # [2] situational KS
+        initialize_history_ks(param_size, num_iterations),  # [3] historical KS
+        initialize_topographic_ks(features, key, num_codes),  # [4] topographic KS
+        initialize_normative_ks(param_size, population_size),  # [5] normative KS
+        initialize_metric_history(),         # [6] metric history (slopes)
     )
     return belief_space
 

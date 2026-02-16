@@ -23,15 +23,35 @@ from evojax.algo.cultural.helper_functions import (
 )
 
 
+def initialize_metric_history(window_size: int = 100):
+    """Rolling window for computing metric slopes across generations.
+
+    Tracks best_fitness_adv, best_fitness_mi, and entropy per generation.
+    Slopes are computed over short (last 20), medium (last 50), and long
+    (full window) horizons to detect stagnation, mode collapse, and
+    improvement trends that drive KS scoring and Domain KS adaptation.
+    """
+    return (
+        jnp.zeros((window_size,)),   # best_fitness_adv per generation
+        jnp.zeros((window_size,)),   # best_fitness_mi per generation
+        jnp.zeros((window_size,)),   # entropy per generation
+        jnp.zeros((window_size,)),   # best_r_sense per generation
+        jnp.int32(0),                # write_index (circular buffer position)
+        jnp.int32(0),                # count (number of entries written, capped at window_size)
+    )
+
+
 def initialize_domain_ks(param_size: int, num_elites: int = 20):
     return (
-        jnp.zeros((num_elites, param_size)),  # best solutions (parameter sets)
-        jnp.zeros((num_elites, param_size)),  # stdevs
-        jnp.zeros((num_elites, param_size)),  # scaled noises
-        jnp.full((num_elites,), 1000.0),      # fitness values, adversarial
-        jnp.full((num_elites,), 1000.0),      # fitness values, mutual information
-        jnp.full((num_elites,), 1000.0),      # Tchebycheff fitness values
-        jnp.full((num_elites,), 1000.0),      # entropy
+        jnp.zeros((num_elites, param_size)),  # [0] best solutions (parameter sets)
+        jnp.zeros((num_elites, param_size)),  # [1] stdevs
+        jnp.zeros((num_elites, param_size)),  # [2] scaled noises
+        jnp.full((num_elites,), 1000.0),      # [3] fitness values, adversarial
+        jnp.full((num_elites,), 1000.0),      # [4] fitness values, mutual information
+        jnp.full((num_elites,), 1000.0),      # [5] combined fitness values
+        jnp.full((num_elites,), 1000.0),      # [6] entropy
+        jnp.zeros((num_elites,)),             # [7] r_sense (code separation quality)
+        jnp.zeros((num_elites,)),             # [8] r_cons (constraint satisfaction)
     )
 
 
@@ -92,80 +112,128 @@ def initialize_normative_ks(param_size: int, pop_size: int = 64):
     )
 
 @jax.jit
+def update_metric_history(belief_space, best_fitness_adv, best_fitness_mi, entropy, best_r_sense):
+    """Append one generation's key metrics to the circular buffer.
+
+    Args:
+        belief_space: full belief space tuple (metric_history is element [6])
+        best_fitness_adv: scalar, best adversarial fitness this generation
+        best_fitness_mi: scalar, best MI fitness this generation
+        entropy: scalar, population-level entropy this generation
+        best_r_sense: scalar, best code separation this generation
+    """
+    metric_history = belief_space[6]
+    adv_buf, mi_buf, ent_buf, sense_buf, write_idx, count = metric_history
+    window_size = adv_buf.shape[0]
+
+    adv_buf = adv_buf.at[write_idx].set(best_fitness_adv)
+    mi_buf = mi_buf.at[write_idx].set(best_fitness_mi)
+    ent_buf = ent_buf.at[write_idx].set(entropy)
+    sense_buf = sense_buf.at[write_idx].set(best_r_sense)
+    new_idx = (write_idx + 1) % window_size
+    new_count = jnp.minimum(count + 1, window_size)
+
+    updated_metric_history = (adv_buf, mi_buf, ent_buf, sense_buf, new_idx, new_count)
+    updated_belief_space = belief_space[:6] + (updated_metric_history,)
+    return updated_belief_space
+
+
+@jax.jit
+def compute_metric_slopes(belief_space):
+    """Compute short/medium/long slopes from the metric history circular buffer.
+
+    Returns a dict-like tuple of 5 slopes used by KS scoring functions:
+        (adv_short_slope, mi_short_slope, adv_med_slope, mi_med_slope, entropy_long_slope)
+
+    Short = last 20 generations, Medium = last 50, Long = full window (100).
+    Uses least-squares linear regression (same as existing calculate_slope).
+    Returns 0.0 for any window that doesn't have enough data yet.
+    """
+    metric_history = belief_space[6]
+    adv_buf, mi_buf, ent_buf, sense_buf, write_idx, count = metric_history
+    window_size = adv_buf.shape[0]
+
+    def _slope_over_last_n(buf, n, write_idx, count):
+        """Compute slope over the last n entries of a circular buffer."""
+        has_enough = count >= n
+        # Extract the last n entries in chronological order
+        indices = (jnp.arange(n) + write_idx - n) % window_size
+        vals = buf[indices]
+        x = jnp.arange(n, dtype=jnp.float32)
+        mean_x = jnp.mean(x)
+        mean_y = jnp.mean(vals)
+        numer = jnp.sum((x - mean_x) * (vals - mean_y))
+        denom = jnp.sum((x - mean_x) ** 2) + 1e-12
+        slope = numer / denom
+        return jnp.where(has_enough, slope, 0.0)
+
+    adv_short  = _slope_over_last_n(adv_buf, 20, write_idx, count)
+    mi_short   = _slope_over_last_n(mi_buf, 20, write_idx, count)
+    adv_med    = _slope_over_last_n(adv_buf, 50, write_idx, count)
+    mi_med     = _slope_over_last_n(mi_buf, 50, write_idx, count)
+    # Long slope uses full window (100 gens); returns 0 if count < 100
+    ent_long   = _slope_over_last_n(ent_buf, 100, write_idx, count)
+
+    return (adv_short, mi_short, adv_med, mi_med, ent_long)
+
+
+@jax.jit
 def update_domain_ks(
-    belief_space, best_solution, stdev, best_scaled_noise, best_fitness_adv, best_fitness_mi, best_fitness_tchebycheff, disc_logit
+    belief_space, best_solution, stdev, best_scaled_noise,
+    best_fitness_adv, best_fitness_mi, best_fitness_combined,
+    disc_logit, best_r_sense, best_r_cons
 ):
+    """Update Domain KS: Pareto archive with GAN diagnostic metadata.
+
+    Maintains 20 non-dominated solutions ranked by [|adv|, |mi|, |entropy|].
+    Each archived solution also tracks r_sense and r_cons for failure-mode
+    detection in the adaptive guidance selection.
+    """
     domain_ks = belief_space[1]
+    (best_solutions, stdevs, best_scaled_noises,
+     best_fitnesses_adv, best_fitnesses_mi, best_fitnesses_combined,
+     entropies, r_senses, r_conses) = domain_ks
 
-    best_solutions, stdevs, best_scaled_noises, best_fitnesses_adversarial, best_fitnesses_mutual_info, best_fitnesses_tchebycheff, entropies = domain_ks
+    # Append new solution
+    updated_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    updated_stdevs = jnp.concatenate([stdevs, stdev.reshape(1, -1)], axis=0)
+    updated_noises = jnp.concatenate([best_scaled_noises, best_scaled_noise], axis=0)
+    updated_adv = jnp.concatenate([best_fitnesses_adv, best_fitness_adv.flatten()], axis=0)
+    updated_mi = jnp.concatenate([best_fitnesses_mi, best_fitness_mi.flatten()], axis=0)
+    updated_combined = jnp.concatenate([best_fitnesses_combined, best_fitness_combined.flatten()], axis=0)
 
-    updated_best_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
+    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+    updated_entropy = jnp.concatenate([entropies, entropy], axis=0)
 
-    stdev = stdev.reshape(1, stdev.shape[0])
-    updated_stdevs = jnp.concatenate([stdevs, stdev], axis=0)
+    updated_r_sense = jnp.concatenate([r_senses, best_r_sense.flatten()], axis=0)
+    updated_r_cons = jnp.concatenate([r_conses, best_r_cons.flatten()], axis=0)
 
-    updated_best_scaled_noises = jnp.concatenate([best_scaled_noises, best_scaled_noise], axis=0)
-
-    updated_best_fitness_adversarial = jnp.concatenate(
-        [best_fitnesses_adversarial, best_fitness_adv.flatten()], axis=0
-    )
-
-    updated_best_fitness_mutual_info = jnp.concatenate(
-        [best_fitnesses_mutual_info, best_fitness_mi.flatten()], axis=0
-    )
-
-    updated_best_fitness_tchebycheff = jnp.concatenate(
-        [best_fitnesses_tchebycheff, best_fitness_tchebycheff.flatten()], axis=0
-    )
-
-    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)]) 
-
-    #entropy = entropy.reshape(1, -1)
-
-    updated_entropy = jnp.concatenate(
-        [entropies, entropy], axis=0
-    )
-
-    objectives = jnp.stack([abs(updated_best_fitness_adversarial), abs(updated_best_fitness_mutual_info), abs(updated_entropy) ], axis=1)
-
+    # Non-dominated sort on [|adv|, |mi|, |entropy|]
+    objectives = jnp.stack([
+        jnp.abs(updated_adv),
+        jnp.abs(updated_mi),
+        jnp.abs(updated_entropy)
+    ], axis=1)
     ranks = non_dominated_sort_lax(objectives)
 
-    # Select the top 20 non-dominated solutions
+    # Select top 20 by Pareto rank, tie-break by adversarial fitness
     num_selected = 20
-
-    order = jnp.lexsort((-updated_best_fitness_adversarial, ranks))
-
-    # select indices based on order
-    selected_indices = order[:num_selected]
-    #selected_indices = jnp.argsort(ranks)[:num_selected]
-
-    selected_best_solutions = updated_best_solutions[selected_indices]
-
-    selected_stdevs = updated_stdevs[selected_indices]
-
-    selected_best_scaled_noises = updated_best_scaled_noises[selected_indices]    
-    selected_best_fitness_adversarial = updated_best_fitness_adversarial[selected_indices]
-
-    selected_best_fitness_mutual_info = updated_best_fitness_mutual_info[selected_indices]
-
-    selected_best_fitness_tchebycheff = updated_best_fitness_tchebycheff[selected_indices]
-
-    selected_entropy = updated_entropy[selected_indices]
+    order = jnp.lexsort((-updated_adv, ranks))
+    selected = order[:num_selected]
 
     updated_domain_ks = (
-        selected_best_solutions,
-        selected_stdevs,
-        selected_best_scaled_noises,
-        selected_best_fitness_adversarial,
-        selected_best_fitness_mutual_info,
-        selected_best_fitness_tchebycheff,
-        selected_entropy,
+        updated_solutions[selected],
+        updated_stdevs[selected],
+        updated_noises[selected],
+        updated_adv[selected],
+        updated_mi[selected],
+        updated_combined[selected],
+        updated_entropy[selected],
+        updated_r_sense[selected],
+        updated_r_cons[selected],
     )
 
-    updated_belief_space_domain = (
-        belief_space[:1] + (updated_domain_ks,) + belief_space[2:]
-    )
-    return updated_belief_space_domain
+    return belief_space[:1] + (updated_domain_ks,) + belief_space[2:]
 
 @jax.jit
 def update_situational_ks(
@@ -397,10 +465,47 @@ def update_normative_ks(belief_space, fitness_scores, all_spreads, all_safety_ra
     )
 
     updated_belief_space_normative = (
-        belief_space[:5] + (updated_normative_ks,)
+        belief_space[:5] + (updated_normative_ks,) + belief_space[6:]
     )
 
     return updated_belief_space_normative
+
+@jax.jit
+def _domain_ks_select_index(domain_ks, entropy_long_slope, adv_med_slope):
+    """Adaptive buffer: select which archived solution Domain KS suggests.
+
+    The Domain KS embodies knowledge about GAN training dynamics.  Instead of
+    always returning the first Pareto solution, it detects the current training
+    regime and picks the most appropriate archived solution:
+
+    - Mode collapse risk (entropy dropping): pick highest-entropy solution
+      to recover diversity.
+    - Stagnation (adv not improving): pick highest r_sense solution to
+      explore code separation — a different axis of improvement.
+    - Normal progress: pick solution with best combined fitness (exploit
+      the domain's governing rules).
+    """
+    entropies = domain_ks[6]     # (20,)
+    r_senses = domain_ks[7]      # (20,)
+    combined = domain_ks[5]      # (20,)
+
+    # Detect mode collapse: entropy slope is negative (dropping)
+    collapse_risk = entropy_long_slope < -0.005
+
+    # Detect stagnation: adversarial slope is near zero (no medium-term improvement)
+    stagnation = jnp.abs(adv_med_slope) < 0.001
+
+    # Select index based on detected regime
+    # Priority: collapse > stagnation > normal
+    # (collapse is the most dangerous failure mode)
+    idx_entropy = jnp.argmax(entropies)      # highest entropy (recover diversity)
+    idx_sense = jnp.argmax(r_senses)         # best separation (explore new axis)
+    idx_combined = jnp.argmax(combined)      # best overall (exploit)
+
+    idx = jnp.where(collapse_risk, idx_entropy,
+          jnp.where(stagnation, idx_sense, idx_combined))
+    return idx
+
 
 @jax.jit
 def get_center_guidance(belief_space, t, center):
@@ -410,18 +515,15 @@ def get_center_guidance(belief_space, t, center):
     topographic_ks = belief_space[4]
     normative_ks = belief_space[5]
 
-    # TODO: Replace with proper metric history tracking (step 2).
-    # Currently using neutral defaults so KS scores return moderate values.
-    best_fitness_adv_short_slope = jnp.float32(0.0)
-    best_fitness_mi_short_slope = jnp.float32(0.0)
-    best_fitness_adv_med_slope = jnp.float32(0.0)
-    best_fitness_mi_med_slope = jnp.float32(0.0)
-    entropy_long_slope = jnp.float32(0.0)
+    # Compute slopes from metric history
+    slopes = compute_metric_slopes(belief_space)
+    adv_short, mi_short, adv_med, mi_med, ent_long = slopes
 
-    sit_score = situational_score(best_fitness_adv_short_slope, best_fitness_mi_short_slope)
-    hist_score = historical_score(entropy_long_slope, best_fitness_adv_short_slope)
-    topo_score = topographic_score(entropy_long_slope, best_fitness_adv_med_slope)
-    dom_score = domain_score(best_fitness_adv_med_slope, best_fitness_mi_med_slope, entropy_long_slope)
+    # Score each KS based on current training dynamics
+    sit_score = situational_score(adv_short, mi_short)
+    hist_score = historical_score(ent_long, adv_short)
+    topo_score = topographic_score(ent_long, adv_med)
+    dom_score = domain_score(adv_med, mi_med, ent_long)
 
     ks_weights = jnp.array([dom_score, sit_score, hist_score, topo_score])
 
@@ -429,27 +531,28 @@ def get_center_guidance(belief_space, t, center):
     max_index = jnp.argmax(ks_weights)
     ks_weights = jnp.zeros_like(ks_weights, dtype=jnp.int32).at[max_index].set(1)
 
-    # Extract center suggestions from each KS
-    domain_ks_center = domain_ks[0][0]               # Best Pareto solution
-    situational_ks_center = situational_ks[0]         # Current best
+    # Domain KS: adaptive buffer selection (failure-mode aware)
+    domain_idx = _domain_ks_select_index(domain_ks, ent_long, adv_med)
+    domain_ks_center = domain_ks[0][domain_idx]
+
+    # Situational KS: current best (most exploitative)
+    situational_ks_center = situational_ks[0]
+
+    # Historical KS: best historical solution by entropy (recover diversity)
     history_max_entropy_idx = jnp.argmax(history_ks[6])
-    history_ks_center = history_ks[0][history_max_entropy_idx]  # Historical best by entropy
+    history_ks_center = history_ks[0][history_max_entropy_idx]
 
-    # Weighted combination
-    domain_ks_center_weighted = domain_ks_center * ks_weights[0]
-    situational_row_averages_weighted = situational_ks_center * ks_weights[1]
-    history_row_averages_weighted = history_ks_center * ks_weights[2]
-    # TODO: Topographic KS center guidance needs proper implementation (step 2).
-    # Topographic KS tracks centroids in output space, not parameter space,
-    # so it cannot directly suggest a center. Using zeros for now.
-    topographic_ks_center_weighted = jnp.zeros_like(domain_ks_center) * ks_weights[3]
+    # Weighted combination (winner-take-all makes only one non-zero)
+    domain_weighted = domain_ks_center * ks_weights[0]
+    situational_weighted = situational_ks_center * ks_weights[1]
+    history_weighted = history_ks_center * ks_weights[2]
+    # Topographic KS operates in output space, not parameter space.
+    # Its influence is through centroid tracking and fitness shaping,
+    # not direct center guidance.
+    topo_weighted = jnp.zeros_like(domain_ks_center) * ks_weights[3]
 
-    return (
-        domain_ks_center_weighted +
-        situational_row_averages_weighted +
-        history_row_averages_weighted +
-        topographic_ks_center_weighted
-    )
+    return domain_weighted + situational_weighted + history_weighted + topo_weighted
+
 
 @jax.jit
 def get_stdev_guidance(belief_space, t, stdev):
@@ -459,42 +562,34 @@ def get_stdev_guidance(belief_space, t, stdev):
     topographic_ks = belief_space[4]
     normative_ks = belief_space[5]
 
-    # TODO: Replace with proper metric history tracking (step 2).
-    best_fitness_adv_short_slope = jnp.float32(0.0)
-    best_fitness_mi_short_slope = jnp.float32(0.0)
-    best_fitness_adv_med_slope = jnp.float32(0.0)
-    best_fitness_mi_med_slope = jnp.float32(0.0)
-    entropy_long_slope = jnp.float32(0.0)
+    # Compute slopes from metric history
+    slopes = compute_metric_slopes(belief_space)
+    adv_short, mi_short, adv_med, mi_med, ent_long = slopes
 
-    sit_score = situational_score(best_fitness_adv_short_slope, best_fitness_mi_short_slope)
-    hist_score = historical_score(entropy_long_slope, best_fitness_adv_short_slope)
-    topo_score = topographic_score(entropy_long_slope, best_fitness_adv_med_slope)
-    dom_score = domain_score(best_fitness_adv_med_slope, best_fitness_mi_med_slope, entropy_long_slope)
+    sit_score = situational_score(adv_short, mi_short)
+    hist_score = historical_score(ent_long, adv_short)
+    topo_score = topographic_score(ent_long, adv_med)
+    dom_score = domain_score(adv_med, mi_med, ent_long)
 
     ks_weights = jnp.array([dom_score, sit_score, hist_score, topo_score])
 
-    # Winner-take-all: only the highest-scoring KS contributes
     max_index = jnp.argmax(ks_weights)
     ks_weights = jnp.zeros_like(ks_weights, dtype=jnp.int32).at[max_index].set(1)
 
-    # Extract stdev suggestions from each KS
-    domain_ks_stdev = domain_ks[1][0]                 # Best Pareto solution's stdev
-    situational_ks_stdev = situational_ks[1]          # Current best's stdev
+    # Domain KS: adaptive buffer selection (same failure-mode logic)
+    domain_idx = _domain_ks_select_index(domain_ks, ent_long, adv_med)
+    domain_ks_stdev = domain_ks[1][domain_idx]
+
+    situational_ks_stdev = situational_ks[1]
+
     history_ks_max_entropy_idx = jnp.argmax(history_ks[6])
     history_ks_stdev = history_ks[1][history_ks_max_entropy_idx]
 
-    # Weighted combination
-    domain_ks_stdev_weighted = domain_ks_stdev * ks_weights[0]
-    situational_row_averages_weighted = situational_ks_stdev * ks_weights[1]
-    history_row_averages_weighted = history_ks_stdev * ks_weights[2]
-    # TODO: Topographic KS stdev guidance needs proper implementation (step 2).
-    topographic_ks_stdev_weighted = jnp.zeros_like(domain_ks_stdev) * ks_weights[3]
+    domain_weighted = domain_ks_stdev * ks_weights[0]
+    situational_weighted = situational_ks_stdev * ks_weights[1]
+    history_weighted = history_ks_stdev * ks_weights[2]
+    topo_weighted = jnp.zeros_like(domain_ks_stdev) * ks_weights[3]
 
-    guidance = (
-        domain_ks_stdev_weighted
-        + situational_row_averages_weighted
-        + history_row_averages_weighted
-        + topographic_ks_stdev_weighted
-    )
+    guidance = domain_weighted + situational_weighted + history_weighted + topo_weighted
 
     return guidance, max_index
