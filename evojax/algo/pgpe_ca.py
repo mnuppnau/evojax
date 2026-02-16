@@ -813,20 +813,53 @@ class PGPE(NEAlgorithm):
         #cultural_score = r_sense + r_intra + r_cons + fitness_con
         spreads = spreads.reshape(512, 11, 1)
         safety_ratios = safety_ratios.reshape(512, 11, 11)
-                
+
         self.belief_space = update_normative_ks(
             self.belief_space,
             fitness_scores,
             spreads,
             safety_ratios
         )
-        #fitness_scores = fitness_adv + realism_gate * cultural_score - penalty_mi
-        #else:
-        #    cultural_score = r_sense + r_intra + fitness_con
-        #fitness_scores = fitness_adv.flatten() + (fitness_mi.flatten() * w_mi) + (realism_gate * cultural_score)
-        #fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()*100 #+ r_sense + fitness_con.flatten()*0.6 + r_intra + r_cons
 
-        #fitness_scores = -jnp.argsort(order+1)
+        # --- Update Domain, Situational, and Historical KS ---
+        # Extract the best individual from this generation for the KS archives.
+        # PGPE layout: solutions[0..255] = center + noise, solutions[256..511] = center - noise
+        best_idx = jnp.argmax(fitness_scores.flatten())
+        noise_idx = best_idx % self._num_directions
+        sign = jnp.where(best_idx < self._num_directions, 1.0, -1.0)
+        best_noise = self._scaled_noises[noise_idx] * sign
+        best_solution = (self._center + best_noise).reshape(1, -1)
+        best_scaled_noise = best_noise.reshape(1, -1)
+
+        # Per-individual fitness components for the best individual
+        best_fitness_adv = jnp.array([fitness_adv.flatten()[best_idx]])
+        best_fitness_mi = jnp.array([fitness_mi.flatten()[best_idx]])
+        best_fitness_combined = jnp.array([fitness_scores.flatten()[best_idx]])
+
+        # Population-level entropy proxy from disc_logits (averaged across individuals and samples)
+        mean_disc_logit = jnp.mean(disc_logits, axis=(0, 1))  # (11,) avg class probs
+
+        # Domain KS: maintains Pareto front of non-dominated solutions
+        self.belief_space = update_domain_ks(
+            self.belief_space, best_solution, self._stdev,
+            best_scaled_noise, best_fitness_adv, best_fitness_mi,
+            best_fitness_combined, mean_disc_logit
+        )
+
+        # Situational KS: tracks the single best solution (most exploitative)
+        self.belief_space = update_situational_ks(
+            self.belief_space, best_solution, self._stdev,
+            best_scaled_noise, best_fitness_adv, best_fitness_mi,
+            best_fitness_combined, mean_disc_logit
+        )
+
+        # Historical KS: archive of best solutions across generations
+        self.belief_space = update_history_ks(
+            self.belief_space, best_solution, self._stdev,
+            best_scaled_noise, best_fitness_adv, best_fitness_mi,
+            best_fitness_combined, mean_disc_logit
+        )
+
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,False)
 
         grad_center, grad_stdev = compute_reinforce_update(

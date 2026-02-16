@@ -30,7 +30,7 @@ def initialize_belief_space(
     
     belief_space = (
         jnp.array([population_size]),
-        initialize_domain_ks(num_clusters, num_pixels, num_imgs_per_cluster),
+        initialize_domain_ks(param_size),
         initialize_situational_ks(param_size),
         initialize_history_ks(param_size,num_iterations),
         initialize_topographic_ks(features, key, num_codes),
