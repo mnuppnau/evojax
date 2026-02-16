@@ -525,33 +525,42 @@ def get_center_guidance(belief_space, t, center):
     topo_score = topographic_score(ent_long, adv_med)
     dom_score = domain_score(adv_med, mi_med, ent_long)
 
-    ks_weights = jnp.array([dom_score, sit_score, hist_score, topo_score])
+    ks_scores = jnp.array([dom_score, sit_score, hist_score, topo_score])
 
-    # Winner-take-all: only the highest-scoring KS contributes
-    max_index = jnp.argmax(ks_weights)
-    ks_weights = jnp.zeros_like(ks_weights, dtype=jnp.int32).at[max_index].set(1)
+    # CATGAME-inspired weighted distribution: all KS contribute proportionally
+    # rather than winner-take-all.  Temperature controls diversity —
+    # higher values spread influence more uniformly across KS, preventing
+    # one KS from dominating with oscillation (the WTD failure mode).
+    # At temperature=2.0, a score difference of 1.0 yields ~60/40 split
+    # instead of 100/0, achieving the dynamic equilibrium of CATGAME.
+    temperature = 2.0
+    ks_weights = jax.nn.softmax(ks_scores / temperature)
 
     # Domain KS: adaptive buffer selection (failure-mode aware)
     domain_idx = _domain_ks_select_index(domain_ks, ent_long, adv_med)
     domain_ks_center = domain_ks[0][domain_idx]
 
     # Situational KS: current best (most exploitative)
-    situational_ks_center = situational_ks[0]
+    situational_ks_center = situational_ks[0].flatten()
 
     # Historical KS: best historical solution by entropy (recover diversity)
     history_max_entropy_idx = jnp.argmax(history_ks[6])
     history_ks_center = history_ks[0][history_max_entropy_idx]
 
-    # Weighted combination (winner-take-all makes only one non-zero)
-    domain_weighted = domain_ks_center * ks_weights[0]
-    situational_weighted = situational_ks_center * ks_weights[1]
-    history_weighted = history_ks_center * ks_weights[2]
-    # Topographic KS operates in output space, not parameter space.
-    # Its influence is through centroid tracking and fitness shaping,
-    # not direct center guidance.
-    topo_weighted = jnp.zeros_like(domain_ks_center) * ks_weights[3]
+    # Topographic KS operates in output space (centroids/fitness shaping),
+    # not parameter space.  Its parameter-space contribution is conservative:
+    # "keep current center."  When topographic score is high (exploring output
+    # structure), guidance favors stability over moving toward archived solutions.
+    topo_ks_center = center.flatten()
 
-    return domain_weighted + situational_weighted + history_weighted + topo_weighted
+    guidance = (
+        domain_ks_center * ks_weights[0]
+        + situational_ks_center * ks_weights[1]
+        + history_ks_center * ks_weights[2]
+        + topo_ks_center * ks_weights[3]
+    )
+
+    return guidance
 
 
 @jax.jit
@@ -571,25 +580,30 @@ def get_stdev_guidance(belief_space, t, stdev):
     topo_score = topographic_score(ent_long, adv_med)
     dom_score = domain_score(adv_med, mi_med, ent_long)
 
-    ks_weights = jnp.array([dom_score, sit_score, hist_score, topo_score])
+    ks_scores = jnp.array([dom_score, sit_score, hist_score, topo_score])
 
-    max_index = jnp.argmax(ks_weights)
-    ks_weights = jnp.zeros_like(ks_weights, dtype=jnp.int32).at[max_index].set(1)
+    # CATGAME-inspired weighted distribution (see get_center_guidance)
+    temperature = 2.0
+    ks_weights = jax.nn.softmax(ks_scores / temperature)
 
     # Domain KS: adaptive buffer selection (same failure-mode logic)
     domain_idx = _domain_ks_select_index(domain_ks, ent_long, adv_med)
     domain_ks_stdev = domain_ks[1][domain_idx]
 
-    situational_ks_stdev = situational_ks[1]
+    situational_ks_stdev = situational_ks[1].flatten()
 
     history_ks_max_entropy_idx = jnp.argmax(history_ks[6])
     history_ks_stdev = history_ks[1][history_ks_max_entropy_idx]
 
-    domain_weighted = domain_ks_stdev * ks_weights[0]
-    situational_weighted = situational_ks_stdev * ks_weights[1]
-    history_weighted = history_ks_stdev * ks_weights[2]
-    topo_weighted = jnp.zeros_like(domain_ks_stdev) * ks_weights[3]
+    # Topographic: conservative — keep current exploration rate
+    topo_ks_stdev = stdev.flatten()
 
-    guidance = domain_weighted + situational_weighted + history_weighted + topo_weighted
+    guidance = (
+        domain_ks_stdev * ks_weights[0]
+        + situational_ks_stdev * ks_weights[1]
+        + history_ks_stdev * ks_weights[2]
+        + topo_ks_stdev * ks_weights[3]
+    )
 
+    max_index = jnp.argmax(ks_weights)
     return guidance, max_index

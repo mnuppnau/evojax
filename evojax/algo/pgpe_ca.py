@@ -345,50 +345,35 @@ class PGPE(NEAlgorithm):
         return center_ca.flatten()
 
     def ask(self) -> jnp.ndarray:
-        #if self._t > 100000:
-        #    center_ca, stdev_ca, min_index = get_updated_params(
-        #        self.belief_space, self._center, self._stdev, self._t
-        #    )
-        #    #jax.debug.print('max center ca value {} : ', jnp.max(center_ca))
-        #    #jax.debug.print('min center ca value {} : ', jnp.min(center_ca))
-        #    #jax.debug.print('max stddev ca value {} : ', jnp.max(stdev_ca))
-        #    #jax.debug.print('min stddev ca value {} : ', jnp.min(stdev_ca))
-        #    #jax.debug.print('min index {} : ', min_index)
-        #    #jax.debug.print('max center value {} : ', jnp.max(self._center))
-        #    #jax.debug.print('min center value {} : ', jnp.min(self._center))
-        #    #jax.debug.print('max stddev value {} : ', jnp.max(self._stdev))
-        #    #jax.debug.print('min stddev value {} : ', jnp.min(self._stdev))
-        #    if min_index == 0:
-        #        stdev_ca = stdev_ca * 0.2
-        #        num_directions_ca = 16
-        #    elif min_index == 1:
-        #        stdev_ca = stdev_ca * 0.1
-        #        num_directions_ca = 16
-        #    elif min_index == 2:
-        #        stdev_ca = stdev_ca * 0.2
-        #        num_directions_ca = 16
-        #    elif min_index == 3:
-        #        stdev_ca = stdev_ca * 0.3
-        #        num_directions_ca = 16
-        #    center, stdev = self._center, self._stdev
-        #else:
         center, stdev = self._center, self._stdev
 
-        
-        #if self._t > 100000:
-        #    # clip stdev_ca to be between 1e-4 and 1e1
-        #    stdev_ca = jnp.clip(stdev_ca, 1e-4, 1e1)
-        #    self._key, self._scaled_noises, self._solutions = ask_func_concat(
-        #        self._key,
-        #        stdev,
-        #        center,
-        #        self._num_directions,
-        #        self._center.size,
-        #        stdev_ca,
-        #        center_ca,
-        #        num_directions_ca // 2
-        #    )
-        #else:
+        # CA activation: ramp from 0→1 between iterations 115k-145k
+        # (matches the ca_weight schedule in tell())
+        ca_weight = jnp.clip((self._t - 115000) / 30000, 0.0, 1.0)
+
+        # Get CA-guided center/stdev from the belief space.
+        # Knowledge Sources score themselves based on metric slopes and
+        # contribute proportionally (CATGAME-style weighted distribution).
+        ca_center, ca_stdev, ks_winner = get_updated_params(
+            self.belief_space, center, stdev, self._t
+        )
+        ca_center = ca_center.flatten()
+        ca_stdev = jnp.clip(ca_stdev.flatten(), 1e-4, 1e1)
+
+        # Blend CA guidance into the PGPE sampling distribution.
+        # At 5% max influence the CA nudges rather than overrides — PGPE
+        # gradients in tell() remain the primary driver, while the belief
+        # space provides directional hints from accumulated domain knowledge
+        # about GAN training dynamics (mode collapse, stagnation, etc.).
+        blend = 0.05 * ca_weight
+
+        # Guard: skip blend if archives are still uninitialized (all zeros)
+        has_ca_data = jnp.any(ca_center != 0.0)
+        blend = blend * jnp.float32(has_ca_data)
+
+        center = (1.0 - blend) * center + blend * ca_center
+        stdev = (1.0 - blend) * stdev + blend * ca_stdev
+
         self._key, self._scaled_noises, self._solutions = ask_func(
             self._key,
             stdev,
