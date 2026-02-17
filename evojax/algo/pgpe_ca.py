@@ -347,27 +347,6 @@ class PGPE(NEAlgorithm):
     def ask(self) -> jnp.ndarray:
         center, stdev = self._center, self._stdev
 
-        # Get CA-guided center/stdev from the belief space.
-        # Knowledge Sources score themselves based on metric slopes and
-        # contribute proportionally (CATGAME-style weighted distribution).
-        ca_center, ca_stdev, ks_winner = get_updated_params(
-            self.belief_space, center, stdev, self._t
-        )
-        ca_center = ca_center.flatten()
-        ca_stdev = jnp.clip(ca_stdev.flatten(), 1e-4, 1e1)
-
-        # Blend CA guidance into the PGPE sampling distribution from the start.
-        # The CA's primary purpose is preventing mode collapse, which on complex
-        # datasets like OrganSMNIST happens almost immediately — so waiting for
-        # a late activation ramp defeats the purpose.  The 5% blend is gentle
-        # enough to activate as soon as KS archives have real data (after the
-        # first tell() call).  The has_ca_data guard handles the natural warmup.
-        has_ca_data = jnp.any(ca_center != 0.0)
-        blend = 0.05 * jnp.float32(has_ca_data)
-
-        center = (1.0 - blend) * center + blend * ca_center
-        stdev = (1.0 - blend) * stdev + blend * ca_stdev
-
         self._key, self._scaled_noises, self._solutions = ask_func(
             self._key,
             stdev,
@@ -860,22 +839,41 @@ class PGPE(NEAlgorithm):
                 scaled_noises=self._scaled_noises,
                 stdev=self._stdev,
             )
-        
-        #min_index = 0
 
-        #if self._t > 90000:
-        #    self.belief_space, ks_weights = update_normative_ks(
-        #        self.belief_space,
-        #        best_fitness=self._best_score_mi,
-        #        avg_fitness=self._avg_score_mi,
-        #        norm_entropy=norm_entropy,
-        #        pop_stats=pop_stats,
-        #    )
+        # --- CA gradient blending (belief space → gradient influence) ---
+        # The CA influences training by nudging the REINFORCE gradient direction
+        # toward KS-suggested targets, not by directly modifying parameters.
+        # This preserves PGPE's update mechanics (ClipUp for center, clipped
+        # stdev update) while letting accumulated domain knowledge steer
+        # the optimization away from failure modes like mode collapse.
+        ca_center_g, ca_stdev_g, ks_winner = get_updated_params(
+            self.belief_space, self._center, self._stdev, self._t
+        )
+        ca_center_g = ca_center_g.flatten()
+        ca_stdev_g = jnp.clip(ca_stdev_g.flatten(), 1e-4, 1e1)
 
-        #    ##jax.debug.print('ks weights before update : {} ', ks_weights) 
-        #    min_index = jnp.argmin(ks_weights)
-        #    result = jnp.zeros(4)
-        #    ks_weights = result.at[min_index].set(1.0)
+        # Direction from current toward KS-suggested target
+        ca_grad_center = ca_center_g - self._center
+        ca_grad_stdev = ca_stdev_g - self._stdev
+
+        # Only blend when archives have real data (non-zero)
+        has_ca_data = jnp.any(ca_center_g != 0.0)
+        ca_blend = 0.05 * jnp.float32(has_ca_data)
+
+        # Scale CA direction to match REINFORCE gradient magnitude so the
+        # blend ratio is meaningful.  ClipUp normalizes center grad anyway;
+        # for stdev, update_stdev clips by max_change so oversized grads
+        # are safe, but matching scale keeps the 5% ratio honest.
+        r_center_scale = jnp.linalg.norm(grad_center) + 1e-12
+        ca_center_scale = jnp.linalg.norm(ca_grad_center) + 1e-12
+        ca_grad_center = ca_grad_center * (r_center_scale / ca_center_scale)
+
+        r_stdev_scale = jnp.linalg.norm(grad_stdev) + 1e-12
+        ca_stdev_scale = jnp.linalg.norm(ca_grad_stdev) + 1e-12
+        ca_grad_stdev = ca_grad_stdev * (r_stdev_scale / ca_stdev_scale)
+
+        grad_center = (1.0 - ca_blend) * grad_center + ca_blend * ca_grad_center
+        grad_stdev = (1.0 - ca_blend) * grad_stdev + ca_blend * ca_grad_stdev
 
         self._opt_state = self._opt_update(
                 self._t // self._lr_decay_steps, -grad_center, self._opt_state
