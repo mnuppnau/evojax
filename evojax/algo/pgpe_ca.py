@@ -856,8 +856,13 @@ class PGPE(NEAlgorithm):
         ca_grad_center = ca_center_g - self._center
         ca_grad_stdev = ca_stdev_g - self._stdev
 
-        # Only blend when archives have real data (non-zero)
-        has_ca_data = jnp.any(ca_center_g != 0.0)
+        # Sanitize: replace any NaN with zero so it can't propagate.
+        # NaN can arise from entropy computations on early disc_logit values.
+        ca_grad_center = jnp.nan_to_num(ca_grad_center, nan=0.0)
+        ca_grad_stdev = jnp.nan_to_num(ca_grad_stdev, nan=0.0)
+
+        # Only blend when archives have real, non-zero data
+        has_ca_data = jnp.any(ca_center_g != 0.0) & jnp.all(jnp.isfinite(ca_center_g))
         ca_blend = 0.05 * jnp.float32(has_ca_data)
 
         # Scale CA direction to match REINFORCE gradient magnitude so the
@@ -872,8 +877,19 @@ class PGPE(NEAlgorithm):
         ca_stdev_scale = jnp.linalg.norm(ca_grad_stdev) + 1e-12
         ca_grad_stdev = ca_grad_stdev * (r_stdev_scale / ca_stdev_scale)
 
-        grad_center = (1.0 - ca_blend) * grad_center + ca_blend * ca_grad_center
-        grad_stdev = (1.0 - ca_blend) * grad_stdev + ca_blend * ca_grad_stdev
+        # Use jnp.where to guard the blend — prevents 0*NaN=NaN propagation.
+        # Unlike arithmetic (0.0 * NaN = NaN), jnp.where truly selects one
+        # branch without contamination from the other.
+        grad_center = jnp.where(
+            has_ca_data,
+            (1.0 - ca_blend) * grad_center + ca_blend * ca_grad_center,
+            grad_center
+        )
+        grad_stdev = jnp.where(
+            has_ca_data,
+            (1.0 - ca_blend) * grad_stdev + ca_blend * ca_grad_stdev,
+            grad_stdev
+        )
 
         self._opt_state = self._opt_update(
                 self._t // self._lr_decay_steps, -grad_center, self._opt_state

@@ -202,7 +202,8 @@ def update_domain_ks(
     updated_mi = jnp.concatenate([best_fitnesses_mi, best_fitness_mi.flatten()], axis=0)
     updated_combined = jnp.concatenate([best_fitnesses_combined, best_fitness_combined.flatten()], axis=0)
 
-    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+    safe_logit = jnp.maximum(disc_logit, 1e-8)
+    entropy = jnp.array([jnp.sum(-jnp.log(safe_logit) * safe_logit)])
     updated_entropy = jnp.concatenate([entropies, entropy], axis=0)
 
     updated_r_sense = jnp.concatenate([r_senses, best_r_sense.flatten()], axis=0)
@@ -260,7 +261,8 @@ def update_situational_ks(
         [best_fitness_tchebycheff, tchebyscheff_score.flatten()], axis=0
     )
 
-    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+    safe_logit = jnp.maximum(disc_logit, 1e-8)
+    entropy = jnp.array([jnp.sum(-jnp.log(safe_logit) * safe_logit)])
 
     updated_entropy = jnp.concatenate(
         [entropies, entropy], axis=0
@@ -327,7 +329,8 @@ def update_history_ks(
         [best_fitnesses_tchebycheff, tchebyscheff_score.flatten()], axis=0
     )
 
-    entropy = jnp.array([jnp.sum(-jnp.log(disc_logit + 1e-8) * disc_logit)])
+    safe_logit = jnp.maximum(disc_logit, 1e-8)
+    entropy = jnp.array([jnp.sum(-jnp.log(safe_logit) * safe_logit)])
 
     #entropy = entropy.reshape(-1, 1)
     
