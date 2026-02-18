@@ -755,7 +755,7 @@ class PGPE(NEAlgorithm):
         # 3. If r_intra is dropping (within-code variation collapsing), boost w_intra
         #    so PGPE rewards members that maintain within-code variety (use z-noise)
         intra_distress = jnp.clip(-intra_short * 100.0, 0.0, 0.15)
-        w_intra_base = 0.15
+        w_intra_base = 0.20
         w_intra = w_intra_base + intra_distress  # CA boosts when codes are tightening
 
         # 4. r_cons floor penalty: penalize only when centroid consistency drops

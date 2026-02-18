@@ -830,7 +830,14 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, sol
 
         grad_fn_disc = jax.value_and_grad(loss_discriminator, has_aux=True)
         (loss, (real_fake_loss, vars_d)), grads = grad_fn_disc(params_d, batch_stats_d)
-        
+
+        # Smooth D regulation: scale gradients based on real_fake_loss.
+        # D gets full learning at real_fake_loss >= 0.5 (equilibrium),
+        # zero learning at <= 0.35 (D dominant), linear ramp between.
+        # This replaces the binary freeze threshold.
+        d_scale = jnp.clip((real_fake_loss - 0.35) / 0.15, 0.0, 1.0)
+        grads = jax.tree_util.tree_map(lambda g: g * d_scale, grads)
+
         # apply gradients
         updates, new_opt_state = solver.update(grads, opt_disc, params_d)
         params_d = optax.apply_updates(params_d, updates)
@@ -1177,8 +1184,7 @@ class Trainer(object):
                             solver_disc,
                         )
 #jax.debug.print('loss: {} ', loss)
-                        if real_fake_loss > 0.3:
-                            params_disc, self.batch_stats_disc, opt_disc = state
+                        params_disc, self.batch_stats_disc, opt_disc = state
 
                 leaves_params, _ = jax.tree_flatten(params_disc) 
                 flat_params_disc = jnp.concatenate([p.flatten() for p in leaves_params])
