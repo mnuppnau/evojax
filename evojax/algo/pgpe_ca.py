@@ -148,6 +148,14 @@ def standardize(x):
     return (x - jnp.mean(x)) / jnp.maximum(jnp.std(x), 1e-6)
 
 @jax.jit
+def rank_normalize(x):
+    """Rank-based fitness shaping: maps values to [-1, 1] by rank order.
+    Robust to near-zero variance (unlike standardize which amplifies noise)."""
+    n = x.shape[0]
+    ranks = jnp.argsort(jnp.argsort(x)).astype(jnp.float32)
+    return 2.0 * ranks / jnp.maximum(n - 1, 1) - 1.0
+
+@jax.jit
 def mi_penalty(fitness_mi, fitness_adv, mi_thr=-0.01, v_ref=0.01, M=5.0, eps=1e-8):
     # violation
     v = jnp.maximum(0.0, mi_thr - fitness_mi)
@@ -715,7 +723,7 @@ class PGPE(NEAlgorithm):
         # To give r_sense comparable gradient influence to fitness_adv:
         #   need w_sense * 0.0092 ≈ w_adv * 0.0465 → w_sense ≈ 5.0 * w_adv
         # With min-pair r_sense (higher variance ~0.015), w_sense ~3.0 suffices.
-        w_adv = 1.0
+        w_adv = 0.53
         # decrease w_mi from 10 to 0.3 over the course of 5k iterations
         #t = self._t
         
@@ -745,23 +753,22 @@ class PGPE(NEAlgorithm):
         #w_sense = 0.5 * ca_weight
         transition = jnp.clip((self._t - 195000) / 5000, 0.0, 1.0)
         #w_mi = 0.24 - 0.16 * transition       # 0.24 → 0.08
-        w_mi = 0.15 + jnp.clip((self._t - 5000) / 80000, 0.0, 0.30)  # 0.15 → 0.45 ramp-up
-        w_sense = (0.5 + 0.2 * transition) * ca_weight  # 0.5 → 0.7
+        w_mi = 0.1
+        w_sense = 0.1 + 0.2 * transition  # 0.5 → 0.7, active from iter 0
 
-        # Anchoring: prevent the 4 locked codes from drifting
-        w_cons = 0.15 * ca_weight
-        
+        # Code diversity: pixel-space, discriminator-independent
+        w_div = 0.48
+
         # Normative: keep low
         w_norm = 0.04 * ca_weight
 
-        # 3. Calculate Fitness
-        # Note: Ensure signs are correct (Subtracting penalties)
+        # 3. Calculate Fitness (all rank_normalize for scale parity)
         fitness_scores = (
-            (standardize(fitness_adv) * w_adv)
-            + (standardize(fitness_mi) * w_mi)
-            + (standardize(r_sense) * w_sense)             # Stage 2: Push clusters apart
-            - (standardize(normative_penalty) * w_norm)    # Stage 2: Enforce safety/spread limits
-            - (standardize(r_cons) * w_cons)               # Stage 2: Anchor distinct digits
+            (rank_normalize(fitness_adv) * w_adv)          # Quality (capped, can't dominate)
+            + (rank_normalize(fitness_mi) * w_mi)          # MI signal
+            + (rank_normalize(r_sense) * w_sense)          # Feature-space code separation
+            + (rank_normalize(pop_var) * w_div)            # Pixel-space code diversity
+            - (rank_normalize(normative_penalty) * w_norm) # Safety/spread limits
         )
         #w_mi = jnp.clip((self._t / 10000) * 10.0, 0.1, 0.6)
         

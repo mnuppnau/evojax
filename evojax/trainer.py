@@ -816,15 +816,15 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, sol
                   loss_mi = loss_mutual_information(fake_cat_input, q_cat)
 
                   # use 0.9 as the label for real images instead of 1.0
-                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds))
+                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.9)
                   # use 0.1 as the label for fake images instead of 0.0
-                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds))
+                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds)+0.05)
 
                   real_loss = jnp.mean(real_loss)
                   fake_loss = jnp.mean(fake_loss)
 
                   real_fake_loss = (real_loss + fake_loss) / 2.0
-                  loss = real_fake_loss + loss_mi
+                  loss = real_fake_loss + loss_mi*0.2
                 
                   return loss, (real_fake_loss, vars_d)
 
@@ -1126,6 +1126,8 @@ class Trainer(object):
 
             self.ordered_centroids = jnp.zeros((self.n_classes, 256))
 
+            real_fake_loss = 0.0  # Default for logging when D is not trained
+
             for i in range(start_iter, self._max_iter):
 
                 shape_noise = (self.mini_batch_size, self.latent_dim)
@@ -1136,13 +1138,13 @@ class Trainer(object):
                         # Sample batch of data.
 
                         self._key, subkey_latent, subkey_mnist, subkey_noise, subkey_shift_x, subkey_shift_y = jax.random.split(self._key,6)
-                        
+
 
                         data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
                         #data = np.expand_dims(data / 255.0, axis=-1)
 
                         latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
-                      
+
                         noise = jax.random.normal(subkey_noise, (self.mini_batch_size, 28, 28, 1)) * 0.1
 
                         shift_x = jax.random.randint(subkey_shift_x, shape=(), minval=-1, maxval=2)
@@ -1152,14 +1154,14 @@ class Trainer(object):
                         params_hn = self.solver_hn.best_params
                         best_params_hn_formatted = self.policy_gen._format_single_params_hypernet_fn(params_hn)
                         #else:
-                       
+
                         params_g = self.adapter.generate_params(best_params_hn_formatted)
 
                         (fake_images) = Generator(training=False).apply({'params': params_g},latent)
-                        
+
                         # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
                         fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
-                        
+
                         state = (params_disc, self.batch_stats_disc, opt_disc)
 
                         state, d_loss, real_fake_loss = train_step_disc(

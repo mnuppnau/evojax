@@ -720,13 +720,15 @@ class GenPolicy(PolicyNetwork):
             
             (preds, q, q_flat) = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data_with_noise, mutable=False)
 
-            # calculate variance of fake data
-            var_fake = jnp.var(fake_data[:, 4:24, 4:24, :], axis=0)
-           
-            # take mean of variance
-            mean_var_fake = jnp.mean(var_fake)
+            # Code pixel diversity: variance across codes sharing the same z.
+            # Latent design: groups of n_classes consecutive samples share same z,
+            # differ only by code. Any pixel difference = code influence.
+            n_classes = 11
+            n_ctrl = (fake_data.shape[0] // n_classes) * n_classes  # 55 for batch=64
+            grouped = fake_data[:n_ctrl].reshape(-1, n_classes, 28, 28, 1)
+            code_pixel_div = jnp.mean(jnp.var(grouped, axis=1))
 
-            return preds, q, mean_var_fake, q_flat
+            return preds, q, code_pixel_div, q_flat
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
