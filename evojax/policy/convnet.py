@@ -723,10 +723,14 @@ class GenPolicy(PolicyNetwork):
             # Code pixel diversity: variance across codes sharing the same z.
             # Latent design: groups of n_classes consecutive samples share same z,
             # differ only by code. Any pixel difference = code influence.
+            # Brightness-normalized: subtract per-image mean so the generator
+            # cannot cheat by encoding codes as bright vs dark. Forces
+            # structural/textural diversity instead.
             n_classes = 11
             n_ctrl = (fake_data.shape[0] // n_classes) * n_classes  # 55 for batch=64
             grouped = fake_data[:n_ctrl].reshape(-1, n_classes, 28, 28, 1)
-            code_pixel_div = jnp.mean(jnp.var(grouped, axis=1))
+            grouped_centered = grouped - grouped.mean(axis=(2, 3), keepdims=True)
+            code_pixel_div = jnp.mean(jnp.var(grouped_centered, axis=1))
 
             return preds, q, code_pixel_div, q_flat
 
