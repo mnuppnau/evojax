@@ -469,9 +469,10 @@ class PGPE(NEAlgorithm):
         #w_mi = 1 - w_adv
 
 
-        # CA activation schedule (used for topographic momentum and fitness weights)
-        # Must match the ca_weight used for fitness weights below.
-        ca_weight = jnp.clip((self._t - 115000) / 30000, 0.0, 1.0)
+        # CA activation schedule: short warmup for KS to fill (500 iter),
+        # then ramp to full over 2000 iter. Active early so CA can adapt
+        # to the environment from the start rather than arriving late.
+        ca_weight = jnp.clip((self._t - 500) / 2000, 0.0, 1.0)
 
         # Centroid momentum: when CA is active, nearly freeze topographic centroids
         # to prevent locked codes from drifting. 0.7 (early) → 0.97 (full CA).
@@ -723,44 +724,56 @@ class PGPE(NEAlgorithm):
         # To give r_sense comparable gradient influence to fitness_adv:
         #   need w_sense * 0.0092 ≈ w_adv * 0.0465 → w_sense ≈ 5.0 * w_adv
         # With min-pair r_sense (higher variance ~0.015), w_sense ~3.0 suffices.
-        w_adv = 0.53
-        # decrease w_mi from 10 to 0.3 over the course of 5k iterations
-        #t = self._t
-        
-        # Up phase (0 → 2000)
-        #progress_up = jnp.clip(t / 2000.0, 0.0, 1.0)
-        #ramp_up = 0.05 + (0.5 - 0.05) * 0.5 * (1 - jnp.cos(jnp.pi * progress_up))
-        
-        # Down phase (2000 → 2800)  <-- shorter = faster drop
-        #progress_down = jnp.clip((t - 2000.0) / 800.0, 0.0, 1.0)
-        #ramp_down = 0.05 + (0.5 - 0.05) * 0.5 * (1 + jnp.cos(jnp.pi * progress_down))
-        
-        #w_mi = jnp.where(t < 2000, ramp_up, ramp_down)
-        
-        #w_mi = 0.16
+        # --- CA-driven adaptive weight modulation ---
+        # Base weights (user-tuned sweet spot from the stable 0-195k regime)
+        w_adv_base = 0.53
+        w_mi_base = 0.1
+        w_sense_base = 0.1
+        w_div_base = 0.48
+        w_norm_base = 0.04
 
-        ## CA Weights (Only active after 140k)
-        #w_sense = 0.3 * ca_weight       # Reward separation (dominant signal for fine-tuning)
-        #w_cons = 0.1 * ca_weight        # Penalize drift
-        #w_norm = 0.04 * ca_weight       # Penalize violation (Keep this small!)
+        # Compute metric slopes from CA belief space
+        slopes = compute_metric_slopes(self.belief_space)
+        (adv_short, mi_short, adv_med, mi_med, ent_long,
+         sense_short, intra_short, adv_avg_short, sense_med) = slopes
 
-        # MI: gentle ramp from 0.16 → 0.25 over 50k
-        # (stronger MI to push remaining codes, CA anchors prevent quality loss)
-        mi_ramp = jnp.clip((self._t - 120000) / 50000, 0.0, 1.0)
-        #w_mi = 0.16 + 0.09 * mi_ramp
-        
-        # Separation: higher than before (0.5 vs 0.3) - the main lever for unseparated codes
-        #w_sense = 0.5 * ca_weight
-        transition = jnp.clip((self._t - 195000) / 5000, 0.0, 1.0)
-        #w_mi = 0.24 - 0.16 * transition       # 0.24 → 0.08
-        w_mi = 0.1
-        w_sense = 0.1 + 0.2 * transition  # 0.5 → 0.7, active from iter 0
+        # CA adaptation: adjust weights based on detected trends.
+        # Positive slope = metric improving, Negative = metric declining.
+        # Each adjustment is clamped to prevent runaway weight changes.
 
-        # Code diversity: pixel-space, discriminator-independent
-        w_div = 0.48
+        # 1. If fitness_adv is dropping (D winning), boost w_adv, reduce diversity pressure
+        #    adv_avg_short < 0 means avg adversarial fitness is declining
+        adv_distress = jnp.clip(-adv_avg_short * 50.0, 0.0, 0.2)
+        w_adv = w_adv_base + adv_distress
+        w_div = w_div_base - adv_distress * 0.5  # ease off diversity when D is crushing
+
+        # 2. If r_sense is spiking too fast (divergence precursor), reduce w_sense
+        #    sense_short > 0 means separation is increasing (good, but too fast = bad)
+        sense_overshoot = jnp.clip(sense_short * 100.0 - 0.5, 0.0, 0.08)
+        w_sense = w_sense_base - sense_overshoot
+
+        # 3. If r_intra is dropping (within-code variation collapsing), boost w_intra
+        #    so PGPE rewards members that maintain within-code variety (use z-noise)
+        intra_distress = jnp.clip(-intra_short * 100.0, 0.0, 0.15)
+        w_intra_base = 0.15
+        w_intra = w_intra_base + intra_distress  # CA boosts when codes are tightening
+
+        # 4. r_cons floor penalty: penalize only when centroid consistency drops
+        #    below a minimum threshold. This prevents drift without over-anchoring.
+        cons_floor = 0.05
+        cons_shortfall = jnp.maximum(0.0, cons_floor - r_cons)  # per-member penalty
+        w_cons_floor = 0.1
+
+        # 5. MI weight stays stable (less sensitive to short-term dynamics)
+        w_mi = w_mi_base
+
+        # Ensure no weight goes negative
+        w_adv = jnp.maximum(w_adv, 0.1)
+        w_div = jnp.maximum(w_div, 0.1)
+        w_sense = jnp.maximum(w_sense, 0.02)
 
         # Normative: keep low
-        w_norm = 0.04 * ca_weight
+        w_norm = w_norm_base * ca_weight
 
         # 3. Calculate Fitness (all rank_normalize for scale parity)
         fitness_scores = (
@@ -768,6 +781,8 @@ class PGPE(NEAlgorithm):
             + (rank_normalize(fitness_mi) * w_mi)          # MI signal
             + (rank_normalize(r_sense) * w_sense)          # Feature-space code separation
             + (rank_normalize(pop_var) * w_div)            # Pixel-space code diversity
+            + (rank_normalize(r_intra) * w_intra)          # Within-code variation (use z-noise)
+            - (rank_normalize(cons_shortfall) * w_cons_floor) # Penalize centroid drift below floor
             - (rank_normalize(normative_penalty) * w_norm) # Safety/spread limits
         )
         #w_mi = jnp.clip((self._t / 10000) * 10.0, 0.1, 0.6)
@@ -815,7 +830,9 @@ class PGPE(NEAlgorithm):
             jnp.max(fitness_adv),
             jnp.max(fitness_mi),
             pop_entropy,
-            jnp.max(r_sense)
+            jnp.max(r_sense),
+            avg_r_intra=jnp.mean(r_intra),
+            avg_fitness_adv=jnp.mean(fitness_adv),
         )
 
         # Domain KS: Pareto front with GAN diagnostic metadata (r_sense, r_cons)

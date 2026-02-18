@@ -1133,7 +1133,11 @@ class Trainer(object):
                 shape_noise = (self.mini_batch_size, self.latent_dim)
                 shape_cat = (self.mini_batch_size,)
                 
-                if i % 1 == 0:
+                # D-step frequency: reduce D updates early so G can establish
+                # diversity before D crushes it. Every 3rd iter for first 1.5k,
+                # then every iteration after.
+                d_freq = 3 if i < 1500 else 1
+                if i % d_freq == 0:
                     for mini_batch in range(num_mini_batches):
                         # Sample batch of data.
 
@@ -1173,7 +1177,7 @@ class Trainer(object):
                             solver_disc,
                         )
 #jax.debug.print('loss: {} ', loss)
-                        if i < 5000 or real_fake_loss > 0.3:
+                        if real_fake_loss > 0.3:
                             params_disc, self.batch_stats_disc, opt_disc = state
 
                 leaves_params, _ = jax.tree_flatten(params_disc) 

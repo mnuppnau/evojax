@@ -26,18 +26,20 @@ from evojax.algo.cultural.helper_functions import (
 def initialize_metric_history(window_size: int = 100):
     """Rolling window for computing metric slopes across generations.
 
-    Tracks best_fitness_adv, best_fitness_mi, and entropy per generation.
+    Tracks key metrics per generation for CA-driven weight adaptation.
     Slopes are computed over short (last 20), medium (last 50), and long
-    (full window) horizons to detect stagnation, mode collapse, and
-    improvement trends that drive KS scoring and Domain KS adaptation.
+    (full window) horizons to detect stagnation, mode collapse, divergence,
+    and improvement trends.
     """
     return (
-        jnp.zeros((window_size,)),   # best_fitness_adv per generation
-        jnp.zeros((window_size,)),   # best_fitness_mi per generation
-        jnp.zeros((window_size,)),   # entropy per generation
-        jnp.zeros((window_size,)),   # best_r_sense per generation
-        jnp.int32(0),                # write_index (circular buffer position)
-        jnp.int32(0),                # count (number of entries written, capped at window_size)
+        jnp.zeros((window_size,)),   # [0] best_fitness_adv per generation
+        jnp.zeros((window_size,)),   # [1] best_fitness_mi per generation
+        jnp.zeros((window_size,)),   # [2] entropy per generation
+        jnp.zeros((window_size,)),   # [3] best_r_sense per generation
+        jnp.int32(0),                # [4] write_index (circular buffer position)
+        jnp.int32(0),                # [5] count (entries written, capped at window_size)
+        jnp.zeros((window_size,)),   # [6] avg_r_intra per generation
+        jnp.zeros((window_size,)),   # [7] avg_fitness_adv per generation
     )
 
 
@@ -112,7 +114,7 @@ def initialize_normative_ks(param_size: int, pop_size: int = 64):
     )
 
 @jax.jit
-def update_metric_history(belief_space, best_fitness_adv, best_fitness_mi, entropy, best_r_sense):
+def update_metric_history(belief_space, best_fitness_adv, best_fitness_mi, entropy, best_r_sense, avg_r_intra=0.0, avg_fitness_adv=0.0):
     """Append one generation's key metrics to the circular buffer.
 
     Args:
@@ -121,19 +123,23 @@ def update_metric_history(belief_space, best_fitness_adv, best_fitness_mi, entro
         best_fitness_mi: scalar, best MI fitness this generation
         entropy: scalar, population-level entropy this generation
         best_r_sense: scalar, best code separation this generation
+        avg_r_intra: scalar, population average within-code variation
+        avg_fitness_adv: scalar, population average adversarial fitness
     """
     metric_history = belief_space[6]
-    adv_buf, mi_buf, ent_buf, sense_buf, write_idx, count = metric_history
+    adv_buf, mi_buf, ent_buf, sense_buf, write_idx, count, intra_buf, adv_avg_buf = metric_history
     window_size = adv_buf.shape[0]
 
     adv_buf = adv_buf.at[write_idx].set(best_fitness_adv)
     mi_buf = mi_buf.at[write_idx].set(best_fitness_mi)
     ent_buf = ent_buf.at[write_idx].set(entropy)
     sense_buf = sense_buf.at[write_idx].set(best_r_sense)
+    intra_buf = intra_buf.at[write_idx].set(avg_r_intra)
+    adv_avg_buf = adv_avg_buf.at[write_idx].set(avg_fitness_adv)
     new_idx = (write_idx + 1) % window_size
     new_count = jnp.minimum(count + 1, window_size)
 
-    updated_metric_history = (adv_buf, mi_buf, ent_buf, sense_buf, new_idx, new_count)
+    updated_metric_history = (adv_buf, mi_buf, ent_buf, sense_buf, new_idx, new_count, intra_buf, adv_avg_buf)
     updated_belief_space = belief_space[:6] + (updated_metric_history,)
     return updated_belief_space
 
@@ -142,15 +148,16 @@ def update_metric_history(belief_space, best_fitness_adv, best_fitness_mi, entro
 def compute_metric_slopes(belief_space):
     """Compute short/medium/long slopes from the metric history circular buffer.
 
-    Returns a dict-like tuple of 5 slopes used by KS scoring functions:
-        (adv_short_slope, mi_short_slope, adv_med_slope, mi_med_slope, entropy_long_slope)
+    Returns a tuple of 9 slopes:
+        (adv_short, mi_short, adv_med, mi_med, ent_long,
+         sense_short, intra_short, adv_avg_short, sense_med)
 
     Short = last 20 generations, Medium = last 50, Long = full window (100).
-    Uses least-squares linear regression (same as existing calculate_slope).
+    Uses least-squares linear regression.
     Returns 0.0 for any window that doesn't have enough data yet.
     """
     metric_history = belief_space[6]
-    adv_buf, mi_buf, ent_buf, sense_buf, write_idx, count = metric_history
+    adv_buf, mi_buf, ent_buf, sense_buf, write_idx, count, intra_buf, adv_avg_buf = metric_history
     window_size = adv_buf.shape[0]
 
     def _slope_over_last_n(buf, n, write_idx, count):
@@ -167,14 +174,18 @@ def compute_metric_slopes(belief_space):
         slope = numer / denom
         return jnp.where(has_enough, slope, 0.0)
 
-    adv_short  = _slope_over_last_n(adv_buf, 20, write_idx, count)
-    mi_short   = _slope_over_last_n(mi_buf, 20, write_idx, count)
-    adv_med    = _slope_over_last_n(adv_buf, 50, write_idx, count)
-    mi_med     = _slope_over_last_n(mi_buf, 50, write_idx, count)
-    # Long slope uses full window (100 gens); returns 0 if count < 100
-    ent_long   = _slope_over_last_n(ent_buf, 100, write_idx, count)
+    adv_short     = _slope_over_last_n(adv_buf, 20, write_idx, count)
+    mi_short      = _slope_over_last_n(mi_buf, 20, write_idx, count)
+    adv_med       = _slope_over_last_n(adv_buf, 50, write_idx, count)
+    mi_med        = _slope_over_last_n(mi_buf, 50, write_idx, count)
+    ent_long      = _slope_over_last_n(ent_buf, 100, write_idx, count)
+    sense_short   = _slope_over_last_n(sense_buf, 20, write_idx, count)
+    intra_short   = _slope_over_last_n(intra_buf, 20, write_idx, count)
+    adv_avg_short = _slope_over_last_n(adv_avg_buf, 20, write_idx, count)
+    sense_med     = _slope_over_last_n(sense_buf, 50, write_idx, count)
 
-    return (adv_short, mi_short, adv_med, mi_med, ent_long)
+    return (adv_short, mi_short, adv_med, mi_med, ent_long,
+            sense_short, intra_short, adv_avg_short, sense_med)
 
 
 @jax.jit
@@ -520,7 +531,7 @@ def get_center_guidance(belief_space, t, center):
 
     # Compute slopes from metric history
     slopes = compute_metric_slopes(belief_space)
-    adv_short, mi_short, adv_med, mi_med, ent_long = slopes
+    adv_short, mi_short, adv_med, mi_med, ent_long = slopes[:5]
 
     # Score each KS based on current training dynamics
     sit_score = situational_score(adv_short, mi_short)
@@ -576,7 +587,7 @@ def get_stdev_guidance(belief_space, t, stdev):
 
     # Compute slopes from metric history
     slopes = compute_metric_slopes(belief_space)
-    adv_short, mi_short, adv_med, mi_med, ent_long = slopes
+    adv_short, mi_short, adv_med, mi_med, ent_long = slopes[:5]
 
     sit_score = situational_score(adv_short, mi_short)
     hist_score = historical_score(ent_long, adv_short)
