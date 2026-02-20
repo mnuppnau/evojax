@@ -336,9 +336,34 @@ class PGPE(NEAlgorithm):
         self._scaled_noises = None
 
         self._key, subkey = random.split(self._key)
-       
+
         self.belief_space = belief_space if belief_space is not None else initialize_belief_space(
             population_size=self.pop_size, param_size=abs(param_size), key=subkey)
+
+        # KS weight logging: buffer entries and flush to file every 100 iterations
+        self._ks_log_buffer = []
+        self._ks_log_path = None
+
+    def set_ks_log_path(self, path):
+        """Set the file path for KS weight logging and write header."""
+        self._ks_log_path = path
+        with open(path, 'w') as f:
+            f.write('\t'.join([
+                'iter', 'ks_winner',
+                'w_adv', 'w_mi', 'w_sense', 'w_div', 'w_intra', 'w_cons_floor', 'w_norm',
+                'adv_distress', 'sense_overshoot', 'intra_distress',
+                'adv_short', 'mi_short', 'adv_med', 'mi_med', 'ent_long',
+                'sense_short', 'intra_short', 'adv_avg_short', 'sense_med',
+            ]) + '\n')
+
+    def _flush_ks_log(self):
+        """Flush buffered KS weight entries to file."""
+        if self._ks_log_path is None or not self._ks_log_buffer:
+            return
+        with open(self._ks_log_path, 'a') as f:
+            for row in self._ks_log_buffer:
+                f.write('\t'.join(f'{v:.6f}' if isinstance(v, float) else str(v) for v in row) + '\n')
+        self._ks_log_buffer = []
 
     def get_top_idx(self) -> jnp.ndarray:
         """Get the index of the top solution."""
@@ -775,6 +800,18 @@ class PGPE(NEAlgorithm):
         # Normative: keep low
         w_norm = w_norm_base * ca_weight
 
+        # Buffer KS weights for logging (flushed every 100 iterations)
+        if self._ks_log_path is not None:
+            self._ks_log_buffer.append([
+                self._t, 0,  # ks_winner filled later after get_updated_params
+                float(w_adv), float(w_mi), float(w_sense), float(w_div),
+                float(w_intra), float(w_cons_floor), float(w_norm),
+                float(adv_distress), float(sense_overshoot), float(intra_distress),
+                float(adv_short), float(mi_short), float(adv_med), float(mi_med),
+                float(ent_long), float(sense_short), float(intra_short),
+                float(adv_avg_short), float(sense_med),
+            ])
+
         # 3. Calculate Fitness (all rank_normalize for scale parity)
         fitness_scores = (
             (rank_normalize(fitness_adv) * w_adv)          # Quality (capped, can't dominate)
@@ -821,8 +858,9 @@ class PGPE(NEAlgorithm):
         best_r_cons = jnp.array([r_cons.flatten()[best_idx]])
 
         # Population-level entropy proxy from disc_logits (averaged across individuals and samples)
-        mean_disc_logit = jnp.mean(disc_logits, axis=(0, 1))  # (11,) avg class probs
-        pop_entropy = jnp.sum(-jnp.log(mean_disc_logit + 1e-8) * mean_disc_logit)
+        mean_disc_logit = jnp.mean(disc_logits, axis=(0, 1))  # (11,) raw logits
+        mean_disc_prob = jax.nn.softmax(mean_disc_logit)       # convert to probabilities
+        pop_entropy = -jnp.sum(mean_disc_prob * jnp.log(mean_disc_prob + 1e-8))
 
         # Update metric history (rolling buffer for slope computation)
         self.belief_space = update_metric_history(
@@ -915,10 +953,18 @@ class PGPE(NEAlgorithm):
             grad_stdev
         )
 
+        # Backfill ks_winner into the buffered log entry for this iteration
+        if self._ks_log_path is not None and self._ks_log_buffer:
+            self._ks_log_buffer[-1][1] = int(ks_winner)
+
         self._opt_state = self._opt_update(
                 self._t // self._lr_decay_steps, -grad_center, self._opt_state
         )
         self._t += 1
+
+        # Flush KS log buffer every 100 iterations
+        if self._t % 100 == 0:
+            self._flush_ks_log()
        
         self._center = self._get_params(self._opt_state)
         
