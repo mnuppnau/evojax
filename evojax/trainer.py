@@ -80,15 +80,18 @@ from typing import Tuple
 class Generator(nn.Module):
     features: int = 64
     training: bool = True
+    kernel_size: int = 5       # 5 = stable (5x5 upsample/output), 3 = experimental (3x3)
+    extra_depth: bool = False  # True = extra conv at 14x14 (experimental, tied to kernel_size=3)
 
     @nn.compact
     def __call__(self, z):
+        ks = (self.kernel_size, self.kernel_size)
 
         # Project z -> 7*7*8 (small depth) -> Conv to features
         x = nn.Dense(7 * 7 * 8)(z)
         x = x.reshape((x.shape[0], 7, 7, 8))
 
-        # Expand depth with 3x3 conv (clean edges, no spatial bias)
+        # Expand depth with 3x3 conv (clean edges, no spatial bias) — always 3x3
         x = nn.Conv(self.features, kernel_size=(3,3), padding='SAME')(x)
         x = nn.GroupNorm(num_groups=32)(x)
         x = jnp.tanh(x)
@@ -96,10 +99,9 @@ class Generator(nn.Module):
         # UPSAMPLE BLOCK 1 (7x7 -> 14x14)
         x = jax.image.resize(x, shape=(x.shape[0], 14, 14, x.shape[3]), method='nearest')
 
-        # 3x3 kernels: eliminate edge bias from old 5x5 kernels
         x = nn.Conv(
             self.features,
-            kernel_size=(3, 3),
+            kernel_size=ks,
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -107,23 +109,24 @@ class Generator(nn.Module):
         x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
         x = jnp.tanh(x)
 
-        # Extra depth at 14x14: richer feature composition before final upsample
-        x = nn.Conv(
-            self.features,
-            kernel_size=(3, 3),
-            strides=(1, 1),
-            padding='SAME',
-            kernel_init=normal_init(0.02)
-        )(x)
-        x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
-        x = jnp.tanh(x)
+        # Extra depth at 14x14 (experimental only)
+        if self.extra_depth:
+            x = nn.Conv(
+                self.features,
+                kernel_size=ks,
+                strides=(1, 1),
+                padding='SAME',
+                kernel_init=normal_init(0.02)
+            )(x)
+            x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
+            x = jnp.tanh(x)
 
         # UPSAMPLE BLOCK 2 (14x14 -> 28x28)
         x = jax.image.resize(x, shape=(x.shape[0], 28, 28, x.shape[3]), method='nearest')
 
         x = nn.Conv(
             self.features // 2,
-            kernel_size=(3, 3),
+            kernel_size=ks,
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -134,7 +137,7 @@ class Generator(nn.Module):
         # OUTPUT BLOCK (28x28 -> 28x28)
         x = nn.Conv(
             1,
-            kernel_size=(3, 3),
+            kernel_size=ks,
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -219,18 +222,14 @@ class Discriminator(nn.Module):
 
         return d_logits, q_cat_logits, q_feat_avg
 
-# --- 1. The HyperNetwork (Linearized with Multiplicative Embeddings) ---
-# Replaces one-hot + GELU non-linear HN with learned embeddings + linear projection.
-# Rationale: GELU activations created a rugged fitness landscape where PGPE's Gaussian
-# perturbations couldn't reliably estimate gradients at scale. The linear mapping
-# preserves the coordinate-based structural inductive bias while giving PGPE a smooth
-# landscape. Multiplicative layer*chunk interaction lets each (layer, chunk) pair
-# have a unique representation without non-linear entanglement.
+# --- 1. The HyperNetwork (Non-Linear with Geometric Input) ---
 class HyperNetwork(nn.Module):
     chunk_size: int = 256
     n_layers: int = 20
     n_chunks: int = 200
-    embed_dim: int = 32
+    hidden_dim: int = 48
+    activation: str = 'gelu'
+    output_stddev: float = 0.025
 
     @nn.compact
     def __call__(self, layer_ids, chunk_ids, depths, scales):
@@ -239,32 +238,63 @@ class HyperNetwork(nn.Module):
                 depths (N,) float, scales (N,) float
         Output: (N, chunk_size) generated weight chunks
         """
-        # Learned embeddings replace sparse one-hot vectors
-        layer_emb = nn.Embed(self.n_layers, self.embed_dim)(layer_ids)   # (N, 32)
-        chunk_emb = nn.Embed(self.n_chunks, self.embed_dim)(chunk_ids)   # (N, 32)
+        layer_oh = jax.nn.one_hot(layer_ids, self.n_layers)
+        chunk_oh = jax.nn.one_hot(chunk_ids, self.n_chunks)
+        inputs = jnp.concatenate([
+            layer_oh, chunk_oh, depths[:, None], scales[:, None]
+        ], axis=-1)
 
-        # Multiplicative interaction: layer-chunk specific representation
-        interaction = layer_emb * chunk_emb  # (N, 32)
-
-        # Concatenate with geometric features
-        coords = jnp.concatenate([
-            interaction,
-            depths[:, None],
-            scales[:, None]
-        ], axis=-1)  # (N, 34)
-
-        # Single linear projection to chunk weights — no non-linearity
+        act_fn = nn.gelu if self.activation == 'gelu' else nn.tanh
+        x = nn.Dense(self.hidden_dim)(inputs)
+        x = act_fn(x)
+        x = nn.Dense(self.hidden_dim)(x)
+        x = act_fn(x)
         weights = nn.Dense(
             self.chunk_size,
-            kernel_init=jax.nn.initializers.normal(stddev=0.025)
-        )(coords)
+            kernel_init=jax.nn.initializers.normal(stddev=self.output_stddev)
+        )(x)
+
+        return weights
+
+# --- 1b. Per-Layer HyperNetwork (for independent PGPE solvers) ---
+class LayerHyperNetwork(nn.Module):
+    chunk_size: int = 256
+    n_chunks: int = 10     # varies per layer group
+    hidden_dim: int = 48
+    activation: str = 'gelu'
+    output_stddev: float = 0.025
+
+    @nn.compact
+    def __call__(self, chunk_ids, depths, scales):
+        """
+        Input:  chunk_ids (N,) int, depths (N,) float, scales (N,) float
+        Output: (N, chunk_size) generated weight chunks
+        """
+        chunk_oh = jax.nn.one_hot(chunk_ids, self.n_chunks)
+        inputs = jnp.concatenate([
+            chunk_oh, depths[:, None], scales[:, None]
+        ], axis=-1)
+
+        act_fn = nn.gelu if self.activation == 'gelu' else nn.tanh
+        x = nn.Dense(self.hidden_dim)(inputs)
+        x = act_fn(x)
+        x = nn.Dense(self.hidden_dim)(x)
+        x = act_fn(x)
+        weights = nn.Dense(
+            self.chunk_size,
+            kernel_init=jax.nn.initializers.normal(stddev=self.output_stddev)
+        )(x)
 
         return weights
 
 # --- 2. The Adapter (The "Context" Builder) ---
 class ParameterAdapter:
-    def __init__(self, target_init_params, chunk_size=256):
+    def __init__(self, target_init_params, chunk_size=256,
+                 hn_hidden_dim=48, hn_activation='gelu', hn_output_stddev=0.025):
         self.chunk_size = chunk_size
+        self.hn_hidden_dim = hn_hidden_dim
+        self.hn_activation = hn_activation
+        self.hn_output_stddev = hn_output_stddev
         self.target_tree = tree_util.tree_structure(target_init_params)
 
         # --- A. Flatten and Map Shapes ---
@@ -298,10 +328,15 @@ class ParameterAdapter:
         self.N_LAYERS = int(np.max(np.concatenate(layer_ids_list))) + 1
         self.N_CHUNKS = int(np.max(np.concatenate(chunk_ids_list))) + 1
 
-    def init_hypernet(self, rng):
+    def _make_hn(self):
         return HyperNetwork(
-            self.chunk_size, self.N_LAYERS, self.N_CHUNKS
-        ).init(
+            chunk_size=self.chunk_size, n_layers=self.N_LAYERS, n_chunks=self.N_CHUNKS,
+            hidden_dim=self.hn_hidden_dim, activation=self.hn_activation,
+            output_stddev=self.hn_output_stddev,
+        )
+
+    def init_hypernet(self, rng):
+        return self._make_hn().init(
             rng,
             jnp.zeros(self.total_chunks, dtype=jnp.int32),
             jnp.zeros(self.total_chunks, dtype=jnp.int32),
@@ -310,9 +345,7 @@ class ParameterAdapter:
         )
 
     def generate_params(self, hypernet_params):
-        flat_chunks = HyperNetwork(
-            self.chunk_size, self.N_LAYERS, self.N_CHUNKS
-        ).apply(
+        flat_chunks = self._make_hn().apply(
             hypernet_params,
             self.layer_ids,
             self.chunk_ids,
@@ -330,6 +363,400 @@ class ParameterAdapter:
             p.reshape(s) for p, s in zip(param_list, self.param_shapes)
         ]
         return tree_util.tree_unflatten(self.target_tree, reshaped_params)
+
+# --- 3. Multi-Layer Adapter (for per-layer PGPE solvers) ---
+class MultiLayerAdapter:
+    KERNEL_SIZE_THRESHOLD = 1000
+
+    def __init__(self, target_init_params, chunk_size=256,
+                 hn_hidden_dim=48, hn_activation='gelu', hn_output_stddev=0.025):
+        self.chunk_size = chunk_size
+        self.hn_hidden_dim = hn_hidden_dim
+        self.hn_activation = hn_activation
+        self.hn_output_stddev = hn_output_stddev
+        self.target_tree = tree_util.tree_structure(target_init_params)
+
+        flat_params, _ = tree_util.tree_flatten(target_init_params)
+        flat_with_path = tree_util.tree_flatten_with_path(target_init_params)[0]
+        self.param_shapes = [p.shape for p in flat_params]
+        self.param_sizes = [int(np.prod(p.shape)) for p in flat_params]
+        self.n_leaves = len(flat_params)
+
+        # --- Auto-detect layer groups from param tree ---
+        # Major kernels (>threshold) get their own HN; rest goes to misc
+        self.hn_group_info = []   # (name, leaf_idx, shape, size)
+        self.misc_leaf_indices = []
+
+        for i, (path, leaf) in enumerate(flat_with_path):
+            path_parts = [p.key if hasattr(p, 'key') else str(p) for p in path]
+            param_name = path_parts[-1] if path_parts else ''
+            module_name = path_parts[0] if path_parts else ''
+
+            if param_name == 'kernel' and leaf.size > self.KERNEL_SIZE_THRESHOLD:
+                self.hn_group_info.append((module_name, i, leaf.shape, int(leaf.size)))
+            else:
+                self.misc_leaf_indices.append(i)
+
+        # --- Create LayerHyperNetwork per HN group ---
+        self.layer_hns = []
+        self.layer_chunk_ids = []
+        self.layer_depths = []
+        self.layer_scales = []
+        self.layer_n_chunks = []
+        self.layer_leaf_idx = []
+        self.layer_gen_param_size = []
+        self.layer_gen_param_shape = []
+
+        n_hn = len(self.hn_group_info)
+        for group_idx, (name, leaf_idx, shape, size) in enumerate(self.hn_group_info):
+            n_chunks = (size + chunk_size - 1) // chunk_size
+            depth = group_idx / max(n_hn - 1, 1)
+            scale = 0.25 + 0.75 * depth
+
+            chunk_ids = jnp.arange(n_chunks, dtype=jnp.int32)
+            depths_arr = jnp.full(n_chunks, depth)
+            scales_arr = jnp.full(n_chunks, scale)
+
+            hn = LayerHyperNetwork(
+                chunk_size=chunk_size, n_chunks=n_chunks,
+                hidden_dim=self.hn_hidden_dim, activation=self.hn_activation,
+                output_stddev=self.hn_output_stddev,
+            )
+
+            self.layer_hns.append(hn)
+            self.layer_chunk_ids.append(chunk_ids)
+            self.layer_depths.append(depths_arr)
+            self.layer_scales.append(scales_arr)
+            self.layer_n_chunks.append(n_chunks)
+            self.layer_leaf_idx.append(leaf_idx)
+            self.layer_gen_param_size.append(size)
+            self.layer_gen_param_shape.append(shape)
+
+        # --- Misc group info ---
+        self.misc_sizes = [self.param_sizes[i] for i in self.misc_leaf_indices]
+        self.misc_shapes = [self.param_shapes[i] for i in self.misc_leaf_indices]
+        self.misc_total_params = sum(self.misc_sizes)
+        self.misc_split_indices = list(np.cumsum(self.misc_sizes)[:-1])
+
+    @property
+    def n_hn_groups(self):
+        return len(self.hn_group_info)
+
+    @property
+    def n_groups(self):
+        return self.n_hn_groups + 1  # +1 for misc
+
+    def init_layer_hn(self, rng, group_idx):
+        """Initialize params for one LayerHyperNetwork."""
+        hn = self.layer_hns[group_idx]
+        return hn.init(
+            rng,
+            self.layer_chunk_ids[group_idx],
+            self.layer_depths[group_idx],
+            self.layer_scales[group_idx]
+        )
+
+    def get_layer_hn_param_count(self, group_idx):
+        """Get total parameter count for one LayerHyperNetwork."""
+        hn_params = self.init_layer_hn(jax.random.PRNGKey(0), group_idx)
+        return sum(p.size for p in jax.tree_util.tree_leaves(hn_params))
+
+    def generate_layer_weights(self, group_idx, hn_params):
+        """Generate kernel weights for one layer group from its HN params."""
+        hn = self.layer_hns[group_idx]
+        flat_chunks = hn.apply(
+            hn_params,
+            self.layer_chunk_ids[group_idx],
+            self.layer_depths[group_idx],
+            self.layer_scales[group_idx]
+        )
+        raw = flat_chunks.reshape(-1)
+        kernel = raw[:self.layer_gen_param_size[group_idx]]
+        return kernel.reshape(self.layer_gen_param_shape[group_idx])
+
+    def assemble_gen_params(self, hn_params_list, misc_flat):
+        """Assemble full Generator param tree from per-group HN outputs + misc.
+
+        Args:
+            hn_params_list: list of n_hn_groups HN param pytrees
+            misc_flat: (misc_total_params,) flat array of misc params
+
+        Returns:
+            Full Generator param pytree
+        """
+        leaf_values = {}
+
+        for group_idx in range(self.n_hn_groups):
+            leaf_idx = self.layer_leaf_idx[group_idx]
+            leaf_values[leaf_idx] = self.generate_layer_weights(
+                group_idx, hn_params_list[group_idx]
+            )
+
+        misc_splits = jnp.split(misc_flat, self.misc_split_indices)
+        for i, leaf_idx in enumerate(self.misc_leaf_indices):
+            leaf_values[leaf_idx] = misc_splits[i].reshape(self.misc_shapes[i])
+
+        all_leaves = [leaf_values[i] for i in range(self.n_leaves)]
+        return tree_util.tree_unflatten(self.target_tree, all_leaves)
+
+    def summary(self):
+        """Print summary of layer group assignments."""
+        lines = []
+        for i, (name, leaf_idx, shape, size) in enumerate(self.hn_group_info):
+            hn_params = self.get_layer_hn_param_count(i)
+            lines.append(
+                f'  Group {i} [{name}]: {size:,} gen params, '
+                f'{self.layer_n_chunks[i]} chunks, {hn_params:,} HN params'
+            )
+        lines.append(
+            f'  Group {self.n_hn_groups} [misc]: {self.misc_total_params:,} direct params '
+            f'({len(self.misc_leaf_indices)} leaves)'
+        )
+        return '\n'.join(lines)
+
+
+# --- Per-layer evaluation functions for block coordinate evolution ---
+
+def _compute_fitness_components(d_logits, q_cat_logits, q_feat, cat_codes, codes60,
+                                hist_centroids, hist_velocity, pop_avg_spread,
+                                pop_min_safety, batch_size, n_classes):
+    """Compute all fitness components from Generator/Discriminator outputs.
+
+    Replicates the core logic from Latent_Points.step_fn but operates on
+    raw G+D outputs rather than a task state.  Pure function, JIT-friendly.
+
+    Args:
+        d_logits:        (B, 1) discriminator logit
+        q_cat_logits:    (B, n_classes) Q-head categorical logits
+        q_feat:          (B, feat_dim) Q-trunk feature vectors
+        cat_codes:       (B, n_classes) one-hot code labels
+        codes60:         (n_ctrl,) integer code labels for controlled samples
+        hist_centroids:  (n_classes, feat_dim) topographic KS centroids
+        hist_velocity:   (n_classes, feat_dim) topographic KS velocities
+        pop_avg_spread:  scalar or (n_classes,1) normative KS spread
+        pop_min_safety:  scalar or (n_classes,) normative KS safety
+        batch_size:      int (static)
+        n_classes:       int (static)
+
+    Returns:
+        Tuple of (fitness_adv, fitness_mi, r_cons, r_sense, r_intra,
+                  normative_penalty, safety_ratios, spreads)
+    """
+    # Normalize q features
+    q_norm = jnp.linalg.norm(q_feat, axis=-1, keepdims=True)
+    q_feat = q_feat / jnp.maximum(q_norm, 1e-8)
+
+    B, F = q_feat.shape
+
+    # Current batch centroids
+    sum_per_cat_code = cat_codes.T @ q_feat          # (K, F)
+    count_per_code = cat_codes.sum(axis=0)[:, None]  # (K, 1)
+    current_centroids = sum_per_cat_code / jnp.maximum(count_per_code, 1e-5)
+    c_norm = jnp.linalg.norm(current_centroids, axis=-1, keepdims=True)
+    current_centroids = current_centroids / jnp.maximum(c_norm, 1e-8)
+
+    # Historical centroids (normalized)
+    h_norm = jnp.linalg.norm(hist_centroids, axis=-1, keepdims=True)
+    hist_centroids_norm = hist_centroids / jnp.maximum(h_norm, 1e-8)
+
+    # Predicted centroids (lookahead)
+    lookahead_factor = 5.0
+    predicted_centroids = current_centroids + (hist_velocity * lookahead_factor)
+    p_norm = jnp.linalg.norm(predicted_centroids, axis=-1, keepdims=True)
+    predicted_centroids = predicted_centroids / jnp.maximum(p_norm, 1e-8)
+
+    # Spreads
+    assigned_centroids = cat_codes @ current_centroids  # (B, F)
+    dists = 1.0 - jnp.sum(q_feat * assigned_centroids, axis=-1)
+    spreads = (cat_codes.T @ dists[:, None]) / jnp.maximum(count_per_code, 1e-5)
+
+    # Safety ratios (predicted)
+    pred_sim_mat = predicted_centroids @ predicted_centroids.T
+    pred_separation_mat = 1.0 - pred_sim_mat
+    sum_spreads = spreads + spreads.T
+    safety_ratios = pred_separation_mat / jnp.maximum(sum_spreads, 1e-6)
+    safety_ratios = safety_ratios + jnp.eye(n_classes) * 100.0
+
+    # r_cons: consistency with historical centroids
+    n_ctrl = codes60.shape[0]
+    q_feat60 = q_feat[:n_ctrl]
+    topo_for_sample = hist_centroids_norm[codes60]
+    cos_sim_hist = jnp.sum(q_feat60 * topo_for_sample, axis=-1)
+    r_cons = jnp.mean(1.0 - cos_sim_hist)
+
+    # r_sense: min-pair separation
+    curr_sim_mat = current_centroids @ current_centroids.T
+    curr_sep_mat = 1.0 - curr_sim_mat + jnp.eye(n_classes) * 100.0
+    nearest_dist = jnp.min(curr_sep_mat, axis=1)
+    r_min_pair = jnp.min(curr_sep_mat)
+    r_sense_mean = jnp.mean(nearest_dist)
+    r_sense = 0.7 * r_min_pair + 0.3 * r_sense_mean
+
+    # r_intra: cluster tightness reward
+    spread_flat = spreads.flatten()
+    below = jnp.clip((spread_flat / 0.05), 0.0, 1.0)
+    above = 1.0 - jnp.clip((spread_flat - 0.2) / 0.2, 0.0, 1.0)
+    reward_k = jnp.minimum(below, above)
+    r_intra = jnp.mean(reward_k)
+
+    # Normative penalty
+    min_safety_per_code = jnp.min(safety_ratios, axis=1)
+    raw_violation = jnp.mean(jnp.maximum(0.0, pop_min_safety - min_safety_per_code))
+    safety_violation = jnp.mean(jnp.minimum(raw_violation, 2.0))
+    tightness_threshold = 0.75 * pop_avg_spread
+    target_spread = jnp.maximum(tightness_threshold, 0.05)
+    spread_violation = jnp.mean(jnp.maximum(0.0, spreads - target_spread))
+    target_min_spread = 0.015
+    violation_tight = jnp.mean(jnp.maximum(0.0, target_min_spread - spreads))
+    normative_penalty = spread_violation + violation_tight
+
+    # Losses
+    q_cat_log = jax.nn.log_softmax(q_cat_logits, axis=-1)
+    fitness_mi = jnp.mean(jnp.sum(cat_codes * q_cat_log, axis=-1))   # higher = better MI
+    fitness_adv = -jnp.mean(
+        optax.sigmoid_binary_cross_entropy(
+            d_logits.squeeze(-1), jnp.ones(batch_size)
+        )
+    )
+
+    # Code pixel diversity (computed from fake images — passed separately)
+    # Not computed here; caller handles it from fake_images directly.
+
+    return (fitness_adv, fitness_mi, r_cons, r_sense, r_intra,
+            normative_penalty, safety_ratios, spreads)
+
+
+def build_per_layer_eval_fn(group_idx, multi_adapter, format_fn,
+                            frozen_leaves, treedef, n_classes=11,
+                            gen_kernel_size=5, gen_extra_depth=False):
+    """Build a JIT+vmapped evaluation function for one layer group.
+
+    Args:
+        group_idx: index into multi_adapter's HN groups, or n_hn_groups for misc
+        multi_adapter: MultiLayerAdapter instance
+        format_fn: flat→pytree function for this group's HN (None for misc)
+        frozen_leaves: list of Generator param leaves (from all groups' bests)
+        treedef: pytree structure of Generator params
+        n_classes: number of classes (11 for OrganSMNIST)
+
+    Returns:
+        A function: eval_fn(candidates, latent, noise, cat_codes, codes60,
+                            params_disc, batch_stats_disc,
+                            hist_centroids, hist_velocity,
+                            pop_avg_spread, pop_min_safety)
+        that returns fitness component arrays of shape (pop_size_layer,).
+    """
+    is_misc = (group_idx >= multi_adapter.n_hn_groups)
+    batch_size_static = None  # will be inferred from latent
+
+    if is_misc:
+        misc_leaf_indices = multi_adapter.misc_leaf_indices
+        misc_split_indices = multi_adapter.misc_split_indices
+        misc_shapes = multi_adapter.misc_shapes
+    else:
+        leaf_idx = multi_adapter.layer_leaf_idx[group_idx]
+
+    def eval_single(candidate_flat, latent, noise, cat_codes, codes60,
+                    params_disc, batch_stats_disc,
+                    hist_centroids, hist_velocity,
+                    pop_avg_spread, pop_min_safety):
+        """Evaluate a single candidate. Vmapped over the population."""
+        # 1. Build Generator params: swap this candidate's weights into frozen base
+        new_leaves = list(frozen_leaves)
+
+        if is_misc:
+            misc_splits = jnp.split(candidate_flat, misc_split_indices)
+            for i, lidx in enumerate(misc_leaf_indices):
+                new_leaves[lidx] = misc_splits[i].reshape(misc_shapes[i])
+        else:
+            hn_params = format_fn(candidate_flat)
+            layer_weights = multi_adapter.generate_layer_weights(group_idx, hn_params)
+            new_leaves[leaf_idx] = layer_weights
+
+        gen_params = treedef.unflatten(new_leaves)
+
+        # 2. Run Generator
+        fake_images = Generator(training=False, kernel_size=gen_kernel_size,
+                                extra_depth=gen_extra_depth).apply({'params': gen_params}, latent)
+        fake_images = fake_images.reshape((-1, 28, 28, 1))
+
+        # 3. Run Discriminator (mutable=['batch_stats'] so SpectralNorm
+        #    can write its u-vector; we discard the updated stats)
+        fake_images_noisy = fake_images + noise
+        (d_logits, q_cat_logits, q_feat), _ = Discriminator().apply(
+            {'params': params_disc, 'batch_stats': batch_stats_disc},
+            fake_images_noisy, mutable=['batch_stats']
+        )
+
+        # 4. Code pixel diversity (pop_var)
+        n_ctrl = (fake_images.shape[0] // n_classes) * n_classes
+        grouped = fake_images[:n_ctrl].reshape(-1, n_classes, 28, 28, 1)
+        grouped_centered = grouped - grouped.mean(axis=(2, 3), keepdims=True)
+        pop_var = jnp.mean(jnp.var(grouped_centered, axis=1))
+
+        # 5. Fitness components
+        batch_size = latent.shape[0]
+        (fitness_adv, fitness_mi, r_cons, r_sense, r_intra,
+         normative_penalty, safety_ratios, spreads) = _compute_fitness_components(
+            d_logits, q_cat_logits, q_feat, cat_codes, codes60,
+            hist_centroids, hist_velocity, pop_avg_spread, pop_min_safety,
+            batch_size, n_classes
+        )
+
+        return (fitness_adv, fitness_mi, pop_var, r_cons, r_sense, r_intra,
+                normative_penalty, safety_ratios, spreads)
+
+    # vmap over candidates (axis 0), broadcast all other inputs
+    vmapped_eval = jax.vmap(eval_single, in_axes=(0, None, None, None, None,
+                                                   None, None, None, None,
+                                                   None, None))
+    return jax.jit(vmapped_eval)
+
+
+@jax.jit
+def _rank_normalize(x):
+    """Rank-based fitness shaping: maps values to [-1, 1] by rank order."""
+    n = x.shape[0]
+    ranks = jnp.argsort(jnp.argsort(x)).astype(jnp.float32)
+    return 2.0 * ranks / jnp.maximum(n - 1, 1) - 1.0
+
+
+@jax.jit
+def compose_fitness(fitness_adv, fitness_mi, pop_var, r_cons, r_sense,
+                    r_intra, normative_penalty,
+                    w_adv, w_mi, w_div, w_sense, w_intra,
+                    w_cons_floor, w_norm, cons_floor=0.05):
+    """Combine per-component fitness into a single scalar per candidate.
+
+    Each component is rank-normalized independently, then weighted and summed.
+    Replicates the composition logic from PGPE_CA.tell().
+
+    Args:
+        fitness_adv:        (pop,) adversarial fitness
+        fitness_mi:         (pop,) mutual information fitness
+        pop_var:            (pop,) code pixel diversity
+        r_cons:             (pop,) centroid consistency
+        r_sense:            (pop,) code separation
+        r_intra:            (pop,) cluster tightness
+        normative_penalty:  (pop,) spread/safety violation
+        w_adv..w_norm:      scalar weights (from CA modulation)
+        cons_floor:         float, consistency floor for penalty
+
+    Returns:
+        (pop,) combined fitness scores
+    """
+    cons_shortfall = jnp.maximum(0.0, cons_floor - r_cons)
+
+    return (
+        _rank_normalize(fitness_adv) * w_adv
+        + _rank_normalize(fitness_mi) * w_mi
+        + _rank_normalize(r_sense) * w_sense
+        + _rank_normalize(pop_var) * w_div
+        + _rank_normalize(r_intra) * w_intra
+        - _rank_normalize(cons_shortfall) * w_cons_floor
+        - _rank_normalize(normative_penalty) * w_norm
+    )
+
 
 #class Generator(nn.Module):
 #    """
@@ -725,8 +1152,9 @@ def reorder_real_centroids(
 ) -> jnp.ndarray:                  # (10, 256) reordered
     return real_centroids[col_indices]
 
-@partial(jax.jit, static_argnames=['solver'])
-def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, solver):
+@partial(jax.jit, static_argnames=['solver', 'd_reg_mode'])
+def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, solver,
+                    d_reg_mode='binary', d_reg_low=0.35, d_reg_high=0.50):
        
         noise, shift_x, shift_y = noise_shift_tup
         params_d, batch_stats_d, opt_disc = state
@@ -834,19 +1262,21 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, sol
                   fake_loss = jnp.mean(fake_loss)
 
                   real_fake_loss = (real_loss + fake_loss) / 2.0
-                  loss = real_fake_loss + loss_mi*0.1
-                
-                  return loss, (real_fake_loss, vars_d)
+
+                  if d_reg_mode == 'binary':
+                      # Binary mode: no gradient scaling, full D+MI loss always
+                      total_loss = real_fake_loss + loss_mi * 0.1
+                  else:
+                      # Smooth mode: scale adversarial gradients by D performance
+                      d_scale_local = jnp.clip(
+                          (real_fake_loss - d_reg_low) / jnp.maximum(d_reg_high - d_reg_low, 1e-6),
+                          0.0, 1.0)
+                      total_loss = real_fake_loss * jax.lax.stop_gradient(d_scale_local) + loss_mi * 0.2
+
+                  return total_loss, (real_fake_loss, vars_d)
 
         grad_fn_disc = jax.value_and_grad(loss_discriminator, has_aux=True)
         (loss, (real_fake_loss, vars_d)), grads = grad_fn_disc(params_d, batch_stats_d)
-
-        # Smooth D regulation: scale gradients based on real_fake_loss.
-        # D gets full learning at real_fake_loss >= 0.5 (equilibrium),
-        # zero learning at <= 0.35 (D dominant), linear ramp between.
-        # This replaces the binary freeze threshold.
-        d_scale = jnp.clip((real_fake_loss - 0.35) / 0.15, 0.0, 1.0)
-        grads = jax.tree_util.tree_map(lambda g: g * d_scale, grads)
 
         # apply gradients
         updates, new_opt_state = solver.update(grads, opt_disc, params_d)
@@ -971,7 +1401,12 @@ class Trainer(object):
                  checkpoint_interval: int = 0,
                  resume_from: str = None,
                  logger: logging.Logger = None,
-                 log_scores_fn: Optional[Callable[[int, jnp.ndarray, str], None]] = None):
+                 log_scores_fn: Optional[Callable[[int, jnp.ndarray, str], None]] = None,
+                 layer_solvers: Optional[list] = None,
+                 multi_adapter: Optional[object] = None,
+                 layer_format_fns: Optional[list] = None,
+                 d_reg_mode: str = 'binary',
+                 fitness_mode: str = 'static'):
         """Initialization.
 
         Args:
@@ -993,6 +1428,9 @@ class Trainer(object):
             logger - Logger.
             log_scores_fn - custom function to log the scores array. Expects input:
                 `current_iter`: int, `scores`: jnp.ndarray, 'stage': str = "train" | "test"
+            layer_solvers - List of PGPE_Layer solvers for per-layer mode (None = monolithic).
+            multi_adapter - MultiLayerAdapter for per-layer mode (None = monolithic).
+            layer_format_fns - List of format functions (flat->pytree) per layer solver.
         """
 
         if logger is None:
@@ -1043,6 +1481,17 @@ class Trainer(object):
         #self.solver_disc = solver_disc
         #self.solver_q = solver_q
 
+        # Per-layer mode (None = monolithic mode using solver_hn)
+        self.layer_solvers = layer_solvers
+        self.multi_adapter = multi_adapter
+        self.layer_format_fns = layer_format_fns
+        self.per_layer_mode = layer_solvers is not None
+        self.d_reg_mode = d_reg_mode
+        self.fitness_mode = fitness_mode
+        # Read Generator architecture config from policy
+        self.gen_kernel_size = getattr(policy_gen, 'gen_kernel_size', 5)
+        self.gen_extra_depth = getattr(policy_gen, 'gen_extra_depth', False)
+
         self.sim_mgr_gen = SimManager(
             n_repeats=n_repeats,
             test_n_repeats=test_n_repeats,
@@ -1073,7 +1522,23 @@ class Trainer(object):
         variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.solver_disc = optax.adam(learning_rate=0.00008, b1=0.5, b2=0.999)
+        d_lr = 0.00008
+        self.solver_disc = optax.adam(learning_rate=d_lr, b1=0.5, b2=0.999)
+
+    def _assemble_best_gen_params(self):
+        """Assemble full Generator params from per-layer solver bests.
+
+        Returns the Generator param pytree by:
+        1. Taking best_params from each HN solver → format → generate layer weights
+        2. Taking best_params from the misc solver (direct params)
+        3. Assembling via multi_adapter.assemble_gen_params()
+        """
+        hn_params_list = []
+        for g in range(self.multi_adapter.n_hn_groups):
+            best_flat = self.layer_solvers[g].best_params
+            hn_params_list.append(self.layer_format_fns[g](best_flat))
+        misc_flat = self.layer_solvers[-1].best_params  # misc solver is last
+        return self.multi_adapter.assemble_gen_params(hn_params_list, misc_flat)
 
     def run(self, demo_mode: bool = False) -> float:
 
@@ -1128,6 +1593,7 @@ class Trainer(object):
                     disc_batch_stats_ref=self.batch_stats_disc,
                     opt_disc_ref=opt_disc,
                     logger=self._logger,
+                    layer_solvers=self.layer_solvers if self.per_layer_mode else None,
                 )
                 start_iter += 1  # Resume from the next iteration
            
@@ -1165,19 +1631,20 @@ class Trainer(object):
                 shape_noise = (self.mini_batch_size, self.latent_dim)
                 shape_cat = (self.mini_batch_size,)
                 
-                # D-step frequency: reduce D updates early so G can establish
-                # diversity before D crushes it. Every 3rd iter for first 1.5k,
-                # then every iteration after.
-                d_freq = 3 if i < 1500 else (2 if i < 3000 else 1)
-                if i % d_freq == 0:
-                    for mini_batch in range(num_mini_batches):
-                        # Sample batch of data.
+                # D-step frequency
+                if self.d_reg_mode == 'binary':
+                    # Binary mode: D trains every iteration, freeze via loss threshold
+                    do_d_step = True
+                else:
+                    # Smooth mode: reduce D updates early so G can establish diversity
+                    d_freq = 5 if i < 1500 else (4 if i < 3000 else 1)
+                    do_d_step = (i % d_freq == 0)
 
+                if do_d_step:
+                    for mini_batch in range(num_mini_batches):
                         self._key, subkey_latent, subkey_mnist, subkey_noise, subkey_shift_x, subkey_shift_y = jax.random.split(self._key,6)
 
-
                         data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
-                        #data = np.expand_dims(data / 255.0, axis=-1)
 
                         latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
 
@@ -1186,20 +1653,22 @@ class Trainer(object):
                         shift_x = jax.random.randint(subkey_shift_x, shape=(), minval=-1, maxval=2)
                         shift_y = jax.random.randint(subkey_shift_y, shape=(), minval=-1, maxval=2)
 
-                        #if i < 2:
-                        params_hn = self.solver_hn.best_params
-                        best_params_hn_formatted = self.policy_gen._format_single_params_hypernet_fn(params_hn)
-                        #else:
+                        if self.per_layer_mode:
+                            params_g = self._assemble_best_gen_params()
+                        else:
+                            params_hn = self.solver_hn.best_params
+                            best_params_hn_formatted = self.policy_gen._format_single_params_hypernet_fn(params_hn)
+                            params_g = self.adapter.generate_params(best_params_hn_formatted)
 
-                        params_g = self.adapter.generate_params(best_params_hn_formatted)
+                        (fake_images) = Generator(training=False, kernel_size=self.gen_kernel_size,
+                                                  extra_depth=self.gen_extra_depth).apply({'params': params_g},latent)
 
-                        (fake_images) = Generator(training=False).apply({'params': params_g},latent)
-
-                        # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
                         fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
 
                         state = (params_disc, self.batch_stats_disc, opt_disc)
 
+                        d_reg_lo = 0.35
+                        d_reg_hi = 0.50
                         state, d_loss, real_fake_loss = train_step_disc(
                             state,
                             data,
@@ -1207,36 +1676,165 @@ class Trainer(object):
                             fake_images,
                             cat_codes,
                             solver_disc,
+                            d_reg_mode=self.d_reg_mode,
+                            d_reg_low=d_reg_lo,
+                            d_reg_high=d_reg_hi,
                         )
-#jax.debug.print('loss: {} ', loss)
-                        params_disc, self.batch_stats_disc, opt_disc = state
 
-                leaves_params, _ = jax.tree_flatten(params_disc) 
-                flat_params_disc = jnp.concatenate([p.flatten() for p in leaves_params])
+                        if self.d_reg_mode == 'binary':
+                            # Binary freeze: only apply D update when D is still learning
+                            if i < 5000 or real_fake_loss > 0.5:
+                                params_disc, self.batch_stats_disc, opt_disc = state
+                        else:
+                            params_disc, self.batch_stats_disc, opt_disc = state
 
-                leaves_batch_stats_disc, _ = jax.tree_flatten(self.batch_stats_disc)
-                flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
+                if self.per_layer_mode:
+                    # --- Per-layer G-step (block coordinate evolution) ---
+                    # 1. Sample shared latent vectors (controlled structure)
+                    self._key, latent_key, noise_key = jax.random.split(self._key, 3)
+                    n_sets = self.batch_size // self.n_classes
+                    n_ctrl = n_sets * self.n_classes
+                    z_base_fixed = jax.random.normal(latent_key, (n_sets + 1, self.latent_dim))
+                    z_base_rep = jnp.repeat(z_base_fixed, self.n_classes, axis=0)
+                    z_base = z_base_rep[:self.batch_size]
+                    codes60 = jnp.tile(jnp.arange(self.n_classes), n_sets)
+                    onehot60 = jax.nn.one_hot(codes60, self.n_classes)
+                    remainder = self.batch_size - n_ctrl
+                    codes_rem = jnp.tile(jnp.arange(self.n_classes), (remainder // self.n_classes) + 1)[:remainder]
+                    onehot_rem = jax.nn.one_hot(codes_rem, self.n_classes)
+                    cat_onehot = jnp.concatenate([onehot60, onehot_rem], axis=0)
+                    latent = jnp.concatenate([z_base, cat_onehot], axis=-1)
+                    noise = jax.random.normal(noise_key, (self.batch_size, 28, 28, 1)) * 0.1
 
-                params_hn, belief_space = self.solver_hn.ask()
-                
-                topographic_ks = belief_space[4]
-                normative_ks = belief_space[5]
+                    # 2. Frozen base Generator from current bests
+                    frozen_gen_params = self._assemble_best_gen_params()
+                    frozen_leaves, treedef = jax.tree_util.tree_flatten(frozen_gen_params)
 
-                #jax.debug.print('topographic_ks shape: {} ', topographic_ks.shape)
-                #avg_per_code = topographic_ks[0]
-                
-                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, norm_pen, safety_ratios, spreads = self.sim_mgr_gen.eval_params(
-                params_gen=params_hn, params_disc=flat_params_disc, batch_stats_disc=flat_batch_stats_disc, topographic_ks=topographic_ks, normative_ks=normative_ks, generator=True, test=False
-                )
+                    # 3. Get KS data from shared CA
+                    topographic_ks = self.solver_hn.belief_space[4]
+                    normative_ks = self.solver_hn.belief_space[5]
+                    hist_centroids = topographic_ks[0]  # (11, 256)
+                    hist_velocity = topographic_ks[1]    # (11, 256)
+                    # Normative: take mean across pop dim for a single representative
+                    pop_avg_spread = jnp.mean(normative_ks[0], axis=0)  # (11, 1)
+                    pop_min_safety = jnp.mean(normative_ks[1], axis=0)  # (11, 11)
 
-                #jax.debug.print('fake_imgs shape: {} ', fake_imgs.shape)
-                if isinstance(self.solver_hn, QualityDiversityMethod):
-                    self.solver_hn.observe_bd(bds_gen)
-                
-                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, normative_penalty=norm_pen, safety_ratios=safety_ratios, spreads=spreads, adv=False)
+                    # 4. Get CA-modulated fitness weights
+                    ca_weights = self.solver_hn.compute_ca_weights()
+                    self.solver_hn.log_ca_weights(ca_weights)
 
-                
-                self.avg_mi_loss = jnp.mean(scores_gen_mi)
+                    # 5. Per-layer iteration: ask → eval → compose → tell
+                    n_total_groups = self.multi_adapter.n_groups  # HN groups + misc
+                    for g in range(n_total_groups):
+                        is_misc = (g >= self.multi_adapter.n_hn_groups)
+                        fmt_fn = self.layer_format_fns[g] if not is_misc else None
+
+                        # Build eval fn for this group
+                        eval_fn = build_per_layer_eval_fn(
+                            group_idx=g, multi_adapter=self.multi_adapter,
+                            format_fn=fmt_fn, frozen_leaves=frozen_leaves,
+                            treedef=treedef, n_classes=self.n_classes,
+                            gen_kernel_size=self.gen_kernel_size,
+                            gen_extra_depth=self.gen_extra_depth,
+                        )
+
+                        # Ask: sample population
+                        candidates = self.layer_solvers[g].ask()
+
+                        # Eval: run G+D for each candidate
+                        (f_adv, f_mi, pv, rc, rs, ri,
+                         npn, sr, sp) = eval_fn(
+                            candidates, latent, noise, cat_onehot, codes60,
+                            params_disc, self.batch_stats_disc,
+                            hist_centroids, hist_velocity,
+                            pop_avg_spread, pop_min_safety
+                        )
+
+                        # Compose: combine fitness components with CA weights
+                        if self.fitness_mode == 'static':
+                            # Static mode: use solver's static weights, no r_intra/cons_floor
+                            sw = self.solver_hn.static_weights
+                            combined = compose_fitness(
+                                f_adv, f_mi, pv, rc, rs, ri, npn,
+                                w_adv=sw['w_adv'], w_mi=sw['w_mi'],
+                                w_div=sw['w_div'], w_sense=sw['w_sense'],
+                                w_intra=0.0, w_cons_floor=0.0,
+                                w_norm=sw['w_norm'],
+                            )
+                        else:
+                            combined = compose_fitness(
+                                f_adv, f_mi, pv, rc, rs, ri, npn,
+                                **{k: ca_weights[k] for k in
+                                   ('w_adv', 'w_mi', 'w_div', 'w_sense',
+                                    'w_intra', 'w_cons_floor', 'w_norm')}
+                            )
+
+                        # Tell: update this solver
+                        self.layer_solvers[g].tell(combined)
+
+                    # 6. Update shared CA belief space with assembled-best metrics
+                    # Run one evaluation with the fully assembled best Generator
+                    best_gen_params = self._assemble_best_gen_params()
+                    best_fake = Generator(training=False, kernel_size=self.gen_kernel_size,
+                                          extra_depth=self.gen_extra_depth).apply(
+                        {'params': best_gen_params}, latent
+                    ).reshape((-1, 28, 28, 1))
+                    best_fake_noisy = best_fake + noise
+                    (best_d_logits, best_q_logits, best_q_feat), _ = Discriminator().apply(
+                        {'params': params_disc, 'batch_stats': self.batch_stats_disc},
+                        best_fake_noisy, mutable=['batch_stats']
+                    )
+                    # Compute avg_per_code for topographic KS
+                    q_norm = jnp.linalg.norm(best_q_feat, axis=-1, keepdims=True)
+                    best_q_feat_n = best_q_feat / jnp.maximum(q_norm, 1e-8)
+                    sum_per_code = cat_onehot.T @ best_q_feat_n
+                    count_per_code = cat_onehot.sum(axis=0)[:, None]
+                    avg_per_code_current = sum_per_code / jnp.maximum(count_per_code, 1e-5)
+
+                    # Use the last group's fitness components for logging
+                    scores_gen_adv = f_adv
+                    scores_gen_mi = f_mi
+                    r_cons = rc
+                    r_sense = rs
+                    r_intra = ri
+                    norm_pen = npn
+                    safety_ratios = sr
+                    spreads = sp
+
+                    self.solver_hn.update_belief_space_from_metrics(
+                        fitness_adv=f_adv, fitness_mi=f_mi,
+                        r_sense=rs, r_intra=ri, r_cons=rc,
+                        disc_logits=best_q_logits[None, ...],  # add pop dim
+                        avg_per_code=avg_per_code_current,
+                        spreads=sp, safety_ratios=sr,
+                        fitness_scores=combined,
+                    )
+
+                    self.avg_mi_loss = jnp.mean(scores_gen_mi)
+
+                else:
+                    # --- Monolithic G-step (original path, unchanged) ---
+                    leaves_params, _ = jax.tree_flatten(params_disc)
+                    flat_params_disc = jnp.concatenate([p.flatten() for p in leaves_params])
+
+                    leaves_batch_stats_disc, _ = jax.tree_flatten(self.batch_stats_disc)
+                    flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
+
+                    params_hn, belief_space = self.solver_hn.ask()
+
+                    topographic_ks = belief_space[4]
+                    normative_ks = belief_space[5]
+
+                    scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, norm_pen, safety_ratios, spreads = self.sim_mgr_gen.eval_params(
+                    params_gen=params_hn, params_disc=flat_params_disc, batch_stats_disc=flat_batch_stats_disc, topographic_ks=topographic_ks, normative_ks=normative_ks, generator=True, test=False
+                    )
+
+                    if isinstance(self.solver_hn, QualityDiversityMethod):
+                        self.solver_hn.observe_bd(bds_gen)
+
+                    self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, normative_penalty=norm_pen, safety_ratios=safety_ratios, spreads=spreads, adv=False)
+
+                    self.avg_mi_loss = jnp.mean(scores_gen_mi)
 
                 if i > 0 and i % self._log_interval == 0:
                     scores_gen_adv = np.array(scores_gen_adv)
@@ -1322,14 +1920,17 @@ class Trainer(object):
                         ]) + '\n')
 
                 if i > 0 and i % self._test_interval == 0:
-                    best_params_hn = self.solver_hn.best_params
-                    best_params_hn_formatted = self.policy_gen._format_single_params_hypernet_fn(best_params_hn)
-
                     self._key, noise_key, con_key = jax.random.split(self._key, 3)
 
-                    params_g = self.adapter.generate_params(best_params_hn_formatted)
+                    if self.per_layer_mode:
+                        params_g = self._assemble_best_gen_params()
+                    else:
+                        best_params_hn = self.solver_hn.best_params
+                        best_params_hn_formatted = self.policy_gen._format_single_params_hypernet_fn(best_params_hn)
+                        params_g = self.adapter.generate_params(best_params_hn_formatted)
 
-                    (fake_imgs) = Generator(training=False).apply({'params': params_g},fixed_latent)
+                    (fake_imgs) = Generator(training=False, kernel_size=self.gen_kernel_size,
+                                              extra_depth=self.gen_extra_depth).apply({'params': params_g},fixed_latent)
                     
                     filename = f"iteration-{i}.npy"
                     np.save(filename, fake_imgs[:, :, :, :])
@@ -1344,10 +1945,14 @@ class Trainer(object):
                         opt_disc=opt_disc,
                         prng_key=self._key,
                         logger=self._logger,
+                        layer_solvers=self.layer_solvers if self.per_layer_mode else None,
                     )
 
             # Test and save the final model.
-            best_params_hn = self.solver_hn.best_params
+            if self.per_layer_mode:
+                best_params_hn = [s.best_params for s in self.layer_solvers]
+            else:
+                best_params_hn = self.solver_hn.best_params
             #best_params_disc = self.solver_disc.best_params
             #test_scores, _ = self.sim_mgr.eval_params(
             #    params=best_params, test=True)

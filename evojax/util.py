@@ -266,6 +266,7 @@ def save_checkpoint(
     opt_disc,
     prng_key: jnp.ndarray,
     logger: logging.Logger = None,
+    layer_solvers: list = None,
 ) -> str:
     """Save full training state to a pickle checkpoint.
 
@@ -275,12 +276,13 @@ def save_checkpoint(
     Args:
         checkpoint_dir: Directory to write the checkpoint into.
         iteration: Current training iteration (loop index).
-        solver_hn: The PGPE_CA solver instance.
+        solver_hn: The PGPE_CA solver instance (shared CA).
         params_disc: Discriminator parameter pytree (Flax).
         batch_stats_disc: Discriminator batch-stats pytree (Flax).
         opt_disc: Discriminator optax optimizer state.
         prng_key: Current PRNG key from the training loop.
         logger: Optional logger.
+        layer_solvers: Optional list of PGPE_Layer solvers (per-layer mode).
 
     Returns:
         The path of the written checkpoint file.
@@ -302,6 +304,18 @@ def save_checkpoint(
         # --- Misc ---
         'prng_key': np.array(prng_key),
     }
+
+    # --- Per-layer solver states (optional) ---
+    if layer_solvers is not None:
+        checkpoint['per_layer_mode'] = True
+        checkpoint['layer_solvers'] = []
+        for s in layer_solvers:
+            checkpoint['layer_solvers'].append({
+                'center': np.array(s._center),
+                'stdev': np.array(s._stdev),
+                't': int(s._t),
+                'opt_state': _to_numpy(s._opt_state),
+            })
 
     path = os.path.join(checkpoint_dir, f'checkpoint_{iteration}.pkl')
     with open(path, 'wb') as f:
@@ -327,6 +341,7 @@ def load_checkpoint(
     disc_batch_stats_ref,
     opt_disc_ref,
     logger: logging.Logger = None,
+    layer_solvers: list = None,
 ):
     """Restore full training state from a checkpoint.
 
@@ -341,6 +356,7 @@ def load_checkpoint(
         disc_batch_stats_ref: Freshly-inited batch stats (for structure).
         opt_disc_ref: Freshly-inited optax optimizer state (for structure).
         logger: Optional logger.
+        layer_solvers: Optional list of PGPE_Layer solvers to restore (per-layer mode).
 
     Returns:
         (iteration, params_disc, batch_stats_disc, opt_disc, prng_key)
@@ -354,6 +370,17 @@ def load_checkpoint(
     solver_hn._t = int(ckpt['pgpe_t'])
     solver_hn._opt_state = _to_jax(ckpt['pgpe_opt_state'])
     solver_hn.belief_space = _to_jax(ckpt['belief_space'])
+
+    # --- Restore per-layer solver states (optional) ---
+    if layer_solvers is not None and 'layer_solvers' in ckpt:
+        for i, s_data in enumerate(ckpt['layer_solvers']):
+            if i < len(layer_solvers):
+                layer_solvers[i]._center = jnp.array(s_data['center'])
+                layer_solvers[i]._stdev = jnp.array(s_data['stdev'])
+                layer_solvers[i]._t = int(s_data['t'])
+                layer_solvers[i]._opt_state = _to_jax(s_data['opt_state'])
+        if logger:
+            logger.info(f'Restored {len(ckpt["layer_solvers"])} per-layer solver states')
 
     # --- Restore Discriminator state ---
     params_disc = _to_jax(ckpt['params_disc'])

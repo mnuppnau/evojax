@@ -89,7 +89,9 @@ class HyperNetwork(nn.Module):
     chunk_size: int = 256
     n_layers: int = 20
     n_chunks: int = 200
-    embed_dim: int = 32
+    hidden_dim: int = 48        # 48 = stable, 32 = experimental
+    activation: str = 'gelu'    # 'gelu' = stable, 'tanh' = experimental
+    output_stddev: float = 0.025  # 0.025 = stable, 0.05 = experimental
 
     @nn.compact
     def __call__(self, layer_ids, chunk_ids, depths, scales):
@@ -98,36 +100,67 @@ class HyperNetwork(nn.Module):
                 depths (N,) float, scales (N,) float
         Output: (N, chunk_size) generated weight chunks
         """
-        # Learned embeddings replace sparse one-hot vectors
-        layer_emb = nn.Embed(self.n_layers, self.embed_dim)(layer_ids)   # (N, 32)
-        chunk_emb = nn.Embed(self.n_chunks, self.embed_dim)(chunk_ids)   # (N, 32)
+        layer_oh = jax.nn.one_hot(layer_ids, self.n_layers)
+        chunk_oh = jax.nn.one_hot(chunk_ids, self.n_chunks)
+        inputs = jnp.concatenate([
+            layer_oh, chunk_oh, depths[:, None], scales[:, None]
+        ], axis=-1)
 
-        # Multiplicative interaction: layer-chunk specific representation
-        # Unlike additive (one-hot concat), this lets chunk 7 in layer 3 differ
-        # from chunk 7 in layer 15 — each pair gets a unique combined embedding
-        interaction = layer_emb * chunk_emb  # (N, 32)
-
-        # Concatenate with geometric features
-        coords = jnp.concatenate([
-            interaction,
-            depths[:, None],
-            scales[:, None]
-        ], axis=-1)  # (N, 34)
-
-        # Single linear projection to chunk weights — no non-linearity
-        # The landscape smoothness comes from this: perturbation in any HN param
-        # causes a linear, predictable change in generated weights
+        act_fn = nn.gelu if self.activation == 'gelu' else nn.tanh
+        x = nn.Dense(self.hidden_dim)(inputs)
+        x = act_fn(x)
+        x = nn.Dense(self.hidden_dim)(x)
+        x = act_fn(x)
         weights = nn.Dense(
             self.chunk_size,
-            kernel_init=jax.nn.initializers.normal(stddev=0.025)
-        )(coords)
+            kernel_init=jax.nn.initializers.normal(stddev=self.output_stddev)
+        )(x)
+
+        return weights
+
+# --- 1b. Per-Layer HyperNetwork (for independent PGPE solvers) ---
+# Each major Generator layer gets its own small HN with its own PGPE solver.
+# No layer embeddings needed — layer identity is implicit (one HN per layer).
+# This eliminates cross-layer gradient noise: perturbing HN_i only affects
+# layer i's weights, so the fitness signal is clean for that layer's solver.
+class LayerHyperNetwork(nn.Module):
+    chunk_size: int = 256
+    n_chunks: int = 10     # varies per layer group
+    hidden_dim: int = 48        # 48 = stable, 32 = experimental
+    activation: str = 'gelu'    # 'gelu' = stable, 'tanh' = experimental
+    output_stddev: float = 0.025  # 0.025 = stable, 0.05 = experimental
+
+    @nn.compact
+    def __call__(self, chunk_ids, depths, scales):
+        """
+        Input:  chunk_ids (N,) int, depths (N,) float, scales (N,) float
+        Output: (N, chunk_size) generated weight chunks
+        """
+        chunk_oh = jax.nn.one_hot(chunk_ids, self.n_chunks)
+        inputs = jnp.concatenate([
+            chunk_oh, depths[:, None], scales[:, None]
+        ], axis=-1)
+
+        act_fn = nn.gelu if self.activation == 'gelu' else nn.tanh
+        x = nn.Dense(self.hidden_dim)(inputs)
+        x = act_fn(x)
+        x = nn.Dense(self.hidden_dim)(x)
+        x = act_fn(x)
+        weights = nn.Dense(
+            self.chunk_size,
+            kernel_init=jax.nn.initializers.normal(stddev=self.output_stddev)
+        )(x)
 
         return weights
 
 # --- 2. The Adapter (The "Context" Builder) ---
 class ParameterAdapter:
-    def __init__(self, target_init_params, chunk_size=256):
+    def __init__(self, target_init_params, chunk_size=256,
+                 hn_hidden_dim=48, hn_activation='gelu', hn_output_stddev=0.025):
         self.chunk_size = chunk_size
+        self.hn_hidden_dim = hn_hidden_dim
+        self.hn_activation = hn_activation
+        self.hn_output_stddev = hn_output_stddev
         self.target_tree = tree_util.tree_structure(target_init_params)
 
         # --- A. Flatten and Map Shapes ---
@@ -161,10 +194,15 @@ class ParameterAdapter:
         self.N_LAYERS = int(np.max(np.concatenate(layer_ids_list))) + 1
         self.N_CHUNKS = int(np.max(np.concatenate(chunk_ids_list))) + 1
 
-    def init_hypernet(self, rng):
+    def _make_hn(self):
         return HyperNetwork(
-            self.chunk_size, self.N_LAYERS, self.N_CHUNKS
-        ).init(
+            chunk_size=self.chunk_size, n_layers=self.N_LAYERS, n_chunks=self.N_CHUNKS,
+            hidden_dim=self.hn_hidden_dim, activation=self.hn_activation,
+            output_stddev=self.hn_output_stddev,
+        )
+
+    def init_hypernet(self, rng):
+        return self._make_hn().init(
             rng,
             jnp.zeros(self.total_chunks, dtype=jnp.int32),
             jnp.zeros(self.total_chunks, dtype=jnp.int32),
@@ -173,9 +211,7 @@ class ParameterAdapter:
         )
 
     def generate_params(self, hypernet_params):
-        flat_chunks = HyperNetwork(
-            self.chunk_size, self.N_LAYERS, self.N_CHUNKS
-        ).apply(
+        flat_chunks = self._make_hn().apply(
             hypernet_params,
             self.layer_ids,
             self.chunk_ids,
@@ -194,18 +230,175 @@ class ParameterAdapter:
         ]
         return tree_util.tree_unflatten(self.target_tree, reshaped_params)
 
+# --- 3. Multi-Layer Adapter (for per-layer PGPE solvers) ---
+# Categorizes Generator params into layer groups:
+# - Groups 0..N: Major kernels (>1000 params), each with own LayerHyperNetwork
+# - Last group: Misc params (biases, GroupNorm, small kernels), evolved directly
+# Auto-detects groups from param tree structure so it adapts to Generator changes.
+class MultiLayerAdapter:
+    KERNEL_SIZE_THRESHOLD = 1000
+
+    def __init__(self, target_init_params, chunk_size=256,
+                 hn_hidden_dim=48, hn_activation='gelu', hn_output_stddev=0.025):
+        self.chunk_size = chunk_size
+        self.hn_hidden_dim = hn_hidden_dim
+        self.hn_activation = hn_activation
+        self.hn_output_stddev = hn_output_stddev
+        self.target_tree = tree_util.tree_structure(target_init_params)
+
+        flat_params, _ = tree_util.tree_flatten(target_init_params)
+        flat_with_path = tree_util.tree_flatten_with_path(target_init_params)[0]
+        self.param_shapes = [p.shape for p in flat_params]
+        self.param_sizes = [int(np.prod(p.shape)) for p in flat_params]
+        self.n_leaves = len(flat_params)
+
+        # --- Auto-detect layer groups from param tree ---
+        # Major kernels (>threshold) get their own HN; rest goes to misc
+        self.hn_group_info = []   # (name, leaf_idx, shape, size)
+        self.misc_leaf_indices = []
+
+        for i, (path, leaf) in enumerate(flat_with_path):
+            path_parts = [p.key if hasattr(p, 'key') else str(p) for p in path]
+            param_name = path_parts[-1] if path_parts else ''
+            module_name = path_parts[0] if path_parts else ''
+
+            if param_name == 'kernel' and leaf.size > self.KERNEL_SIZE_THRESHOLD:
+                self.hn_group_info.append((module_name, i, leaf.shape, int(leaf.size)))
+            else:
+                self.misc_leaf_indices.append(i)
+
+        # --- Create LayerHyperNetwork per HN group ---
+        self.layer_hns = []
+        self.layer_chunk_ids = []
+        self.layer_depths = []
+        self.layer_scales = []
+        self.layer_n_chunks = []
+        self.layer_leaf_idx = []
+        self.layer_gen_param_size = []
+        self.layer_gen_param_shape = []
+
+        n_hn = len(self.hn_group_info)
+        for group_idx, (name, leaf_idx, shape, size) in enumerate(self.hn_group_info):
+            n_chunks = (size + chunk_size - 1) // chunk_size
+            depth = group_idx / max(n_hn - 1, 1)
+            scale = 0.25 + 0.75 * depth
+
+            chunk_ids = jnp.arange(n_chunks, dtype=jnp.int32)
+            depths_arr = jnp.full(n_chunks, depth)
+            scales_arr = jnp.full(n_chunks, scale)
+
+            hn = LayerHyperNetwork(
+                chunk_size=chunk_size, n_chunks=n_chunks,
+                hidden_dim=self.hn_hidden_dim, activation=self.hn_activation,
+                output_stddev=self.hn_output_stddev,
+            )
+
+            self.layer_hns.append(hn)
+            self.layer_chunk_ids.append(chunk_ids)
+            self.layer_depths.append(depths_arr)
+            self.layer_scales.append(scales_arr)
+            self.layer_n_chunks.append(n_chunks)
+            self.layer_leaf_idx.append(leaf_idx)
+            self.layer_gen_param_size.append(size)
+            self.layer_gen_param_shape.append(shape)
+
+        # --- Misc group info ---
+        self.misc_sizes = [self.param_sizes[i] for i in self.misc_leaf_indices]
+        self.misc_shapes = [self.param_shapes[i] for i in self.misc_leaf_indices]
+        self.misc_total_params = sum(self.misc_sizes)
+        self.misc_split_indices = list(np.cumsum(self.misc_sizes)[:-1])
+
+    @property
+    def n_hn_groups(self):
+        return len(self.hn_group_info)
+
+    @property
+    def n_groups(self):
+        return self.n_hn_groups + 1  # +1 for misc
+
+    def init_layer_hn(self, rng, group_idx):
+        """Initialize params for one LayerHyperNetwork."""
+        hn = self.layer_hns[group_idx]
+        return hn.init(
+            rng,
+            self.layer_chunk_ids[group_idx],
+            self.layer_depths[group_idx],
+            self.layer_scales[group_idx]
+        )
+
+    def get_layer_hn_param_count(self, group_idx):
+        """Get total parameter count for one LayerHyperNetwork."""
+        hn_params = self.init_layer_hn(jax.random.PRNGKey(0), group_idx)
+        return sum(p.size for p in jax.tree_util.tree_leaves(hn_params))
+
+    def generate_layer_weights(self, group_idx, hn_params):
+        """Generate kernel weights for one layer group from its HN params."""
+        hn = self.layer_hns[group_idx]
+        flat_chunks = hn.apply(
+            hn_params,
+            self.layer_chunk_ids[group_idx],
+            self.layer_depths[group_idx],
+            self.layer_scales[group_idx]
+        )
+        raw = flat_chunks.reshape(-1)
+        kernel = raw[:self.layer_gen_param_size[group_idx]]
+        return kernel.reshape(self.layer_gen_param_shape[group_idx])
+
+    def assemble_gen_params(self, hn_params_list, misc_flat):
+        """Assemble full Generator param tree from per-group HN outputs + misc.
+
+        Args:
+            hn_params_list: list of n_hn_groups HN param pytrees
+            misc_flat: (misc_total_params,) flat array of misc params
+
+        Returns:
+            Full Generator param pytree
+        """
+        leaf_values = {}
+
+        for group_idx in range(self.n_hn_groups):
+            leaf_idx = self.layer_leaf_idx[group_idx]
+            leaf_values[leaf_idx] = self.generate_layer_weights(
+                group_idx, hn_params_list[group_idx]
+            )
+
+        misc_splits = jnp.split(misc_flat, self.misc_split_indices)
+        for i, leaf_idx in enumerate(self.misc_leaf_indices):
+            leaf_values[leaf_idx] = misc_splits[i].reshape(self.misc_shapes[i])
+
+        all_leaves = [leaf_values[i] for i in range(self.n_leaves)]
+        return tree_util.tree_unflatten(self.target_tree, all_leaves)
+
+    def summary(self):
+        """Print summary of layer group assignments."""
+        lines = []
+        for i, (name, leaf_idx, shape, size) in enumerate(self.hn_group_info):
+            hn_params = self.get_layer_hn_param_count(i)
+            lines.append(
+                f'  Group {i} [{name}]: {size:,} gen params, '
+                f'{self.layer_n_chunks[i]} chunks, {hn_params:,} HN params'
+            )
+        lines.append(
+            f'  Group {self.n_hn_groups} [misc]: {self.misc_total_params:,} direct params '
+            f'({len(self.misc_leaf_indices)} leaves)'
+        )
+        return '\n'.join(lines)
+
 class Generator(nn.Module):
     features: int = 64
     training: bool = True
+    kernel_size: int = 5       # 5 = stable (5x5 upsample/output), 3 = experimental (3x3)
+    extra_depth: bool = False  # True = extra conv at 14x14 (experimental, tied to kernel_size=3)
 
     @nn.compact
     def __call__(self, z):
+        ks = (self.kernel_size, self.kernel_size)
 
         # Project z -> 7*7*8 (small depth) -> Conv to features
         x = nn.Dense(7 * 7 * 8)(z)
         x = x.reshape((x.shape[0], 7, 7, 8))
 
-        # Expand depth with 3x3 conv (clean edges, no spatial bias)
+        # Expand depth with 3x3 conv (clean edges, no spatial bias) — always 3x3
         x = nn.Conv(self.features, kernel_size=(3,3), padding='SAME')(x)
         x = nn.GroupNorm(num_groups=32)(x)
         x = jnp.tanh(x)
@@ -213,10 +406,9 @@ class Generator(nn.Module):
         # UPSAMPLE BLOCK 1 (7x7 -> 14x14)
         x = jax.image.resize(x, shape=(x.shape[0], 14, 14, x.shape[3]), method='nearest')
 
-        # 3x3 kernels: eliminate edge bias from old 5x5 kernels
         x = nn.Conv(
             self.features,
-            kernel_size=(3, 3),
+            kernel_size=ks,
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -224,23 +416,24 @@ class Generator(nn.Module):
         x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
         x = jnp.tanh(x)
 
-        # Extra depth at 14x14: richer feature composition before final upsample
-        x = nn.Conv(
-            self.features,
-            kernel_size=(3, 3),
-            strides=(1, 1),
-            padding='SAME',
-            kernel_init=normal_init(0.02)
-        )(x)
-        x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
-        x = jnp.tanh(x)
+        # Extra depth at 14x14 (experimental only)
+        if self.extra_depth:
+            x = nn.Conv(
+                self.features,
+                kernel_size=ks,
+                strides=(1, 1),
+                padding='SAME',
+                kernel_init=normal_init(0.02)
+            )(x)
+            x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
+            x = jnp.tanh(x)
 
         # UPSAMPLE BLOCK 2 (14x14 -> 28x28)
         x = jax.image.resize(x, shape=(x.shape[0], 28, 28, x.shape[3]), method='nearest')
 
         x = nn.Conv(
             self.features // 2,
-            kernel_size=(3, 3),
+            kernel_size=ks,
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -251,7 +444,7 @@ class Generator(nn.Module):
         # OUTPUT BLOCK (28x28 -> 28x28)
         x = nn.Conv(
             1,
-            kernel_size=(3, 3),
+            kernel_size=ks,
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -661,14 +854,20 @@ class QNetwork(nn.Module):
 class GenPolicy(PolicyNetwork):
     """A convolutional neural network for the MNIST classification task."""
 
-    def __init__(self, logger: logging.Logger = None):
+    def __init__(self, logger: logging.Logger = None,
+                 gen_kernel_size=5, hn_hidden_dim=48, hn_activation='gelu',
+                 hn_output_stddev=0.025, chunk_size=512):
         if logger is None:
             self._logger = create_logger('ConvNetPolicy')
         else:
             self._logger = logger
 
-        self.model_gen = Generator(training=False)
-       
+        self.gen_kernel_size = gen_kernel_size
+        self.gen_extra_depth = (gen_kernel_size == 3)
+
+        self.model_gen = Generator(training=False, kernel_size=gen_kernel_size,
+                                   extra_depth=self.gen_extra_depth)
+
         self.model_disc = Discriminator(train=False)
 
         self.model_q = Discriminator()
@@ -685,7 +884,9 @@ class GenPolicy(PolicyNetwork):
         self.init_params_gen = variables_gen['params']
         self.init_params_disc, self.init_batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.adapter = ParameterAdapter(self.init_params_gen, chunk_size=512)
+        self.adapter = ParameterAdapter(self.init_params_gen, chunk_size=chunk_size,
+                                        hn_hidden_dim=hn_hidden_dim, hn_activation=hn_activation,
+                                        hn_output_stddev=hn_output_stddev)
         self.init_params_hypernet = self.adapter.init_hypernet(random.PRNGKey(11))
 
         #jax.debug.print('batch stats gen shape : {}', self.init_batch_stats_gen.shape)

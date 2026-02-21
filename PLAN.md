@@ -62,22 +62,25 @@ fitness = (rank_normalize(fitness_adv) * w_adv)         # Fool discriminator
         - (rank_normalize(normative_penalty) * w_norm)   # Safety/spread limits
 ```
 
+**Rank normalization is pure rank-based** (no variance gate — see B.17 for why it was removed).
+
 **Base weights (CA-modulated):**
 | Weight | Base | CA Modulation |
 |--------|------|---------------|
-| w_adv | 0.53 | +adv_distress (up to +0.2 when D winning) |
-| w_mi | 0.10 | Static |
-| w_sense | 0.10 | -sense_overshoot (reduce if spiking too fast) |
-| w_div | 0.48 | -adv_distress*0.5 (ease off when D crushing) |
+| w_adv | 0.45 | Stable (no longer boosted under distress) |
+| w_mi | 0.15 | Fixed (Q-head always trains via MI decoupling) |
+| w_sense | 0.12 | +adv_distress*0.4 (INCREASE when D winning) |
+| w_div | 0.50 | +adv_distress*0.6 (INCREASE when D winning, up to 0.65) |
 | w_intra | 0.20 | +intra_distress (up to +0.15 when codes tightening) |
 | w_cons_floor | 0.10 | Static, cons_floor=0.05 |
 | w_norm | 0.04 | Scaled by ca_weight |
 
 ### A.5 D/G Balance Mechanisms (Current)
 
-1. **D-step frequency:** Every 3rd iteration for first 1,500 iter, then every iteration.
-2. **D-freeze threshold:** D params only applied when `real_fake_loss > 0.42`. Prevents D from getting too dominant.
-3. **CA activation:** 500-iter warmup, ramps to full over 2,000 iter.
+1. **D-step frequency:** All modes: every 3rd iter for first 1.5k, every 2nd for 1.5-3k, every iter after 3k. Per-layer ramp removed (D every iter gave best stability).
+2. **Smooth D gradient scaling (decoupled MI):** `d_scale = clip((real_fake_loss - d_reg_lo) / (d_reg_hi - d_reg_lo), 0, 1)` applied inside `loss_discriminator` via `stop_gradient` to scale only adversarial loss. MI loss (`loss_mi * 0.2`) always gets full gradient so Q-head always trains. d_reg_lo=0.35, d_reg_hi=0.50 for all modes. See B.17, D.23.
+3. **D learning rate:** 1e-4 for all modes (reverted from per-layer reduction — higher D lr with current PGPE lrs gave best stability, see D.24).
+4. **CA activation:** 500-iter warmup, ramps to full over 2,000 iter.
 
 ### A.6 Key Metrics (Log Line Order in trainer.py)
 
@@ -212,11 +215,53 @@ The multiplicative `layer_emb * chunk_emb` interaction gives each (layer, chunk)
 
 **Status:** IMPLEMENTED.
 
+### B.16 Inverted CA Distress Logic, Raised D-Throttling (Variance Gate superseded by B.17)
+
+**Problem diagnosed from per-layer training logs (10.7k iterations):**
+
+Three interacting failure modes caused persistent mode collapse in per-layer mode:
+
+1. **The "Adversarial Distress" Feedback Loop:** When D was winning (adv_distress triggered), the CA boosted w_adv (from 0.53 to 0.80) and *reduced* w_div (from 0.48 to 0.34). This is supervised learning logic ("focus on the thing you're failing at") applied to an adversarial game. In a GAN, when G is losing to D, the path of least resistance for PGPE is to sacrifice diversity to find a single mode that fools D. By increasing adversarial weight while decreasing diversity pressure *exactly when G is struggling*, the CA was rewarding mode collapse as a survival strategy.
+
+2. **Rank normalization amplifying noise:** When all 512 population members are equally bad at fooling D (std ≈ 0.01 against mean ≈ -1.5), `rank_normalize` still maps the "least bad" to +1.0 and "worst" to -1.0. With w_adv at 0.80, this noise-derived ranking dominated all other signals. PGPE followed random walks amplified by rank normalization, and if the walk happened to point toward a collapsed mode, PGPE locked onto it.
+
+3. **D-regulation thresholds backwards:** d_reg_lo=0.30 allowed D to reach strong dominance (real_fake_loss=0.30) before throttling kicked in. Per-layer G is inherently slower (6 independent solvers, each updating a subspace), so it needs *more* protection, not less.
+
+**Evidence from logs:** r_sense_avg ≈ 0.04 (centroids virtually overlapping = collapsed), w_adv at ceiling 0.73-0.80 for long stretches, w_div reduced to 0.34, real_fake_loss declining steadily to 0.33 by iter 10k. The system entered a death spiral: D wins → CA boosts w_adv / reduces w_div → G collapses to single mode → D catches collapsed mode → repeat.
+
+**Three-part fix:**
+
+1. **Invert CA distress logic:** When D is winning, keep w_adv stable (0.45) but INCREASE w_div (+distress\*0.6) and w_sense (+distress\*0.4). Forces G to explore more diverse modes when losing, not concentrate on a single one. This is the correct GAN intuition: escaping D requires finding new modes D hasn't learned.
+
+2. **Variance-gated rank normalization:** Add a coefficient of variation (CV) gate: `gate = clip(std/mean(|x|) / 0.05, 0, 1)`. When CV < 5% (population tightly clustered, ranking is noise), the gate attenuates the signal. Scale-invariant: works for fitness_adv (mean ≈ -1.5) and r_sense (mean ≈ 0.005) alike. Prevents noise from generating strong gradients under w_adv multiplication.
+
+3. **Raise D-throttling floor:** Per-layer mode: d_reg_lo=0.45, d_reg_hi=0.55 (D starts throttling below 0.55, fully frozen below 0.45). D stays near coin-flip performance until G establishes diversity.
+
+**Status:** IMPLEMENTED (variance gate part superseded by B.17). Inverted distress and raised D-throttling remain active.
+
+### B.17 Remove Variance Gate + Decouple MI Loss from D Regulation
+
+**Problem diagnosed from continued per-layer training:**
+
+Two remaining issues after B.16 fixes:
+
+1. **Variance gate zeroing out diversity signals:** The CV-based gate (`gate = clip(CV / 0.05, 0, 1)`) was designed to prevent noise amplification, but it zeroed out rank-normalized diversity signals (r_sense, r_intra, code_pixel_div) exactly when G needs them most — during early training and mode collapse recovery. These metrics naturally have low CV when the population hasn't differentiated yet, so the gate killed the very signals that would drive differentiation.
+
+2. **Q-head frozen by D regulation:** The smooth D gradient scaling (`d_scale * all_grads`) was applied to ALL discriminator gradients including MI loss. When D was being throttled (d_scale → 0), the Q-head stopped learning entirely. This broke the fitness_mi signal to PGPE — Q couldn't distinguish codes, so fitness_mi was noise, so PGPE had no MI gradient to follow regardless of w_mi weight.
+
+**Two-part fix:**
+
+1. **Remove variance gate from rank_normalize:** Pure rank-based mapping [-1, 1] without gating. The inverted CA distress logic (B.16) and raised D-throttling already address the mode collapse feedback loop that the variance gate was trying to fix. The gate was a band-aid on a problem that was solved at a deeper level.
+
+2. **Decouple MI loss from D regulation via stop_gradient:** Move d_scale computation inside `loss_discriminator` and apply it only to `real_fake_loss` using `jax.lax.stop_gradient(d_scale)`. The MI loss (`loss_mi * 0.2`) always gets full gradient, so Q-head always trains regardless of D throttling state. This ensures fitness_mi always provides a meaningful signal to PGPE.
+
+**Status:** IMPLEMENTED, TESTING.
+
 ---
 
 ## Section C: Detailed Analysis
 
-### C.1 Rank Normalization (relates to B.1)
+### C.1 Rank Normalization (relates to B.1, B.16)
 
 **Problem:** With `standardize()`, when a fitness component has near-zero variance (e.g., all population members are equally bad at fooling D early on), the standardization amplifies noise to unit variance. This creates random gradients that dominate meaningful signals from other components.
 
@@ -225,7 +270,9 @@ The multiplicative `layer_emb * chunk_emb` interaction gives each (layer, chunk)
 - Near-zero variance doesn't get amplified.
 - Outliers don't dominate (unlike standardize where a single extreme member can shift the distribution).
 
-**Trade-off:** Rank normalization discards magnitude information. If fitness_adv varies from -0.8 to -0.7 (small range, all bad), it still maps to [-1, 1] same as if it varied from -2.0 to 0.0 (large range, some good). This means the PGPE gradient treats small improvements the same as large ones within a component.
+**Trade-off:** Pure rank normalization discards magnitude information. If fitness_adv varies from -0.8 to -0.7 (small range, all bad), it still maps to [-1, 1] same as if it varied from -2.0 to 0.0 (large range, some good). This means PGPE treats "best of equally bad" the same as "genuinely good vs bad."
+
+**Variance gate attempted and removed (B.17):** A CV-based gate (`gate = clip(CV / 0.05, 0, 1)`) was added to attenuate noise when population is tightly clustered. However, it zeroed out diversity signals (r_sense, r_intra) exactly when G needs them most — during early training and mode collapse recovery. The cure was worse than the disease. Pure rank normalization is now used without gating.
 
 ### C.2 Brightness Shortcut (relates to B.2)
 
@@ -266,35 +313,37 @@ This forces the variance to come from spatial pattern differences, not overall b
 8. `adv_avg_short` — short-term slope of avg fitness_adv (population-wide, not just best)
 9. `sense_med` — medium-term slope of best r_sense
 
-**Adaptation rules:**
-1. **adv_distress:** If avg fitness_adv is declining (D winning), boost w_adv up to +0.2, reduce w_div by distress*0.5.
-2. **sense_overshoot:** If r_sense spiking too fast (divergence precursor), reduce w_sense by up to 0.08.
+**Adaptation rules (inverted distress logic, see B.16):**
+1. **adv_distress:** If avg fitness_adv is declining (D winning), keep w_adv **stable**, INCREASE w_div (0.50→0.65) by distress\*0.6, INCREASE w_sense (0.12→0.25) by distress\*0.4. Forces G to explore more when losing, not concentrate on a single mode.
+2. **sense_overshoot:** If r_sense spiking too fast (divergence precursor), reduce w_sense by up to 0.08. Only applies when NOT in adv_distress (distress overrides).
 3. **intra_distress:** If r_intra declining (codes tightening), boost w_intra by up to +0.15.
+4. **w_mi:** Fixed at 0.15 (Q-head always trains via MI decoupling, no CA modulation needed).
 
-### C.5 Within-Code Diversity Loss (relates to B.7)
+### C.5 Within-Code Diversity Loss (relates to B.7, B.16)
 
 **Problem:** By iter 10k, the generator produces nearly identical images for the same code regardless of z-noise input. The within/between variance ratio halved: 0.777 (7k) → 0.385 (10k).
 
-**Root cause:** The adversarial signal (w_adv=0.53) naturally selects for members that fool D, regardless of z-variation. D doesn't reward z-diversity. So the evolutionary pressure pushes toward ignoring z-noise and producing a single "best" image per code.
+**Root cause:** The adversarial signal naturally selects for members that fool D, regardless of z-variation. D doesn't reward z-diversity. So the evolutionary pressure pushes toward ignoring z-noise and producing a single "best" image per code. This was *exacerbated* by the old CA distress logic, which boosted w_adv and reduced w_div when D was winning — actively encouraging the collapse (see B.16).
 
-**Current mitigation:** r_intra in fitness (w_intra=0.20 + CA boost) + D-freeze at 0.42 + code_pixel_div (w_div=0.48). The question is whether these are strong enough relative to w_adv=0.53.
+**Current mitigation:** r_intra in fitness (w_intra=0.20 + CA boost), code_pixel_div (w_div=0.40 + adv_distress boost to 0.55), inverted CA distress (diversity INCREASES when D winning), raised D-throttling floor (d_reg_lo=0.45), decoupled MI loss from D regulation (Q-head always trains via stop_gradient, see B.17).
 
 ---
 
 ## Section D: Code Changes
 
-### D.1 rank_normalize() (relates to B.1, C.1)
+### D.1 rank_normalize() (relates to B.1, B.16, B.17, C.1)
 
-**File:** `evojax/algo/pgpe_ca.py` (lines 150-156)
-**Change:** Added `rank_normalize()` function. Replaced all `standardize()` calls in fitness computation with `rank_normalize()`.
+**File:** `evojax/algo/pgpe_ca.py` (lines 150-157) + `evojax/trainer.py` (lines 711-717)
+**Change:** Added `rank_normalize()` / `_rank_normalize()` functions. Replaced all `standardize()` calls in fitness computation. Variance gate was added (D.22) then removed (D.23) — pure rank normalization is current.
 ```python
 @jax.jit
 def rank_normalize(x):
+    """Rank-based fitness shaping: maps values to [-1, 1] by rank order."""
     n = x.shape[0]
     ranks = jnp.argsort(jnp.argsort(x)).astype(jnp.float32)
     return 2.0 * ranks / jnp.maximum(n - 1, 1) - 1.0
 ```
-**Commit:** `285f5df`
+**Commit:** `285f5df` (original), D.22 (variance gate added), D.23 (variance gate removed)
 
 ### D.2 Brightness-Normalized code_pixel_div (relates to B.2, C.2)
 
@@ -446,6 +495,287 @@ mean_disc_prob = jax.nn.softmax(mean_disc_logit)
 pop_entropy = -jnp.sum(mean_disc_prob * jnp.log(mean_disc_prob + 1e-8))
 ```
 **Impact:** Activates the entire CA guidance system. Previously all CA gradient blending was silently skipped due to NaN propagation through ent_long → KS scores → guidance vectors → has_ca_data=False.
+
+### D.17 LayerHyperNetwork (relates to H.3)
+
+**Files:** `evojax/policy/convnet.py` + `evojax/trainer.py`
+**Change:** Added `LayerHyperNetwork` class — a per-layer variant of HyperNetwork for block coordinate evolution. Each instance serves one Generator layer group. Takes `(chunk_ids, depths, scales)` — no layer embeddings needed since layer identity is implicit. Architecture: `Embed(n_chunks, 8) → concat(depth, scale) → Dense(chunk_size)`. ~3-4k params per instance depending on n_chunks.
+
+**Status:** IMPLEMENTED, TESTED.
+
+### D.18 MultiLayerAdapter (relates to H.3)
+
+**Files:** `evojax/policy/convnet.py` + `evojax/trainer.py`
+**Change:** Added `MultiLayerAdapter` class that manages per-layer HyperNetworks for block coordinate evolution. Auto-detects layer groups from Generator param tree: leaves named 'kernel' with >1000 params get their own `LayerHyperNetwork`; remaining params (biases, GroupNorm, Conv_4 kernel) go to a misc group evolved directly by PGPE.
+
+**Key methods:**
+- `init_layer_hn(rng, group_idx)` — init one LayerHyperNetwork's params
+- `generate_layer_weights(group_idx, hn_params)` — generate kernel from HN params
+- `assemble_gen_params(hn_params_list, misc_flat)` — combine all groups into full Generator param tree
+- `summary()` — print group assignments
+
+**Layer groups detected (features=64 Generator):**
+
+| Group | Module | Gen Params | Chunks | HN Params |
+|-------|--------|-----------|--------|-----------|
+| 0 | Conv_0 | 4,608 | 18 | 2,960 |
+| 1 | Conv_1 | 36,864 | 144 | 3,968 |
+| 2 | Conv_2 | 36,864 | 144 | 3,968 |
+| 3 | Conv_3 | 18,432 | 72 | 3,392 |
+| 4 | Dense_0 | 29,008 | 114 | 3,728 |
+| 5 | misc | 1,353 | — | 1,353 (direct) |
+| **Total** | | **127,129** | | **19,369** |
+
+**Status:** IMPLEMENTED, TESTED. Full round-trip verified: init HNs → assemble → Generator forward pass produces correct shapes.
+
+### D.19 PGPE_Layer Solver (relates to H.3)
+
+**File:** `evojax/algo/pgpe_layer.py` (new file)
+**Change:** Created lightweight PGPE solver for per-layer HyperNetwork evolution. Core PGPE mechanics only — no Cultural Algorithm integration. The shared CA stays at the Trainer level and passes pre-combined fitness (rank-normalized per component, weighted by CA-modulated weights) to each solver's `tell()`.
+
+**Architecture:**
+- Mirrored Gaussian sampling (ask): `center ± noise`, pop_size/2 noise directions
+- REINFORCE gradient computation (tell): paired fitness differences → center/stdev gradients
+- Adam optimizer (default), ClipUp and SGD available
+- Stdev update with max-change clipping and configurable floor (default 0.005)
+- No internal fitness composition — receives pre-combined scalar fitness from Trainer
+
+**Also updated:** `evojax/algo/__init__.py` to export `PGPE_Layer` in imports, `Strategies` dict, and `__all__`.
+
+**End-to-end test verified:** 6 PGPE_Layer solvers (5 HN groups + 1 misc) → ask → MultiLayerAdapter.assemble_gen_params → Generator forward → tell. Full per-layer G-step cycle works.
+
+**Status:** IMPLEMENTED, TESTED.
+
+### D.20 train_organsmnist.py Per-Layer Solver Setup (relates to H.3)
+
+**File:** `examples/train_organsmnist.py`
+**Change:** Added `--per-layer` flag and `--pop-size-layer` (default 256) arguments. When `--per-layer` is set:
+1. Creates `MultiLayerAdapter` from GenPolicy's Generator init params (chunk_size=256, embed_dim=8)
+2. Creates 5 `PGPE_Layer` solvers (one per HN group) + 1 for misc params (direct evolution)
+3. Creates `layer_format_fns` list (flat→pytree converters for each layer HN)
+4. Passes `layer_solvers`, `multi_adapter`, and `layer_format_fns` to Trainer
+
+Also added imports for `MultiLayerAdapter`, `PGPE_Layer`, and `get_params_format_fn`.
+
+**Trainer.__init__ updated** to accept optional `layer_solvers`, `multi_adapter`, `layer_format_fns` parameters. Stores them and sets `self.per_layer_mode` flag. Monolithic mode is unchanged when these are None.
+
+**Backward compatible:** Without `--per-layer`, the existing monolithic PGPE_CA setup runs as before.
+
+**Status:** IMPLEMENTED, TESTED.
+
+### D.21 Per-Layer Trainer G-Step, Fitness Composition, and Checkpoint (relates to H.3)
+
+**Per-layer evaluation function** (`build_per_layer_eval_fn` + `_compute_fitness_components`):
+- Factory function that builds a JIT+vmapped evaluation function for one layer group
+- For each candidate: swaps HN-generated weights into frozen base Generator, runs G+D, computes all fitness components (adv, mi, r_cons, r_sense, r_intra, normative_penalty, safety_ratios, spreads, pop_var)
+- Uses `mutable=['batch_stats']` for Discriminator SpectralNorm compatibility
+- Tested for all 5 HN groups + misc group
+
+**Fitness composition function** (`compose_fitness` + `_rank_normalize`):
+- JIT-compiled function replicating PGPE_CA.tell() fitness composition logic
+- Rank-normalizes each component independently, then weighted sum with CA-modulated weights
+- Weights: w_adv, w_mi, w_div, w_sense, w_intra, w_cons_floor, w_norm
+
+**Per-layer G-step in Trainer.run():**
+1. Samples controlled latent vectors (shared across all groups per iteration)
+2. Assembles frozen base Generator from all solvers' current bests
+3. Retrieves CA-modulated fitness weights via `solver_hn.compute_ca_weights()`
+4. Iterates over all groups: ask → eval → compose → tell
+5. After all groups update, runs one full evaluation with assembled best for CA belief space update
+
+**Shared CA wiring** (`compute_ca_weights` + `update_belief_space_from_metrics` added to PGPE_CA):
+- `compute_ca_weights()`: returns dict of CA-modulated weights without running PGPE ask/tell
+- `update_belief_space_from_metrics()`: updates topographic, normative, metric history KS from externally-computed metrics
+
+**D-step + eval updated** for per-layer mode:
+- `_assemble_best_gen_params()` helper assembles Generator from per-layer solver bests
+- D-step uses assembled Generator for fake image generation
+- Test interval uses assembled Generator for sample image saving
+
+**Checkpoint save/load** extended:
+- `save_checkpoint` accepts optional `layer_solvers` list, saves center/stdev/t/opt_state per solver
+- `load_checkpoint` accepts optional `layer_solvers` list, restores all solver states
+- Backward compatible: old checkpoints without per-layer data load normally
+
+**Files modified:**
+- `evojax/trainer.py`: `_compute_fitness_components`, `build_per_layer_eval_fn`, `_rank_normalize`, `compose_fitness`, `_assemble_best_gen_params`, per-layer G-step branch, D-step/eval branches
+- `evojax/algo/pgpe_ca.py`: `compute_ca_weights`, `update_belief_space_from_metrics`
+- `evojax/util.py`: `save_checkpoint`/`load_checkpoint` extended with `layer_solvers` param
+
+**Status:** IMPLEMENTED, TESTED.
+
+### D.22 Inverted CA Distress, Variance-Gated Rank Normalize, Raised D-Throttling (relates to B.16)
+
+**1. Inverted CA distress logic** (`evojax/algo/pgpe_ca.py` — both `tell()` and `compute_ca_weights()`):
+
+Base weight changes:
+```
+w_adv_base: 0.53 → 0.45    w_mi_base:  0.10 → 0.35
+w_sense_base: 0.10 → 0.15  w_div_base: 0.48 → 0.40
+```
+
+Distress response inverted:
+```python
+# OLD: D winning → chase D, stop exploring
+adv_distress = clip(-adv_avg_short * 50.0, 0.0, 0.27)
+w_adv = w_adv_base + adv_distress         # ↑ adversarial
+w_div = w_div_base - adv_distress * 0.5   # ↓ diversity
+
+# NEW: D winning → keep stable, explore more
+adv_distress = clip(-adv_avg_short * 50.0, 0.0, 0.25)
+w_adv = w_adv_base                         # stable
+w_div = w_div_base + adv_distress * 0.6    # ↑ diversity
+w_sense = w_sense_base + adv_distress * 0.4  # ↑ separation
+```
+
+MI adaptation added (was hardcoded):
+```python
+mi_distress = clip(-mi_short * 40.0, 0.0, 0.15)
+w_mi = min(w_mi_base + mi_distress * ca_weight, 0.50)
+```
+
+Weight ranges:
+| Weight | Range | Ceiling |
+|--------|-------|---------|
+| w_adv | 0.45 | 0.55 |
+| w_mi | 0.35–0.50 | 0.50 |
+| w_div | 0.40–0.55 | 0.65 |
+| w_sense | 0.15–0.25 | 0.35 |
+| w_intra | 0.20–0.35 | — |
+
+Also added `log_ca_weights()` method to PGPE_CA for per-layer mode KS weight logging (same TSV format as monolithic `tell()` logging).
+
+**2. Variance-gated rank normalization** (`evojax/algo/pgpe_ca.py` `rank_normalize()` + `evojax/trainer.py` `_rank_normalize()`):
+
+```python
+@jax.jit
+def rank_normalize(x):
+    n = x.shape[0]
+    ranks = jnp.argsort(jnp.argsort(x)).astype(jnp.float32)
+    ranked = 2.0 * ranks / jnp.maximum(n - 1, 1) - 1.0
+    # CV gate: attenuate when population is tightly clustered (ranking is noise)
+    mean_abs = jnp.mean(jnp.abs(x)) + 1e-8
+    cv = jnp.std(x) / mean_abs
+    gate = jnp.clip(cv / 0.05, 0.0, 1.0)
+    return ranked * gate
+```
+
+Gate behavior for observed metric ranges:
+| Scenario | CV | Gate |
+|----------|-----|------|
+| fitness_adv all equally bad (std=0.01, mean=-1.5) | 0.007 | 0.13 |
+| fitness_adv healthy spread (std=0.15, mean=-1.1) | 0.14 | 1.00 |
+| fitness_mi tightly clustered (std=0.005, mean=-2.1) | 0.002 | 0.05 |
+| r_sense meaningful variation (std=0.001, mean=0.005) | 0.20 | 1.00 |
+| cons_shortfall all zero | 0.00 | 0.00 |
+
+**3. Raised D-throttling** (`evojax/trainer.py`):
+
+Per-layer mode thresholds:
+```python
+d_reg_lo = 0.45  # was 0.30 (D fully frozen below this)
+d_reg_hi = 0.55  # was 0.45 (D at full learning above this)
+```
+
+D learning rate: `0.000008` (was `0.00002`, originally `0.00008` for monolithic).
+
+**Status:** IMPLEMENTED (variance gate part superseded by D.23).
+
+### D.23 Remove Variance Gate + Decouple MI from D Regulation (relates to B.17)
+
+**1. Variance gate removed** (`evojax/algo/pgpe_ca.py` `rank_normalize()` + `evojax/trainer.py` `_rank_normalize()`):
+
+```python
+@jax.jit
+def rank_normalize(x):
+    """Rank-based fitness shaping: maps values to [-1, 1] by rank order."""
+    n = x.shape[0]
+    ranks = jnp.argsort(jnp.argsort(x)).astype(jnp.float32)
+    return 2.0 * ranks / jnp.maximum(n - 1, 1) - 1.0
+```
+
+CV gate lines removed (was: `mean_abs`, `cv`, `gate`, `return ranked * gate`).
+
+**2. MI loss decoupled from D regulation** (`evojax/trainer.py` `train_step_disc()`):
+
+Before (D regulation killed Q-head gradients):
+```python
+# Inside loss_discriminator:
+loss = real_fake_loss + loss_mi * 0.2
+return loss, (real_fake_loss, vars_d)
+
+# After grad computation:
+d_scale = clip((real_fake_loss - d_reg_low) / (d_reg_high - d_reg_low), 0, 1)
+grads = tree_map(lambda g: g * d_scale, grads)  # ALL grads scaled, including MI
+```
+
+After (Q-head always trains):
+```python
+# Inside loss_discriminator:
+d_scale_local = clip((real_fake_loss - d_reg_low) / max(d_reg_high - d_reg_low, 1e-6), 0, 1)
+total_loss = real_fake_loss * stop_gradient(d_scale_local) + loss_mi * 0.2
+return total_loss, (real_fake_loss, vars_d)
+
+# Post-gradient d_scale application REMOVED
+```
+
+Key mechanism: `stop_gradient(d_scale_local)` means d_scale affects the loss value (so JAX sees the correct total loss) but JAX does NOT differentiate through d_scale itself. The gradient of `real_fake_loss * stop_gradient(k)` is `k * grad(real_fake_loss)` — the adversarial gradients are scaled down by k, but `loss_mi * 0.2` always contributes full gradients to Q-head parameters.
+
+**Status:** IMPLEMENTED, TESTING.
+
+### D.24 Revert HyperNetwork to Non-Linear Architecture + Raise D LR (relates to B.16, B.17)
+
+**1. Revert HyperNetwork** (`evojax/policy/convnet.py`):
+
+Replaced linearized architecture (Embed + multiplicative interaction + single linear projection) with the non-linear architecture that had stable training:
+
+```python
+class HyperNetwork(nn.Module):
+    chunk_size: int = 256
+    n_layers: int = 20
+    n_chunks: int = 200
+
+    @nn.compact
+    def __call__(self, layer_ids, chunk_ids, depths, scales):
+        layer_oh = jax.nn.one_hot(layer_ids, self.n_layers)
+        chunk_oh = jax.nn.one_hot(chunk_ids, self.n_chunks)
+        inputs = jnp.concatenate([
+            layer_oh, chunk_oh, depths[:, None], scales[:, None]
+        ], axis=-1)
+
+        x = nn.Dense(32)(inputs)
+        x = nn.tanh(x)
+        x = nn.Dense(32)(x)
+        x = nn.tanh(x)
+        weights = nn.Dense(
+            self.chunk_size,
+            kernel_init=jax.nn.initializers.normal(stddev=0.05)
+        )(x)
+        return weights
+```
+
+Same treatment applied to `LayerHyperNetwork` (one-hot chunk + depth/scale → Dense(32)+tanh → Dense(32)+tanh → Dense(chunk_size)).
+
+Key differences from linearized version:
+- One-hot encoding instead of learned Embed layers
+- Two hidden layers with tanh non-linearity instead of single linear projection
+- Output init stddev=0.05 (was 0.025)
+- `embed_dim` field removed from both HN classes and MultiLayerAdapter
+
+**2. Raise D learning rate** (`evojax/trainer.py`):
+
+```python
+# Was: d_lr = 0.000008 if self.per_layer_mode else 0.00008
+d_lr = 0.0001  # 1e-4 for all modes
+```
+
+Higher D lr with current PGPE learning rates gave the best image quality and stability in prior runs.
+
+**3. Updated callers:**
+- `MultiLayerAdapter.__init__()`: removed `embed_dim` parameter
+- `train_organsmnist.py`: removed `embed_dim=8` from `MultiLayerAdapter()` call
+
+**Status:** IMPLEMENTED, TESTING.
 
 ---
 
@@ -643,6 +973,67 @@ This is a more principled approach than a threshold because D's learning rate is
 
 ---
 
+### G.5 — Feb 20, 2026: Diagnosing the Per-Layer Mode Collapse Feedback Loop
+
+**Context:** Per-layer mode (D.21) was running but exhibiting persistent mode collapse. Two rounds of D-step adjustments (lowering D lr, extending d_freq ramp, adjusting smooth regulation thresholds) failed to resolve the issue. Training appeared briefly stable around iter 3-8k but diverged by iter 10k with fitness_adv plummeting to -2.0+ and real_fake_loss declining to 0.33.
+
+**Root cause analysis identified three interacting failure modes:**
+
+1. **CA adversarial distress feedback loop (the primary culprit):** The CA's distress response was applying supervised learning intuition to an adversarial game. When D was winning (adv_distress triggered), the CA boosted w_adv from 0.53 to 0.80 and reduced w_div from 0.48 to 0.34. This rewarded PGPE candidates that sacrificed diversity to fool the current D — exactly mode collapse as a "survival strategy." The CA was *accelerating* the death spiral.
+
+2. **Rank normalization amplifying noise in collapsed populations:** When all 512 candidates are equally bad at fooling D (std ≈ 0.01, CV ≈ 0.7%), rank_normalize maps noise to [-1, +1]. Multiplied by w_adv=0.80, this random ranking dominated all other fitness signals. PGPE followed noise-derived gradients, and any accidental movement toward a collapsed mode became self-reinforcing.
+
+3. **D-regulation thresholds backwards:** The per-layer d_reg_lo=0.30 *allowed* D to get stronger before throttling, when per-layer G (6 independent solvers) actually needed *more* protection. D reaching 0.33 triggered the CA distress loop (point 1), which triggered noise-driven collapse (point 2).
+
+**Key insight — GAN-specific evolutionary dynamics:**
+
+In supervised learning, when a model is failing at a task, the correct response is to increase focus on that task. In a GAN, when G is losing to D, the correct response is to *diversify* — find new modes D hasn't learned to discriminate. The CA's original distress logic was fundamentally wrong for adversarial training. This is a general principle for evolutionary GANs: adversarial distress should trigger exploration, not exploitation.
+
+**Metrics at time of diagnosis (10.7k iter):**
+- fitness_adv avg: -0.96 → -2.02 (progressive decline)
+- r_sense avg: 0.009 → 0.008 (codes never separated, always near-collapsed)
+- real_fake_loss: 0.64 → 0.33 (D steadily winning)
+- w_adv in KS logs: hitting 0.73-0.80 ceiling for long stretches
+- w_div in KS logs: reduced to 0.34 during distress (less exploration when most needed)
+- fitness_mi avg: stuck around -2.0 to -2.2 (w_mi was only 0.10 with no CA adaptation)
+
+**Three-part fix (D.22):**
+1. Inverted CA distress: w_adv stable, w_div and w_sense INCREASE under distress
+2. Variance-gated rank normalization: CV-based gate prevents noise amplification
+3. Raised D-throttling: d_reg_lo=0.45 keeps D near coin-flip while G establishes diversity
+
+**Also fixed:** w_mi was hardcoded at 0.10 — the weakest weight despite MI being the entire point of InfoGAN. Raised to 0.35 base with CA adaptation up to 0.50.
+
+---
+
+### G.6 — Feb 20, 2026: Removing Variance Gate and Decoupling MI from D Regulation
+
+**Context:** After implementing the three-part fix from G.5 (inverted distress, variance gate, raised D-throttling), per-layer mode still showed the same collapse pattern. Two remaining issues identified:
+
+1. **Variance gate was counterproductive:** The CV-based gate was zeroing out rank-normalized diversity signals (r_sense, r_intra) during early training and recovery — exactly when those signals are most needed. Diversity metrics naturally have low CV when the population hasn't differentiated, so the gate killed the differentiation signal before it could take effect.
+
+2. **Q-head frozen by D regulation:** The post-gradient `d_scale * all_grads` was applied to ALL discriminator parameters including the Q-head. When D was throttled (d_scale → 0), Q stopped learning entirely. This meant fitness_mi provided no useful signal to PGPE regardless of how high w_mi was set.
+
+**Fixes applied (D.23):**
+1. Removed variance gate from `rank_normalize()` and `_rank_normalize()` — pure rank mapping only
+2. Moved d_scale inside `loss_discriminator` using `stop_gradient` — MI loss always gets full gradient, adversarial loss is scaled. Post-gradient d_scale application removed.
+
+**Key insight:** The variance gate and blanket gradient scaling were both cases of a "fix" that addressed symptoms while creating worse problems. The inverted CA distress (G.5) already addressed the root cause of mode collapse; the variance gate was redundant and harmful. Similarly, D regulation should throttle adversarial learning without collateral damage to MI learning.
+
+---
+
+### G.7 — Feb 20, 2026: Reverting to Non-Linear HyperNetwork + Higher D LR
+
+**Context:** After multiple rounds of fixes (inverted CA distress, variance gate removal, MI decoupling), per-layer mode still showed collapse. The linearized HyperNetwork (D.14 — Embed + multiplicative interaction + single linear projection) was introduced for "smooth PGPE landscape" but never produced stable training in per-layer mode. Meanwhile, the earlier non-linear HN (one-hot + Dense(32)+tanh + Dense(32)+tanh + Dense(chunk_size)) was the last architecture with stable training.
+
+**Decision:** Revert to what worked:
+1. Non-linear HN with one-hot inputs and two hidden layers (tanh activation)
+2. D learning rate back to 1e-4 for all modes (was 8e-6 for per-layer, 8e-5 for monolithic)
+
+**Rationale:** The linearized HN was a premature optimization. The "smooth landscape" argument assumed that PGPE needs linear mapping from HN params to Generator weights, but the original non-linear HN proved this isn't necessary — tanh is a well-behaved nonlinearity and the 32-unit hidden layers provide enough capacity without excessive parameters. The D lr reduction was made to match "slower collective G progress" in per-layer mode, but the evidence shows higher D lr produces better equilibrium with the current PGPE learning rates.
+
+**Changes (D.24):** HyperNetwork + LayerHyperNetwork reverted, MultiLayerAdapter updated, D lr set to 1e-4. All other recent fixes (inverted distress, MI decoupling, raised D-throttling) preserved.
+
 <!-- ==================== DO NOT DELETE ==================== -->
 ## Section H: Long-Term Research Vision
 
@@ -701,16 +1092,16 @@ Our project tests this hypothesis directly: using PGPE (a floating-point evoluti
 - Fitness difference is purely attributable to layer i's candidate — clean gradient signal
 - SNR per solver: sqrt(256)/5500 ≈ 0.003, vs sqrt(512)/25000 ≈ 0.0009 for monolithic (~5x improvement)
 
-**Layer grouping (features=64 Generator):**
+**Layer grouping (features=64 Generator, chunk_size=256, embed_dim=8):**
 
-| Group | Generator layers | Params | Per-group HN |
-|-------|-----------------|--------|-------------|
-| 0 | Dense kernel | 24,304 | ~5.5k |
-| 1 | Conv_0 kernel | 4,608 | ~5.2k |
-| 2 | Conv_1 kernel | 36,864 | ~5.7k |
-| 3 | Conv_2 kernel | 36,864 | ~5.7k |
-| 4 | Conv_3 kernel | 18,432 | ~5.4k |
-| 5 | Conv_4 + biases + GroupNorm | ~3,500 | Direct params |
+| Group | Generator layers | Gen Params | Chunks | HN Params |
+|-------|-----------------|-----------|--------|-----------|
+| 0 | Conv_0 kernel | 4,608 | 18 | 2,960 |
+| 1 | Conv_1 kernel | 36,864 | 144 | 3,968 |
+| 2 | Conv_2 kernel | 36,864 | 144 | 3,968 |
+| 3 | Conv_3 kernel | 18,432 | 72 | 3,392 |
+| 4 | Dense_0 kernel | 29,008 | 114 | 3,728 |
+| 5 | Conv_4 + biases + GroupNorm | 1,353 | — | Direct params |
 
 **Training loop (block coordinate evolution):**
 ```
