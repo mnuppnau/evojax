@@ -114,13 +114,20 @@ class HyperNetwork(nn.Module):
             scales[:, None]
         ], axis=-1)  # (N, 34)
 
-        # Single linear projection to chunk weights — no non-linearity
-        # The landscape smoothness comes from this: perturbation in any HN param
-        # causes a linear, predictable change in generated weights
+        # Hidden layer with tanh non-linearity: enables complex weight patterns
+        # that a single linear projection cannot express. The tanh keeps the
+        # landscape smooth (differentiable everywhere) while allowing each
+        # (layer, chunk) pair to produce qualitatively different weight profiles.
+        hidden = nn.Dense(
+            64,
+            kernel_init=jax.nn.initializers.normal(stddev=0.05)
+        )(coords)
+        hidden = jnp.tanh(hidden)
+
         weights = nn.Dense(
             self.chunk_size,
             kernel_init=jax.nn.initializers.normal(stddev=0.025)
-        )(coords)
+        )(hidden)
 
         return weights
 

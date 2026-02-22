@@ -243,6 +243,9 @@ class PGPE(NEAlgorithm):
         seed: int = 0,
         belief_space: jnp.ndarray = None,
         logger: logging.Logger = None,
+        fitness_mode: str = 'dynamic',
+        ca_activation_iter: int = 5000,
+        static_weights: Optional[dict] = None,
     ):
         """Initialization function.
 
@@ -261,6 +264,12 @@ class PGPE(NEAlgorithm):
             stdev_max_change - Maximum allowed change for stdev in abs values.
             solution_ranking - Should we treat the fitness as rankings or not.
             seed - Random seed for parameters sampling.
+            fitness_mode - 'static' (fixed weights always) or 'dynamic'
+                           (fixed weights early, CA modulation ramps in).
+            ca_activation_iter - Iteration at which CA modulation begins
+                                 ramping in (only used in dynamic mode).
+            static_weights - Dict of fixed fitness weights. Used as base
+                             weights in both modes.
         """
 
         if logger is None:
@@ -339,6 +348,16 @@ class PGPE(NEAlgorithm):
 
         self.belief_space = belief_space if belief_space is not None else initialize_belief_space(
             population_size=self.pop_size, param_size=abs(param_size), key=subkey)
+
+        # Fitness mode: 'static' (fixed weights always) or 'dynamic'
+        # (fixed weights early, CA-modulated weights after ca_activation_iter)
+        self.fitness_mode = fitness_mode
+        self.ca_activation_iter = ca_activation_iter
+        self.static_weights = static_weights or {
+            'w_adv': 0.53, 'w_mi': 0.1, 'w_div': 0.48,
+            'w_sense': 0.1, 'w_intra': 0.20, 'w_cons_floor': 0.10,
+            'w_norm': 0.02,
+        }
 
         # KS weight logging: buffer entries and flush to file every 100 iterations
         self._ks_log_buffer = []
@@ -494,14 +513,19 @@ class PGPE(NEAlgorithm):
         #w_mi = 1 - w_adv
 
 
-        # CA activation schedule: short warmup for KS to fill (500 iter),
-        # then ramp to full over 2000 iter. Active early so CA can adapt
-        # to the environment from the start rather than arriving late.
-        ca_weight = jnp.clip((self._t - 500) / 2000, 0.0, 1.0)
+        # Two-phase CA activation:
+        # 1. ca_grad_weight: early ramp (iter 500) — KS gradient blend provides
+        #    directional guidance that helps PGPE find structured weight regions.
+        # 2. ca_mod_weight: late ramp (ca_activation_iter) — distress-based weight
+        #    modulation needs stable metric slopes to avoid destabilizing training.
+        ca_grad_weight = jnp.clip((self._t - 500) / 2000, 0.0, 1.0)
+        ca_mod_weight = jnp.clip(
+            (self._t - 500) / 2000, 0.0, 1.0
+        )
 
         # Centroid momentum: when CA is active, nearly freeze topographic centroids
         # to prevent locked codes from drifting. 0.7 (early) → 0.97 (full CA).
-        topo_momentum = 0.7 + 0.27 * ca_weight
+        topo_momentum = 0.7 + 0.27 * ca_grad_weight
 
         self.belief_space = update_topographic_ks(
             self.belief_space, avg_per_code, topo_momentum
@@ -749,56 +773,68 @@ class PGPE(NEAlgorithm):
         # To give r_sense comparable gradient influence to fitness_adv:
         #   need w_sense * 0.0092 ≈ w_adv * 0.0465 → w_sense ≈ 5.0 * w_adv
         # With min-pair r_sense (higher variance ~0.015), w_sense ~3.0 suffices.
-        # --- CA-driven adaptive weight modulation ---
-        # Base weights (user-tuned sweet spot from the stable 0-195k regime)
-        w_adv_base = 0.53
-        w_mi_base = 0.1
-        w_sense_base = 0.1
-        w_div_base = 0.48
-        w_norm_base = 0.04
+        # --- Fitness weight computation ---
+        # Base weights from static_weights dict (user-tuned for stable training)
+        sw = self.static_weights
+        w_adv_base = sw['w_adv']
+        w_mi_base = sw['w_mi']
+        w_sense_base = sw['w_sense']
+        w_div_base = sw['w_div']
+        w_intra_base = sw['w_intra']
+        w_cons_floor = sw['w_cons_floor']
+        w_norm_base = sw['w_norm']
 
-        # Compute metric slopes from CA belief space
+        # Compute metric slopes (always, for logging even in static mode)
         slopes = compute_metric_slopes(self.belief_space)
         (adv_short, mi_short, adv_med, mi_med, ent_long,
          sense_short, intra_short, adv_avg_short, sense_med) = slopes
 
-        # CA adaptation: adjust weights based on detected trends.
-        # Positive slope = metric improving, Negative = metric declining.
-        # Each adjustment is clamped to prevent runaway weight changes.
+        # Compute raw distress signals (always, for logging)
+        # Use medium-term slope for adv (smoother, less reactive to noise).
+        # Multipliers reduced from 50/100/100 to 10/20/20 — old values
+        # caused near-constant clip-saturation during normal training.
+        # Clip limits tightened: max perturbation per weight is now ~5%
+        # instead of ~20%, preventing fitness balance disruption.
+        raw_adv_distress = jnp.clip(-adv_med * 10.0, 0.0, 0.05)
+        raw_sense_overshoot = jnp.clip(sense_med * 20.0 - 0.1, 0.0, 0.03)
+        raw_intra_distress = jnp.clip(-intra_short * 20.0, 0.0, 0.04)
 
-        # 1. If fitness_adv is dropping (D winning), boost w_adv, reduce diversity pressure
-        #    adv_avg_short < 0 means avg adversarial fitness is declining
-        adv_distress = jnp.clip(-adv_avg_short * 50.0, 0.0, 0.2)
-        w_adv = w_adv_base + adv_distress
-        w_div = w_div_base - adv_distress * 0.5  # ease off diversity when D is crushing
+        if self.fitness_mode == 'dynamic':
+            # Dynamic mode: CA modulation ramps in via ca_mod_weight.
+            # Before ca_activation_iter: weights = base (proven stable).
+            # After ramp: weights = base + full CA modulation.
+            adv_distress = raw_adv_distress * ca_mod_weight
+            sense_overshoot = raw_sense_overshoot * ca_mod_weight
+            intra_distress = raw_intra_distress * ca_mod_weight
 
-        # 2. If r_sense is spiking too fast (divergence precursor), reduce w_sense
-        #    sense_short > 0 means separation is increasing (good, but too fast = bad)
-        sense_overshoot = jnp.clip(sense_short * 100.0 - 0.5, 0.0, 0.08)
-        w_sense = w_sense_base - sense_overshoot
+            w_adv = w_adv_base + adv_distress
+            w_div = w_div_base - adv_distress * 0.5
+            w_sense = w_sense_base - sense_overshoot
+            w_intra = w_intra_base + intra_distress
+            w_mi = w_mi_base
 
-        # 3. If r_intra is dropping (within-code variation collapsing), boost w_intra
-        #    so PGPE rewards members that maintain within-code variety (use z-noise)
-        intra_distress = jnp.clip(-intra_short * 100.0, 0.0, 0.15)
-        w_intra_base = 0.20
-        w_intra = w_intra_base + intra_distress  # CA boosts when codes are tightening
+            # Ensure no weight goes negative
+            w_adv = jnp.maximum(w_adv, 0.1)
+            w_div = jnp.maximum(w_div, 0.1)
+            w_sense = jnp.maximum(w_sense, 0.02)
+        else:
+            # Static mode: fixed weights, no CA modulation
+            adv_distress = 0.0
+            sense_overshoot = 0.0
+            intra_distress = 0.0
 
-        # 4. r_cons floor penalty: penalize only when centroid consistency drops
-        #    below a minimum threshold. This prevents drift without over-anchoring.
+            w_adv = w_adv_base
+            w_div = w_div_base
+            w_sense = w_sense_base
+            w_intra = w_intra_base
+            w_mi = w_mi_base
+
+        # Normative: scales with CA activation in both modes
+        w_norm = w_norm_base * ca_mod_weight
+
+        # r_cons floor penalty
         cons_floor = 0.05
-        cons_shortfall = jnp.maximum(0.0, cons_floor - r_cons)  # per-member penalty
-        w_cons_floor = 0.1
-
-        # 5. MI weight stays stable (less sensitive to short-term dynamics)
-        w_mi = w_mi_base
-
-        # Ensure no weight goes negative
-        w_adv = jnp.maximum(w_adv, 0.1)
-        w_div = jnp.maximum(w_div, 0.1)
-        w_sense = jnp.maximum(w_sense, 0.02)
-
-        # Normative: keep low
-        w_norm = w_norm_base * ca_weight
+        cons_shortfall = jnp.maximum(0.0, cons_floor - r_cons)
 
         # Buffer KS weights for logging (flushed every 100 iterations)
         if self._ks_log_path is not None:
@@ -812,7 +848,7 @@ class PGPE(NEAlgorithm):
                 float(adv_avg_short), float(sense_med),
             ])
 
-        # 3. Calculate Fitness (all rank_normalize for scale parity)
+        # Calculate Fitness (all rank_normalize for scale parity)
         fitness_scores = (
             (rank_normalize(fitness_adv) * w_adv)          # Quality (capped, can't dominate)
             + (rank_normalize(fitness_mi) * w_mi)          # MI signal
@@ -830,8 +866,8 @@ class PGPE(NEAlgorithm):
         #fitness_scores = fitness_adv + fitness_mi*0.18 + fitness_con*0.013 # + r_sense - normative_penalty*w_norm - r_cons*0.1
         #else:#if self._t < 160000:
         #cultural_score = r_sense + r_intra + r_cons + fitness_con
-        spreads = spreads.reshape(512, 11, 1)
-        safety_ratios = safety_ratios.reshape(512, 11, 11)
+        spreads = spreads.reshape(self.pop_size, 11, 1)
+        safety_ratios = safety_ratios.reshape(self.pop_size, 11, 11)
 
         self.belief_space = update_normative_ks(
             self.belief_space,
@@ -874,24 +910,26 @@ class PGPE(NEAlgorithm):
         )
 
         # Domain KS: Pareto front with GAN diagnostic metadata (r_sense, r_cons)
+        # Pass mean_disc_prob (softmax probabilities) not raw logits — KS entropy
+        # computation does sum(-log(x) * x) which assumes valid probabilities.
         self.belief_space = update_domain_ks(
             self.belief_space, best_solution, self._stdev,
             best_scaled_noise, best_fitness_adv, best_fitness_mi,
-            best_fitness_combined, mean_disc_logit, best_r_sense, best_r_cons
+            best_fitness_combined, mean_disc_prob, best_r_sense, best_r_cons
         )
 
         # Situational KS: tracks the single best solution (most exploitative)
         self.belief_space = update_situational_ks(
             self.belief_space, best_solution, self._stdev,
             best_scaled_noise, best_fitness_adv, best_fitness_mi,
-            best_fitness_combined, mean_disc_logit
+            best_fitness_combined, mean_disc_prob
         )
 
         # Historical KS: archive of best solutions across generations
         self.belief_space = update_history_ks(
             self.belief_space, best_solution, self._stdev,
             best_scaled_noise, best_fitness_adv, best_fitness_mi,
-            best_fitness_combined, mean_disc_logit
+            best_fitness_combined, mean_disc_prob
         )
 
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,False)
@@ -923,9 +961,12 @@ class PGPE(NEAlgorithm):
         ca_grad_center = jnp.nan_to_num(ca_grad_center, nan=0.0)
         ca_grad_stdev = jnp.nan_to_num(ca_grad_stdev, nan=0.0)
 
-        # Only blend when archives have real, non-zero data
+        # Only blend when CA is active and archives have real, non-zero data
         has_ca_data = jnp.any(ca_center_g != 0.0) & jnp.all(jnp.isfinite(ca_center_g))
-        ca_blend = 0.05 * jnp.float32(has_ca_data)
+        # Ramp blend with ca_grad_weight (early start, iter 500) so KS gradient
+        # targets provide directional guidance from early training. This helps
+        # PGPE find structured weight regions instead of settling into blob modes.
+        ca_blend = 0.025 * jnp.float32(has_ca_data) * ca_grad_weight
 
         # Scale CA direction to match REINFORCE gradient magnitude so the
         # blend ratio is meaningful.  ClipUp normalizes center grad anyway;
@@ -975,16 +1016,6 @@ class PGPE(NEAlgorithm):
                 grad=grad_stdev,
             )
         self._stdev = jnp.maximum(self._stdev, 0.005)  # Floor: prevent exploration collapse
-
-        #self.belief_space = update_knowledge_sources(
-        #    self.belief_space,
-        #    (
-        #        self._center,
-        #        self._stdev,
-        #        best_individual[2],
-        #    ),
-        #    pop_stats,
-        #)
 
     @property
     def best_params(self) -> jnp.ndarray:

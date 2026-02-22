@@ -253,11 +253,20 @@ class HyperNetwork(nn.Module):
             scales[:, None]
         ], axis=-1)  # (N, 34)
 
-        # Single linear projection to chunk weights — no non-linearity
+        # Hidden layer with tanh non-linearity: enables complex weight patterns
+        # that a single linear projection cannot express. The tanh keeps the
+        # landscape smooth (differentiable everywhere) while allowing each
+        # (layer, chunk) pair to produce qualitatively different weight profiles.
+        hidden = nn.Dense(
+            64,
+            kernel_init=jax.nn.initializers.normal(stddev=0.05)
+        )(coords)
+        hidden = jnp.tanh(hidden)
+
         weights = nn.Dense(
             self.chunk_size,
             kernel_init=jax.nn.initializers.normal(stddev=0.025)
-        )(coords)
+        )(hidden)
 
         return weights
 
@@ -1168,7 +1177,7 @@ class Trainer(object):
                 # D-step frequency: reduce D updates early so G can establish
                 # diversity before D crushes it. Every 3rd iter for first 1.5k,
                 # then every iteration after.
-                d_freq = 3 if i < 1500 else (2 if i < 3000 else 1)
+                d_freq = 10 if i < 1500 else (4 if i < 3000 else 1)
                 if i % d_freq == 0:
                     for mini_batch in range(num_mini_batches):
                         # Sample batch of data.
