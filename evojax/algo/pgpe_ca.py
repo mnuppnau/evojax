@@ -35,6 +35,7 @@ from evojax.algo.cultural.belief_space import (
 )
 
 from evojax.algo.cultural.knowledge_sources import (
+    initialize_control_ks,
     update_topographic_ks,
     update_domain_ks,
     update_situational_ks,
@@ -42,6 +43,8 @@ from evojax.algo.cultural.knowledge_sources import (
     update_normative_ks,
     update_metric_history,
     compute_metric_slopes,
+    update_control_ks,
+    get_control_outputs,
 )
 
 from evojax.algo.cultural.helper_functions import non_dominated_sort_lax
@@ -246,6 +249,9 @@ class PGPE(NEAlgorithm):
         fitness_mode: str = 'dynamic',
         ca_activation_iter: int = 5000,
         static_weights: Optional[dict] = None,
+        ca_blend_max: float = 0.025,
+        ca_blend_start_iter: int = 500,
+        ca_blend_ramp_iters: int = 2000,
     ):
         """Initialization function.
 
@@ -270,6 +276,9 @@ class PGPE(NEAlgorithm):
                                  ramping in (only used in dynamic mode).
             static_weights - Dict of fixed fitness weights. Used as base
                              weights in both modes.
+            ca_blend_max - Maximum blend ratio for CA gradient guidance.
+            ca_blend_start_iter - Iteration where CA gradient blending starts.
+            ca_blend_ramp_iters - Number of iterations to ramp to ca_blend_max.
         """
 
         if logger is None:
@@ -289,13 +298,11 @@ class PGPE(NEAlgorithm):
 
         self.MIN_DIVERSITY = 0.005
 
-        jax.debug.print('init params in PGPE before array {} : ', init_params)
         if init_params is None:
             self._center = np.zeros(abs(param_size))
         else:
             self._center = init_params
         self._center = jnp.array(self._center)
-        print('init params in PGPE after array {} : ', self._center)
         if isinstance(init_stdev, float):
             self._stdev = np.ones(abs(param_size)) * abs(init_stdev)
         self._stdev = jnp.array(self._stdev)
@@ -348,15 +355,46 @@ class PGPE(NEAlgorithm):
 
         self.belief_space = belief_space if belief_space is not None else initialize_belief_space(
             population_size=self.pop_size, param_size=abs(param_size), key=subkey)
+        if len(self.belief_space) == 7:
+            # Backward compatibility for checkpoints created before control KS existed.
+            self.belief_space = self.belief_space + (initialize_control_ks(),)
 
         # Fitness mode: 'static' (fixed weights always) or 'dynamic'
         # (fixed weights early, CA-modulated weights after ca_activation_iter)
         self.fitness_mode = fitness_mode
         self.ca_activation_iter = ca_activation_iter
+        self.ca_blend_max = max(0.0, float(ca_blend_max))
+        self.ca_blend_start_iter = int(ca_blend_start_iter)
+        self.ca_blend_ramp_iters = max(1, int(ca_blend_ramp_iters))
         self.static_weights = static_weights or {
             'w_adv': 0.53, 'w_mi': 0.1, 'w_div': 0.48,
-            'w_sense': 0.1, 'w_intra': 0.20, 'w_cons_floor': 0.10,
-            'w_norm': 0.02,
+            'w_sense': 0.1, 'w_intra': 0.08, 'w_cons_floor': 0.04,
+            'w_norm': 0.02, 'w_adv_ceiling': 0.0,
+            'adv_ceiling': -0.65, 'adv_ceiling_warmup': 2000,
+        }
+        self._base_weight_vec = jnp.array([
+            self.static_weights['w_adv'],
+            self.static_weights['w_mi'],
+            self.static_weights['w_div'],
+            self.static_weights['w_sense'],
+            self.static_weights['w_intra'],
+            self.static_weights['w_cons_floor'],
+            self.static_weights['w_norm'],
+            self.static_weights.get('w_adv_ceiling', 0.0),
+        ], dtype=jnp.float32)
+        self._base_adv_ceiling = float(self.static_weights.get('adv_ceiling', -0.65))
+        self._adv_ceiling_warmup = int(self.static_weights.get('adv_ceiling_warmup', 2000))
+
+        # Latest CA runtime controls (used by Trainer to modulate D schedule).
+        self._control_signals = {
+            'd_dominance': 0.0,
+            'shortcut_risk': 0.0,
+            'diversity_distress': 0.0,
+            'stagnation': 0.0,
+            'prototype_lock': 0.0,
+            'd_update_rate': 0.5,
+            'ca_blend': 0.0,
+            'adv_ceiling': self._base_adv_ceiling,
         }
 
         # KS weight logging: buffer entries and flush to file every 100 iterations
@@ -370,7 +408,9 @@ class PGPE(NEAlgorithm):
             f.write('\t'.join([
                 'iter', 'ks_winner',
                 'w_adv', 'w_mi', 'w_sense', 'w_div', 'w_intra', 'w_cons_floor', 'w_norm',
-                'adv_distress', 'sense_overshoot', 'intra_distress',
+                'w_adv_ceiling', 'adv_ceiling', 'shortcut_violation_avg',
+                'd_dominance', 'shortcut_risk', 'diversity_distress', 'stagnation', 'prototype_lock',
+                'ca_blend', 'd_update_rate',
                 'adv_short', 'mi_short', 'adv_med', 'mi_med', 'ent_long',
                 'sense_short', 'intra_short', 'adv_avg_short', 'sense_med',
             ]) + '\n')
@@ -387,6 +427,10 @@ class PGPE(NEAlgorithm):
     def get_top_idx(self) -> jnp.ndarray:
         """Get the index of the top solution."""
         return self._top_indices
+
+    def get_runtime_controls(self):
+        """Expose CA control signals so Trainer can modulate D scheduling."""
+        return dict(self._control_signals)
 
     def ask_ca(self) -> jnp.ndarray:
         center_ca, stdev_ca, min_index = get_updated_params(
@@ -513,328 +557,107 @@ class PGPE(NEAlgorithm):
         #w_mi = 1 - w_adv
 
 
-        # Two-phase CA activation:
-        # 1. ca_grad_weight: early ramp (iter 500) — KS gradient blend provides
-        #    directional guidance that helps PGPE find structured weight regions.
-        # 2. ca_mod_weight: late ramp (ca_activation_iter) — distress-based weight
-        #    modulation needs stable metric slopes to avoid destabilizing training.
-        ca_grad_weight = jnp.clip((self._t - 500) / 2000, 0.0, 1.0)
-        ca_mod_weight = jnp.clip(
-            (self._t - 500) / 2000, 0.0, 1.0
+        # 1) Update topographic KS.
+        # Momentum ramps up with iteration so centroids stabilize as training matures.
+        base_blend_ramp = jnp.clip(
+            (self._t - self.ca_blend_start_iter) / self.ca_blend_ramp_iters,
+            0.0, 1.0
         )
-
-        # Centroid momentum: when CA is active, nearly freeze topographic centroids
-        # to prevent locked codes from drifting. 0.7 (early) → 0.97 (full CA).
-        topo_momentum = 0.7 + 0.27 * ca_grad_weight
-
+        topo_momentum = 0.7 + 0.27 * base_blend_ramp
         self.belief_space = update_topographic_ks(
             self.belief_space, avg_per_code, topo_momentum
         )
-       
 
-        #    fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense
+        # 2) Update metric history before computing adaptive controls.
+        mean_disc_logit = jnp.mean(disc_logits, axis=(0, 1))  # (11,) raw logits
+        mean_disc_prob = jax.nn.softmax(mean_disc_logit)
+        pop_entropy = -jnp.sum(mean_disc_prob * jnp.log(mean_disc_prob + 1e-8))
+        self.belief_space = update_metric_history(
+            self.belief_space,
+            jnp.max(fitness_adv),
+            jnp.max(fitness_mi),
+            pop_entropy,
+            jnp.max(r_sense),
+            avg_r_intra=jnp.mean(r_intra),
+            avg_fitness_adv=jnp.mean(fitness_adv),
+        )
 
-        #fitness_scores = fitness_adv.flatten() + pop_var * 20 - penalty
-        #if self._t < 800:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 100#-jnp.argsort(order+1)
-        #elif self._t < 2000:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 60
-        #elif self._t < 7000:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten()
-        #elif self._t < 9000:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 200 + r_sense * 10
-        #elif self._t < 12000:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 10
-        #elif self._t < 16000:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 400 + r_sense * 10 - r_cons * 8
-        #elif self._t < 22000:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 400 + r_sense * 20 - r_cons * 10
-        #elif self._t < 44000:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 1000 - r_cons * 20 + fitness_con.flatten()*10 
-        #elif self._t < 60000:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 1000 + r_sense * 20 + fitness_con.flatten()*20
-        #elif self._t < 80000:
-        #    fitness_scores = fitness_adv.flatten() + fitness_mi.flatten() * 1000 + r_sense * 40 + fitness_con.flatten()*100
-        #else:
-        #    fitness_scores = fitness_adv.flatten()*0.1 + fitness_mi.flatten() * 1000 - r_cons * 20 + r_sense * 10 + r_intra
-        #    
-        #if jnp.mean(fitness_mi) < -0.4:
-        #    w_mi = 10
-        #elif jnp.mean(fitness_mi) < -0.2:
-        #    w_mi = 20
-        #else:
-        #if self._t < 1000: 
-        #    w_mi = 100
-        #elif self._t < 3000:
-        #    w_mi = 20
-        #elif self._t < 9000:
-        #    w_mi = 4
-        #elif self._t < 35000:
-        #    w_mi = 2
-        #elif self._t < 70000:
-        #    w_mi = 10
-        #else:
-        #    w_mi = 100
-      
-        # linearly ramp w_mi from 1.0 to 1000.0 over 200000 timesteps
-        #w_mi = jnp.clip((self._t / 200000) * 200.0, 0.1, 200.0)
-        #if self._t < 6000:
-        #    w_adv = 1.0
-        #elif self._t < 8000:
-        #    w_adv = 0.95
-        #elif self._t < 14000:
-        #    w_adv = 0.9
-        #elif self._t < 30000:
-        #    w_adv = 0.85
-        #elif self._t < 50000:
-        #    w_adv = 0.9
-        #elif self._t < 70000:
-        #    w_adv = 0.95
-        #else:
-        #    w_adv = 1.0
+        # 3) Compute adaptive controls from belief space.
+        if self.fitness_mode == 'dynamic':
+            self.belief_space = update_control_ks(
+                self.belief_space,
+                jnp.float32(self._t),
+                fitness_adv,
+                fitness_mi,
+                pop_var,
+                r_sense,
+                r_intra,
+                jnp.mean(spreads),
+                self._base_weight_vec,
+                jnp.float32(self._base_adv_ceiling),
+                jnp.float32(self.ca_activation_iter),
+                jnp.float32(self.ca_blend_start_iter),
+                jnp.float32(self.ca_blend_ramp_iters),
+                jnp.float32(self.ca_blend_max),
+            )
+            adaptive_weights, adv_ceiling, ca_blend_adapt, d_update_rate, control_signals = get_control_outputs(self.belief_space)
+            w_adv = adaptive_weights[0]
+            w_mi = adaptive_weights[1]
+            w_div = adaptive_weights[2]
+            w_sense = adaptive_weights[3]
+            w_intra = adaptive_weights[4]
+            w_cons_floor = adaptive_weights[5]
+            w_norm = adaptive_weights[6]
+            w_adv_ceiling = adaptive_weights[7]
+            d_dominance = control_signals[0]
+            shortcut_risk = control_signals[1]
+            diversity_distress = control_signals[2]
+            stagnation = control_signals[3]
+            prototype_lock = control_signals[4]
+        else:
+            w_adv = self._base_weight_vec[0]
+            w_mi = self._base_weight_vec[1]
+            w_div = self._base_weight_vec[2]
+            w_sense = self._base_weight_vec[3]
+            w_intra = self._base_weight_vec[4]
+            w_cons_floor = self._base_weight_vec[5]
+            w_norm = self._base_weight_vec[6]
+            w_adv_ceiling = self._base_weight_vec[7]
+            adv_ceiling = jnp.float32(self._base_adv_ceiling)
+            ca_blend_adapt = jnp.float32(self.ca_blend_max * base_blend_ramp)
+            d_update_rate = jnp.float32(0.5)
+            d_dominance = jnp.float32(0.0)
+            shortcut_risk = jnp.float32(0.0)
+            diversity_distress = jnp.float32(0.0)
+            stagnation = jnp.float32(0.0)
+            prototype_lock = jnp.float32(0.0)
 
-        #if self._t < 30000:
-        #    w_sense = 4.0
-        #    w_intra = 1.0
-        #    w_cons = 0.2
-        #    w_con = 3.0
-        #elif self._t < 50000:
-        #    w_sense = 2.0
-        #    w_intra = 1.0
-        #    w_cons = 0.8
-        #    w_con = 2.0
-        #elif self._t < 80000:
-        #    w_sense = 3.0
-        #    w_intra = 2.0
-        #    w_cons = 1.6
-        #    w_con = 2.0
-        #elif self._t < 160000:
-        #    w_sense = 4.0
-        #    w_intra = 3.0
-        #    w_cons = 1.0
-        #    w_con = 3.0
-        #elif self._t < 200000:
-        #    w_sense = 3.0
-        #    w_intra = 1.0
-        #    w_cons = 1.0
-        #    w_con = 2.0
-        #elif self._t < 240000:
-        #    w_sense = 4.0
-        #    w_intra = 2.0
-        #    w_cons = 2.0
-        #    w_con = 2.5
-        #else:
-        #    w_sense = 8.0
-        #    w_intra = 4.0
-        #    w_cons = 3.0
-        #    w_con = 3.0
+        # Runtime control signals for Trainer (Python-side scheduling).
+        self._control_signals = {
+            'd_dominance': float(d_dominance),
+            'shortcut_risk': float(shortcut_risk),
+            'diversity_distress': float(diversity_distress),
+            'stagnation': float(stagnation),
+            'prototype_lock': float(prototype_lock),
+            'd_update_rate': float(d_update_rate),
+            'ca_blend': float(ca_blend_adapt),
+            'adv_ceiling': float(adv_ceiling),
+        }
 
-
-        #if self._t < 20000:
-        #    w_realism = -0.8
-        #elif self._t < 40000:
-        #    w_realism = 0.3
-        #elif self._t < 100000:
-        #    w_realism = 0.5
-        #else:
-        #    w_realism = 0.8
-        
-        #raw_fitness_adv = fitness_adv #* w_adv
-        #fitness_adv = raw_fitness_adv # * w_adv
-        
-        #std_adv = jnp.std(fitness_adv) + 1e-8
-        #std_mi = jnp.std(fitness_mi) + 1e-8
-
-
-        #max_w_mi = jnp.minimum(2.0, jnp.maximum((std_adv / std_mi)//2,0.05))
-
-        #realism_gate = jax.nn.sigmoid(raw_fitness_adv + w_realism)
-        # 2. MI is a constraint. If MI loss is high, it dominates fitness.
-        # If MI loss is low (good), its gradient contribution diminishes.
-        #mi_target = -0.001
-        #mi_gap = jnp.minimum(fitness_mi.flatten() - mi_target, 0.00)
-        
-        #fitness_mi = w_mi * mi_gap
-        #fitness_mi = 5 * fitness_mi.flatten()
-
-        #penalty_mi = mi_penalty(fitness_mi.flatten(), fitness_adv.flatten(), mi_thr=-0.001, v_ref=0.01, M=5.0)
-        #r_sense = w_sense * jnp.minimum(r_sense, 0.68)
-
-        #r_cons_weight = jnp.clip( (self._t - 3000) / 3000 , 0.0, 1.0)
-        ##r_cons_penalty = 2 * jnp.maximum(r_cons, 0.1)
-        #r_cons = -1.0 * r_cons_weight * r_cons#r_cons_penalty
-        #r_cons = w_cons * r_cons
-        #r_cons = -4.0 - r_cons
-
-        #r_intra = w_intra * r_intra
-
-        #r_intra = -4.4 + r_intra
-        #r_intra = 0.1 * r_intra
-        #r_sense = -4.0 + r_sense
-         
-        #fitness_con = w_con * fitness_con.flatten()
-
-        #fitness_adv_mean = jnp.mean(fitness_adv)
-        #fitness_adv_std = jnp.std(fitness_adv)
-        #fitness_adv_norm = (fitness_adv - fitness_adv_mean) / (fitness_adv_std + 1e-8)
-
-        #r_anchor_mean = jnp.mean(r_anchor)
-        #r_anchor_std = jnp.std(r_anchor)
-        #r_anchor_norm = (r_anchor - r_anchor_mean) / (r_anchor_std + 1e-8)
-
-        #fitness_adv = 10.0 - raw_fitness_adv
-        #fitness_con = -6.0 - fitness_con 
-        #fitness_adv = fitness_adv_norm + (0.2 * r_anchor_norm) 
-        #jax.debug.print('realism gate shape {} : ', realism_gate.shape)
-        #jax.debug.print('r_sense shape {} : ', r_sense.shape)
-        #jax.debug.print('r_intra shape {} : ', r_intra.shape)
-        #jax.debug.print('r_cons shape {} : ', r_cons.shape)
-        #jax.debug.print('fitness_con shape {} : ', fitness_con.shape)
-        
-        #cultural_score = (r_sense - r_cons)
-        #cultural_score = cultural_score[:, None]
-        #jax.debug.print('cultural score shape {} : ', cultural_score.shape)
-
-
-        #diversity_score = fitness_adv + (realism_gate * cultural_score)
-        #diversity_score = diversity_score[:, None] 
-
-        #jax.debug.print('diversity score shape {} : ', diversity_score.shape)
-
-        #fitness_adv = fitness_adv[:, None]
-        
-        #if self._t % 2 == 0:
-        #    objectives_final = jnp.hstack([-fitness_adv, -fitness_mi, -cultural_score])
-        #else:
-        #    objectives_final = jnp.hstack([-fitness_adv, -fitness_mi])
-        #jax.debug.print('objectives final shape {} : ', objectives_final.shape)
-
-        #ranks_final = non_dominated_sort_lax(objectives_final)
-        #w_mi = 100.0
-        #w_adv = 10.0
-        #order = jnp.lexsort((-fitness_adv.flatten(), ranks_final))
-        #if self._t < 40000:
-        #fitness_scores = -fitness_adv
-        #elif self._t < 40000:
-            #    
-        # increase w_norm from 0.01 to 1.0 linearly over 20000 iterations
-        #w_norm = jnp.clip((self._t / 200000) * 1.0, 0.01, 1.0)
-        
-
-        # 1. Define the Schedule
-        # ramp_start: 140k. ramp_end: 160k.
-        # We fade CA in over 20k iterations so we don't shock the population.
-        # Inside your fitness function or step_fn
-        # 1. Calculate raw components
-        
-        #ca_weight = jnp.clip((self._t - 140000) / 20000, 0.0, 1.0)
-        
-        # 2. Define the Metric Weights
-        #w_adv = 0.2
-        ##w_mi = 0.28
-        #w_mi = 0.1
-        #w_con = 0.008
-        #w_sense = 1.2 
-        # CA Weights (Only active after 140k)
-        #w_sense = 0.1 * ca_weight       # Reward separation
-        #w_cons = 0.05 * ca_weight       # Penalize drift
-        #w_norm = 0.05 * ca_weight       # Penalize violation (Keep this small!)
-        # gradually warm up w_sense from 0.0 to 1.2 over 1k iterations starting at 180k
-        #phase2_start = 180000
-        #w_sense = jnp.clip((self._t - 180000) / 1000, 0.0, 1.2) 
-        #w_cons = 0.0
-        #w_norm = 0.0
-        # Updated Weight Schedule (Gentler)
-        
-        # 1. Repulsion (w_sense): Decay SLOWLY. 
-        # Don't drop to 0.2 yet. The "8" needs the pressure from the "6" and "2" to stay an "8".
-        # Hold at 1.0 for 2k steps, then decay.
-        #w_sense = jnp.clip(1.2 - ((self._t - 183000) / 100) * 0.8, 0.4, 1.2)
-        
-        # 2. Anchor (w_cons): Cap at 2.0 (Not 20.0!)
-        # We want to prevent drift, not freeze evolution.
-        #w_cons = jnp.clip((self._t - 183000) / 100, 0.0, 1.0)
-        #
-        ## 3. Normative (w_norm): Keep low but active
-        #w_norm = jnp.clip((self._t - 183000) / 100, 0.0, 2.0)
-       ## 3. Calculate Fitness
-        ## Note: Ensure signs are correct (Subtracting penalties)
-        #fitness_scores = (
-        #    (fitness_adv * w_adv)
-        #    + (fitness_mi * w_mi)
-        #    + (fitness_con * w_con)
-        #    + (r_sense * w_sense)             # Stage 2: Push clusters apart
-        #    #- (normative_penalty * w_norm)    # Stage 2: Enforce safety/spread limits
-        #    #- (r_cons * w_cons)               # Stage 2: Anchor distinct digits
-        #)
-        # 2. Define the Metric Weights
-        # Signal analysis at 183k (pop std): adv=0.0465, mi=0.0004, con=0.0198,
-        # r_sense=0.0092, r_cons=0.0012, normative=0.0007
-        # To give r_sense comparable gradient influence to fitness_adv:
-        #   need w_sense * 0.0092 ≈ w_adv * 0.0465 → w_sense ≈ 5.0 * w_adv
-        # With min-pair r_sense (higher variance ~0.015), w_sense ~3.0 suffices.
-        # --- Fitness weight computation ---
-        # Base weights from static_weights dict (user-tuned for stable training)
-        sw = self.static_weights
-        w_adv_base = sw['w_adv']
-        w_mi_base = sw['w_mi']
-        w_sense_base = sw['w_sense']
-        w_div_base = sw['w_div']
-        w_intra_base = sw['w_intra']
-        w_cons_floor = sw['w_cons_floor']
-        w_norm_base = sw['w_norm']
-
-        # Compute metric slopes (always, for logging even in static mode)
+        # Metric slopes for logging/diagnostics.
         slopes = compute_metric_slopes(self.belief_space)
         (adv_short, mi_short, adv_med, mi_med, ent_long,
          sense_short, intra_short, adv_avg_short, sense_med) = slopes
 
-        # Compute raw distress signals (always, for logging)
-        # Use medium-term slope for adv (smoother, less reactive to noise).
-        # Multipliers reduced from 50/100/100 to 10/20/20 — old values
-        # caused near-constant clip-saturation during normal training.
-        # Clip limits tightened: max perturbation per weight is now ~5%
-        # instead of ~20%, preventing fitness balance disruption.
-        raw_adv_distress = jnp.clip(-adv_med * 10.0, 0.0, 0.05)
-        raw_sense_overshoot = jnp.clip(sense_med * 20.0 - 0.1, 0.0, 0.03)
-        raw_intra_distress = jnp.clip(-intra_short * 20.0, 0.0, 0.04)
-
-        if self.fitness_mode == 'dynamic':
-            # Dynamic mode: CA modulation ramps in via ca_mod_weight.
-            # Before ca_activation_iter: weights = base (proven stable).
-            # After ramp: weights = base + full CA modulation.
-            adv_distress = raw_adv_distress * ca_mod_weight
-            sense_overshoot = raw_sense_overshoot * ca_mod_weight
-            intra_distress = raw_intra_distress * ca_mod_weight
-
-            w_adv = w_adv_base + adv_distress
-            w_div = w_div_base - adv_distress * 0.5
-            w_sense = w_sense_base - sense_overshoot
-            w_intra = w_intra_base + intra_distress
-            w_mi = w_mi_base
-
-            # Ensure no weight goes negative
-            w_adv = jnp.maximum(w_adv, 0.1)
-            w_div = jnp.maximum(w_div, 0.1)
-            w_sense = jnp.maximum(w_sense, 0.02)
-        else:
-            # Static mode: fixed weights, no CA modulation
-            adv_distress = 0.0
-            sense_overshoot = 0.0
-            intra_distress = 0.0
-
-            w_adv = w_adv_base
-            w_div = w_div_base
-            w_sense = w_sense_base
-            w_intra = w_intra_base
-            w_mi = w_mi_base
-
-        # Normative: scales with CA activation in both modes
-        w_norm = w_norm_base * ca_mod_weight
-
         # r_cons floor penalty
         cons_floor = 0.05
         cons_shortfall = jnp.maximum(0.0, cons_floor - r_cons)
+
+        # Guardrail against shortcut collapse: once adversarial reward rises
+        # above the ceiling (toward 0), penalize those individuals directly.
+        # This keeps G in the stable band instead of chasing transient D holes.
+        adv_ceiling_gate = jnp.float32(self._t >= self._adv_ceiling_warmup)
+        adv_shortcut_violation = jnp.maximum(0.0, fitness_adv - adv_ceiling)
 
         # Buffer KS weights for logging (flushed every 100 iterations)
         if self._ks_log_path is not None:
@@ -842,7 +665,9 @@ class PGPE(NEAlgorithm):
                 self._t, 0,  # ks_winner filled later after get_updated_params
                 float(w_adv), float(w_mi), float(w_sense), float(w_div),
                 float(w_intra), float(w_cons_floor), float(w_norm),
-                float(adv_distress), float(sense_overshoot), float(intra_distress),
+                float(w_adv_ceiling), float(adv_ceiling), float(jnp.mean(adv_shortcut_violation)),
+                float(d_dominance), float(shortcut_risk), float(diversity_distress), float(stagnation), float(prototype_lock),
+                float(ca_blend_adapt), float(d_update_rate),
                 float(adv_short), float(mi_short), float(adv_med), float(mi_med),
                 float(ent_long), float(sense_short), float(intra_short),
                 float(adv_avg_short), float(sense_med),
@@ -857,15 +682,8 @@ class PGPE(NEAlgorithm):
             + (rank_normalize(r_intra) * w_intra)          # Within-code variation (use z-noise)
             - (rank_normalize(cons_shortfall) * w_cons_floor) # Penalize centroid drift below floor
             - (rank_normalize(normative_penalty) * w_norm) # Safety/spread limits
+            - (adv_shortcut_violation * w_adv_ceiling * adv_ceiling_gate)
         )
-        #w_mi = jnp.clip((self._t / 10000) * 10.0, 0.1, 0.6)
-        
-        #w_mi = 1.0
-        #fitness_scores = -jnp.argsort(order)
-        #    fitness_scores = fitness_adv
-        #fitness_scores = fitness_adv + fitness_mi*0.18 + fitness_con*0.013 # + r_sense - normative_penalty*w_norm - r_cons*0.1
-        #else:#if self._t < 160000:
-        #cultural_score = r_sense + r_intra + r_cons + fitness_con
         spreads = spreads.reshape(self.pop_size, 11, 1)
         safety_ratios = safety_ratios.reshape(self.pop_size, 11, 11)
 
@@ -892,22 +710,6 @@ class PGPE(NEAlgorithm):
         best_fitness_combined = jnp.array([fitness_scores.flatten()[best_idx]])
         best_r_sense = jnp.array([r_sense.flatten()[best_idx]])
         best_r_cons = jnp.array([r_cons.flatten()[best_idx]])
-
-        # Population-level entropy proxy from disc_logits (averaged across individuals and samples)
-        mean_disc_logit = jnp.mean(disc_logits, axis=(0, 1))  # (11,) raw logits
-        mean_disc_prob = jax.nn.softmax(mean_disc_logit)       # convert to probabilities
-        pop_entropy = -jnp.sum(mean_disc_prob * jnp.log(mean_disc_prob + 1e-8))
-
-        # Update metric history (rolling buffer for slope computation)
-        self.belief_space = update_metric_history(
-            self.belief_space,
-            jnp.max(fitness_adv),
-            jnp.max(fitness_mi),
-            pop_entropy,
-            jnp.max(r_sense),
-            avg_r_intra=jnp.mean(r_intra),
-            avg_fitness_adv=jnp.mean(fitness_adv),
-        )
 
         # Domain KS: Pareto front with GAN diagnostic metadata (r_sense, r_cons)
         # Pass mean_disc_prob (softmax probabilities) not raw logits — KS entropy
@@ -961,12 +763,10 @@ class PGPE(NEAlgorithm):
         ca_grad_center = jnp.nan_to_num(ca_grad_center, nan=0.0)
         ca_grad_stdev = jnp.nan_to_num(ca_grad_stdev, nan=0.0)
 
-        # Only blend when CA is active and archives have real, non-zero data
+        # Only blend when CA is active and archives have real, non-zero data.
+        # Blend magnitude comes from CA control state (belief-space driven).
         has_ca_data = jnp.any(ca_center_g != 0.0) & jnp.all(jnp.isfinite(ca_center_g))
-        # Ramp blend with ca_grad_weight (early start, iter 500) so KS gradient
-        # targets provide directional guidance from early training. This helps
-        # PGPE find structured weight regions instead of settling into blob modes.
-        ca_blend = 0.025 * jnp.float32(has_ca_data) * ca_grad_weight
+        ca_blend = ca_blend_adapt * jnp.float32(has_ca_data)
 
         # Scale CA direction to match REINFORCE gradient magnitude so the
         # blend ratio is meaningful.  ClipUp normalizes center grad anyway;

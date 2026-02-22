@@ -392,6 +392,7 @@ class Latent_Points(VectorizedTask):
                  dataset_size: int = 800,  # Similar to MNIST
                  latent_dim: int = 63,
                  n_classes: int = 11,
+                 noise_std: float = 0.1,
                  test: bool = False):
         self.max_steps = 1
         self.obs_shape = (latent_dim + n_classes,)
@@ -407,6 +408,7 @@ class Latent_Points(VectorizedTask):
         self.batch_size = batch_size
         self.latent_dim = latent_dim
         self.n_classes = n_classes
+        self.noise_std = noise_std
 
         self.noise_dim = latent_dim
 
@@ -429,7 +431,7 @@ class Latent_Points(VectorizedTask):
                 n_ctrl = (self.batch_size // self.n_classes) * self.n_classes  # 5*11=55 for batch=64
                 codes60 = jnp.zeros((n_ctrl,), dtype=jnp.int32)
                 # Instance Noise for Discriminator stability
-                noise = jax.random.normal(con_key, (self.batch_size, 28, 28, 1)) * 0.1
+                noise = jax.random.normal(con_key, (self.batch_size, 28, 28, 1)) * self.noise_std
             else:
                 # --- Controlled Experiment (Latent Vector Design) ---
                 # Generate base vectors, repeat n_classes times -> enough to fill batch
@@ -456,7 +458,7 @@ class Latent_Points(VectorizedTask):
                 batch_latent_concat = jnp.concatenate([z_base, batch_cat_one_hot], axis=-1)
 
                 # Instance Noise for Discriminator stability
-                noise = jax.random.normal(cat_key, (self.batch_size, 28, 28, 1)) * 0.1
+                noise = jax.random.normal(cat_key, (self.batch_size, 28, 28, 1)) * self.noise_std
 
             return State(
                 obs=batch_latent_concat,

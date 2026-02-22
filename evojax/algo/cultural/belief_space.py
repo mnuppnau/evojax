@@ -10,6 +10,7 @@ from evojax.algo.cultural.knowledge_sources import (
     initialize_topographic_ks,
     initialize_normative_ks,
     initialize_metric_history,
+    initialize_control_ks,
     get_center_guidance,
     get_stdev_guidance,
 )
@@ -37,6 +38,7 @@ def initialize_belief_space(
         initialize_topographic_ks(features, key, num_codes),  # [4] topographic KS
         initialize_normative_ks(param_size, population_size),  # [5] normative KS
         initialize_metric_history(),         # [6] metric history (slopes)
+        initialize_control_ks(),             # [7] adaptive runtime controls
     )
     return belief_space
 

@@ -220,21 +220,11 @@ class Generator(nn.Module):
         # UPSAMPLE BLOCK 1 (7x7 -> 14x14)
         x = jax.image.resize(x, shape=(x.shape[0], 14, 14, x.shape[3]), method='nearest')
 
-        # 3x3 kernels: eliminate edge bias from old 5x5 kernels
+        # Use a larger kernel after nearest-neighbor upsampling to recover
+        # smoother organ boundaries and reduce "blob" artifacts.
         x = nn.Conv(
             self.features,
-            kernel_size=(3, 3),
-            strides=(1, 1),
-            padding='SAME',
-            kernel_init=normal_init(0.02)
-        )(x)
-        x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
-        x = jnp.tanh(x)
-
-        # Extra depth at 14x14: richer feature composition before final upsample
-        x = nn.Conv(
-            self.features,
-            kernel_size=(3, 3),
+            kernel_size=(5, 5),
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -247,7 +237,7 @@ class Generator(nn.Module):
 
         x = nn.Conv(
             self.features // 2,
-            kernel_size=(3, 3),
+            kernel_size=(5, 5),
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -258,7 +248,7 @@ class Generator(nn.Module):
         # OUTPUT BLOCK (28x28 -> 28x28)
         x = nn.Conv(
             1,
-            kernel_size=(3, 3),
+            kernel_size=(5, 5),
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -668,11 +658,31 @@ class QNetwork(nn.Module):
 class GenPolicy(PolicyNetwork):
     """A convolutional neural network for the MNIST classification task."""
 
-    def __init__(self, logger: logging.Logger = None):
+    def __init__(
+        self,
+        logger: logging.Logger = None,
+        saturation_penalty_weight: float = 0.06,
+        sat_threshold: float = 0.95,
+        sat_target_ratio: float = 0.55,
+        sat_min_ratio: float = 0.10,
+    ):
         if logger is None:
             self._logger = create_logger('ConvNetPolicy')
         else:
             self._logger = logger
+
+        self.saturation_penalty_weight = float(saturation_penalty_weight)
+        self.sat_threshold = float(sat_threshold)
+        self.sat_target_ratio = float(sat_target_ratio)
+        self.sat_min_ratio = float(sat_min_ratio)
+
+        self._logger.info(
+            'GenPolicy saturation penalty: weight=%.4f, threshold=%.3f, target_ratio=%.3f, min_ratio=%.3f',
+            self.saturation_penalty_weight,
+            self.sat_threshold,
+            self.sat_target_ratio,
+            self.sat_min_ratio,
+        )
 
         self.model_gen = Generator(training=False)
        
@@ -756,6 +766,15 @@ class GenPolicy(PolicyNetwork):
             grouped = fake_data[:n_ctrl].reshape(-1, n_classes, 28, 28, 1)
             grouped_centered = grouped - grouped.mean(axis=(2, 3), keepdims=True)
             code_pixel_div = jnp.mean(jnp.var(grouped_centered, axis=1))
+
+            # Penalize over-saturated outputs to discourage the high-contrast
+            # blob attractor while preserving diversity pressure.
+            sat_ratio = jnp.mean(jnp.abs(fake_data) > self.sat_threshold)
+            sat_excess = jnp.maximum(0.0, sat_ratio - self.sat_target_ratio)
+            sat_deficit = jnp.maximum(0.0, self.sat_min_ratio - sat_ratio)
+            code_pixel_div = code_pixel_div - self.saturation_penalty_weight * (
+                sat_excess + sat_deficit
+            )
 
             return preds, q, code_pixel_div, q_flat
 

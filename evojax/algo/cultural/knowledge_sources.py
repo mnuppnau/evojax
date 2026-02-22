@@ -43,6 +43,25 @@ def initialize_metric_history(window_size: int = 100):
     )
 
 
+def initialize_control_ks():
+    """Runtime control state for CA-driven adaptive training knobs.
+
+    State layout:
+      [0] ema_signals: [d_dominance, shortcut_risk, diversity_distress, stagnation, prototype_lock]
+      [1] adaptive_weights: [w_adv, w_mi, w_div, w_sense, w_intra, w_cons_floor, w_norm, w_adv_ceiling]
+      [2] adaptive_adv_ceiling
+      [3] adaptive_ca_blend
+      [4] d_update_rate  (0..1, higher = more D updates)
+    """
+    return (
+        jnp.zeros((5,), dtype=jnp.float32),
+        jnp.zeros((8,), dtype=jnp.float32),
+        jnp.float32(-0.65),
+        jnp.float32(0.0),
+        jnp.float32(0.5),
+    )
+
+
 def initialize_domain_ks(param_size: int, num_elites: int = 20):
     return (
         jnp.zeros((num_elites, param_size)),  # [0] best solutions (parameter sets)
@@ -140,8 +159,171 @@ def update_metric_history(belief_space, best_fitness_adv, best_fitness_mi, entro
     new_count = jnp.minimum(count + 1, window_size)
 
     updated_metric_history = (adv_buf, mi_buf, ent_buf, sense_buf, new_idx, new_count, intra_buf, adv_avg_buf)
-    updated_belief_space = belief_space[:6] + (updated_metric_history,)
+    updated_belief_space = belief_space[:6] + (updated_metric_history,) + belief_space[7:]
     return updated_belief_space
+
+
+@jax.jit
+def update_control_ks(
+    belief_space,
+    t,
+    fitness_adv,
+    fitness_mi,
+    pop_var,
+    r_sense,
+    r_intra,
+    avg_spread,
+    base_weights,
+    base_adv_ceiling,
+    ca_activation_iter,
+    ca_blend_start_iter,
+    ca_blend_ramp_iters,
+    ca_blend_max,
+):
+    """Update CA runtime control state from metric history + current population.
+
+    This turns the CA belief space into a controller that adapts training
+    knobs (fitness weights, adversarial ceiling, CA blend, and D update rate)
+    as the GAN landscape changes.
+    """
+    control_ks = belief_space[7]
+    ema_prev, _, _, _, _ = control_ks
+
+    slopes = compute_metric_slopes(belief_space)
+    adv_short = slopes[0]
+    adv_med = slopes[2]
+    mi_med = slopes[3]
+    sense_short = slopes[5]
+    intra_short = slopes[6]
+
+    best_adv = jnp.max(fitness_adv)
+    pop_var_mean = jnp.mean(pop_var)
+
+    # 1) Risk detection.
+    # D-dominance: adversarial reward too negative and still trending down.
+    d_dom_level = jnp.clip((-1.15 - best_adv) / 0.55, 0.0, 1.0)
+    d_dom_trend = jnp.clip((-adv_short) / 0.03, 0.0, 1.0)
+    d_dominance_raw = 0.70 * d_dom_level + 0.30 * d_dom_trend
+
+    # Shortcut risk: adversarial reward jumps upward (toward 0) and exceeds ceiling.
+    shortcut_level = jnp.clip(
+        (best_adv - (base_adv_ceiling - 0.10)) / 0.35, 0.0, 1.0
+    )
+    shortcut_frac = jnp.mean((fitness_adv > base_adv_ceiling).astype(jnp.float32))
+    shortcut_trend = jnp.clip(adv_short / 0.03, 0.0, 1.0)
+    shortcut_raw = 0.45 * shortcut_level + 0.35 * shortcut_frac + 0.20 * shortcut_trend
+
+    # Prototype-lock risk: codes are well separated, but each code collapses
+    # to near-identical samples across z (very low spread / within-code variance).
+    r_sense_mean = jnp.mean(r_sense)
+    r_intra_mean = jnp.mean(r_intra)
+    spread_deficit = jnp.clip((0.055 - avg_spread) / 0.03, 0.0, 1.0)
+    intra_deficit = jnp.clip((0.75 - r_intra_mean) / 0.30, 0.0, 1.0)
+    sense_excess = jnp.clip((r_sense_mean - 0.09) / 0.04, 0.0, 1.0)
+    prototype_lock_raw = jnp.clip(
+        0.45 * intra_deficit + 0.30 * spread_deficit + 0.25 * sense_excess,
+        0.0,
+        1.0,
+    )
+
+    # Diversity distress: code-separation/within-code metrics weakening.
+    sense_drop = jnp.clip((-sense_short) / 0.004, 0.0, 1.0)
+    intra_drop = jnp.clip((-intra_short) / 0.0025, 0.0, 1.0)
+    var_drop = jnp.clip((0.10 - pop_var_mean) / 0.10, 0.0, 1.0)
+    diversity_raw = jnp.clip(
+        0.30 * sense_drop + 0.25 * intra_drop + 0.15 * var_drop
+        + 0.20 * intra_deficit + 0.10 * spread_deficit,
+        0.0,
+        1.0,
+    )
+
+    # Stagnation: medium-term slopes are flat.
+    stagnation_raw = 1.0 - jnp.clip(
+        (jnp.abs(adv_med) + jnp.abs(mi_med)) / 0.01, 0.0, 1.0
+    )
+
+    raw_signals = jnp.array(
+        [d_dominance_raw, shortcut_raw, diversity_raw, stagnation_raw, prototype_lock_raw],
+        dtype=jnp.float32
+    )
+
+    # 2) EMA smoothing for stability.
+    ema_alpha = jnp.float32(0.15)
+    ema_signals = (1.0 - ema_alpha) * ema_prev + ema_alpha * raw_signals
+
+    # 3) Ramp in control authority after warm-up.
+    control_ramp = jnp.clip((t - ca_activation_iter) / 2000.0, 0.0, 1.0)
+    d_dominance, shortcut_risk, diversity_distress, stagnation, prototype_lock = ema_signals * control_ramp
+
+    # 4) Adaptive fitness weights.
+    base_w_adv = base_weights[0]
+    base_w_mi = base_weights[1]
+    base_w_div = base_weights[2]
+    base_w_sense = base_weights[3]
+    base_w_intra = base_weights[4]
+    base_w_cons_floor = base_weights[5]
+    base_w_norm = base_weights[6]
+    base_w_adv_ceiling = base_weights[7]
+
+    w_adv = base_w_adv + 0.14 * d_dominance - 0.16 * shortcut_risk
+    w_mi = base_w_mi + 0.03 * stagnation
+    w_div = base_w_div + 0.10 * diversity_distress + 0.10 * prototype_lock - 0.05 * d_dominance
+    w_sense = base_w_sense + 0.08 * diversity_distress - 0.10 * prototype_lock - 0.04 * shortcut_risk
+    w_intra = base_w_intra + 0.20 * diversity_distress + 0.18 * prototype_lock + 0.06 * stagnation
+    w_cons_floor = base_w_cons_floor + 0.06 * shortcut_risk
+    w_norm = base_w_norm + 0.07 * shortcut_risk + 0.03 * diversity_distress + 0.02 * prototype_lock
+    w_adv_ceiling = base_w_adv_ceiling + 0.90 * shortcut_risk
+
+    adaptive_weights = jnp.array([
+        jnp.clip(w_adv, 0.25, 0.80),
+        jnp.clip(w_mi, 0.05, 0.25),
+        jnp.clip(w_div, 0.20, 0.70),
+        jnp.clip(w_sense, 0.03, 0.30),
+        jnp.clip(w_intra, 0.05, 0.45),
+        jnp.clip(w_cons_floor, 0.02, 0.20),
+        jnp.clip(w_norm, 0.0, 0.25),
+        jnp.clip(w_adv_ceiling, 0.0, 2.0),
+    ], dtype=jnp.float32)
+
+    # 5) Adaptive adversarial ceiling and CA blend strength.
+    adaptive_adv_ceiling = jnp.clip(
+        base_adv_ceiling + 0.05 * d_dominance - 0.08 * shortcut_risk,
+        -0.95, -0.45
+    )
+
+    blend_ramp = jnp.clip(
+        (t - ca_blend_start_iter) / jnp.maximum(ca_blend_ramp_iters, 1.0),
+        0.0, 1.0
+    )
+    blend_multiplier = jnp.clip(
+        0.5 + 0.8 * shortcut_risk + 0.4 * stagnation - 0.3 * d_dominance + 0.3 * prototype_lock,
+        0.30, 1.50
+    )
+    adaptive_ca_blend = ca_blend_max * blend_ramp * blend_multiplier
+
+    # 6) D update control (trainer uses this to modulate D frequency).
+    d_update_rate = jnp.clip(
+        0.45 + 0.45 * shortcut_risk - 0.85 * d_dominance - 0.25 * prototype_lock + 0.10 * stagnation,
+        0.0, 1.0
+    )
+    d_update_rate = jnp.where(control_ramp > 0.0, d_update_rate, jnp.float32(0.5))
+
+    updated_control_ks = (
+        ema_signals,
+        adaptive_weights,
+        adaptive_adv_ceiling,
+        adaptive_ca_blend,
+        d_update_rate,
+    )
+    return belief_space[:7] + (updated_control_ks,)
+
+
+@jax.jit
+def get_control_outputs(belief_space):
+    """Fetch latest adaptive control outputs from belief space."""
+    control_ks = belief_space[7]
+    ema_signals, adaptive_weights, adaptive_adv_ceiling, adaptive_ca_blend, d_update_rate = control_ks
+    return adaptive_weights, adaptive_adv_ceiling, adaptive_ca_blend, d_update_rate, ema_signals
 
 
 @jax.jit

@@ -96,21 +96,11 @@ class Generator(nn.Module):
         # UPSAMPLE BLOCK 1 (7x7 -> 14x14)
         x = jax.image.resize(x, shape=(x.shape[0], 14, 14, x.shape[3]), method='nearest')
 
-        # 3x3 kernels: eliminate edge bias from old 5x5 kernels
+        # Use a larger kernel after nearest-neighbor upsampling to recover
+        # smoother organ boundaries and reduce "blob" artifacts.
         x = nn.Conv(
             self.features,
-            kernel_size=(3, 3),
-            strides=(1, 1),
-            padding='SAME',
-            kernel_init=normal_init(0.02)
-        )(x)
-        x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
-        x = jnp.tanh(x)
-
-        # Extra depth at 14x14: richer feature composition before final upsample
-        x = nn.Conv(
-            self.features,
-            kernel_size=(3, 3),
+            kernel_size=(5, 5),
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -123,7 +113,7 @@ class Generator(nn.Module):
 
         x = nn.Conv(
             self.features // 2,
-            kernel_size=(3, 3),
+            kernel_size=(5, 5),
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -134,7 +124,7 @@ class Generator(nn.Module):
         # OUTPUT BLOCK (28x28 -> 28x28)
         x = nn.Conv(
             1,
-            kernel_size=(3, 3),
+            kernel_size=(5, 5),
             strides=(1, 1),
             padding='SAME',
             kernel_init=normal_init(0.02)
@@ -979,6 +969,18 @@ class Trainer(object):
                  checkpoint_dir: str = None,
                  checkpoint_interval: int = 0,
                  resume_from: str = None,
+                 d_freq_phase1: int = 12,
+                 d_freq_phase2: int = 4,
+                 d_phase1_iters: int = 2000,
+                 d_phase2_iters: int = 4000,
+                 d_update_warmup_iters: int = 5000,
+                 d_min_real_fake_loss: float = 0.35,
+                 d_rescue_rfl: float = 0.55,
+                 d_rescue_adv_max: float = -0.75,
+                 d_rescue_end_iters: int = 12000,
+                 disc_noise_std_start: float = 0.1,
+                 disc_noise_std_end: float = 0.04,
+                 disc_noise_anneal_iters: int = 12000,
                  logger: logging.Logger = None,
                  log_scores_fn: Optional[Callable[[int, jnp.ndarray, str], None]] = None):
         """Initialization.
@@ -1041,6 +1043,20 @@ class Trainer(object):
         self._checkpoint_interval = checkpoint_interval
         self._resume_from = resume_from
 
+        # Discriminator scheduling and instance-noise controls.
+        self._d_freq_phase1 = max(1, int(d_freq_phase1))
+        self._d_freq_phase2 = max(1, int(d_freq_phase2))
+        self._d_phase1_iters = max(0, int(d_phase1_iters))
+        self._d_phase2_iters = max(self._d_phase1_iters, int(d_phase2_iters))
+        self._d_update_warmup_iters = max(0, int(d_update_warmup_iters))
+        self._d_min_real_fake_loss = float(d_min_real_fake_loss)
+        self._d_rescue_rfl = float(d_rescue_rfl)
+        self._d_rescue_adv_max = float(d_rescue_adv_max)
+        self._d_rescue_end_iters = max(0, int(d_rescue_end_iters))
+        self._disc_noise_std_start = float(disc_noise_std_start)
+        self._disc_noise_std_end = float(disc_noise_std_end)
+        self._disc_noise_anneal_iters = max(1, int(disc_noise_anneal_iters))
+
         self._log_scores_fn = log_scores_fn or (lambda x, y, z: None)
 
         self._obs_normalizer = ObsNormalizer(
@@ -1084,6 +1100,11 @@ class Trainer(object):
 
         self.solver_disc = optax.adam(learning_rate=0.00008, b1=0.5, b2=0.999)
 
+    def _disc_noise_std(self, iteration: int) -> float:
+        """Linearly anneal discriminator instance noise for sharper late images."""
+        progress = min(max(iteration, 0), self._disc_noise_anneal_iters) / self._disc_noise_anneal_iters
+        return self._disc_noise_std_start + progress * (self._disc_noise_std_end - self._disc_noise_std_start)
+
     def run(self, demo_mode: bool = False) -> float:
 
         """Start the training / test process."""
@@ -1115,6 +1136,22 @@ class Trainer(object):
 
             self._logger.info(
                 'Start to train for {} iterations.'.format(self._max_iter))
+            self._logger.info(
+                'D schedule: every %d iters (<%d), every %d iters (<%d), then every iter; '
+                'D-freeze after %d iters when real_fake_loss <= %.3f; '
+                'D-rescue (iter<%d) when real_fake_loss > %.3f or adv_max > %.3f; '
+                'disc noise std %.3f -> %.3f over %d iters',
+                self._d_freq_phase1, self._d_phase1_iters,
+                self._d_freq_phase2, self._d_phase2_iters,
+                self._d_update_warmup_iters, self._d_min_real_fake_loss,
+                self._d_rescue_end_iters, self._d_rescue_rfl, self._d_rescue_adv_max,
+                self._disc_noise_std_start, self._disc_noise_std_end,
+                self._disc_noise_anneal_iters
+            )
+            if hasattr(self.solver_hn, 'get_runtime_controls'):
+                self._logger.info(
+                    'Belief-space runtime D modulation enabled (adaptive d_freq and rescue thresholds).'
+                )
 
             if params_hn is not None and params_disc is not None and params_q is not None:
                 # Continue training from the breakpoint.
@@ -1153,6 +1190,7 @@ class Trainer(object):
             self.ordered_centroids = jnp.zeros((self.n_classes, 256))
 
             real_fake_loss = 0.0  # Default for logging when D is not trained
+            last_adv_max = -float('inf')
 
             # --- Set up metric and KS weight log files ---
             metrics_log_path = os.path.join(self._log_dir, 'metrics.tsv') if self._log_dir else 'metrics.tsv'
@@ -1173,11 +1211,56 @@ class Trainer(object):
 
                 shape_noise = (self.mini_batch_size, self.latent_dim)
                 shape_cat = (self.mini_batch_size,)
-                
-                # D-step frequency: reduce D updates early so G can establish
-                # diversity before D crushes it. Every 3rd iter for first 1.5k,
-                # then every iteration after.
-                d_freq = 10 if i < 1500 else (4 if i < 3000 else 1)
+
+                # Pull CA runtime controls from solver (if available).
+                runtime_controls = {}
+                if hasattr(self.solver_hn, 'get_runtime_controls'):
+                    runtime_controls = self.solver_hn.get_runtime_controls()
+                d_update_rate = float(runtime_controls.get('d_update_rate', 0.5))
+                shortcut_risk = float(runtime_controls.get('shortcut_risk', 0.0))
+                d_dominance = float(runtime_controls.get('d_dominance', 0.0))
+                prototype_lock = float(runtime_controls.get('prototype_lock', 0.0))
+                dynamic_rescue_rfl = float(np.clip(
+                    self._d_rescue_rfl - 0.10 * shortcut_risk + 0.08 * d_dominance + 0.10 * prototype_lock,
+                    0.35, 0.80
+                ))
+                dynamic_rescue_adv_max = float(np.clip(
+                    self._d_rescue_adv_max - 0.20 * shortcut_risk + 0.15 * d_dominance + 0.10 * prototype_lock,
+                    -1.20, -0.45
+                ))
+
+                if i < self._d_phase1_iters:
+                    d_freq = self._d_freq_phase1
+                elif i < self._d_phase2_iters:
+                    d_freq = self._d_freq_phase2
+                else:
+                    d_freq = 1
+
+                # Belief-space D schedule modulation:
+                # d_update_rate>0.5 => train D more often, <0.5 => less often.
+                freq_scale = 1.0 + 0.9 * (0.5 - d_update_rate)
+                d_freq = max(1, int(round(d_freq * freq_scale)))
+
+                # Cooldown D when it stays overconfident or when prototype-lock
+                # is detected (codes separated but low within-code diversity).
+                if real_fake_loss < 0.38:
+                    d_freq = max(d_freq, 2)
+                if real_fake_loss < 0.34:
+                    d_freq = max(d_freq, 3)
+                if prototype_lock > 0.35:
+                    d_freq = max(d_freq, 3)
+                if prototype_lock > 0.60:
+                    d_freq = max(d_freq, 4)
+
+                rescue_active = (
+                    i < self._d_rescue_end_iters and (
+                        real_fake_loss > dynamic_rescue_rfl
+                        or last_adv_max > dynamic_rescue_adv_max
+                    )
+                )
+                if rescue_active:
+                    d_freq = 1
+
                 if i % d_freq == 0:
                     for mini_batch in range(num_mini_batches):
                         # Sample batch of data.
@@ -1190,7 +1273,12 @@ class Trainer(object):
 
                         latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
 
-                        noise = jax.random.normal(subkey_noise, (self.mini_batch_size, 28, 28, 1)) * 0.1
+                        base_disc_noise_std = self._disc_noise_std(i)
+                        noise_boost = max(0.0, 0.40 - real_fake_loss) * 0.40 + 0.05 * prototype_lock
+                        curr_disc_noise_std = min(0.18, base_disc_noise_std + noise_boost)
+                        noise = jax.random.normal(
+                            subkey_noise, (self.mini_batch_size, 28, 28, 1)
+                        ) * curr_disc_noise_std
 
                         shift_x = jax.random.randint(subkey_shift_x, shape=(), minval=-1, maxval=2)
                         shift_y = jax.random.randint(subkey_shift_y, shape=(), minval=-1, maxval=2)
@@ -1217,8 +1305,11 @@ class Trainer(object):
                             cat_codes,
                             solver_disc,
                         )
-#jax.debug.print('loss: {} ', loss)
-                        params_disc, self.batch_stats_disc, opt_disc = state
+                        if (
+                            i < self._d_update_warmup_iters
+                            or real_fake_loss > self._d_min_real_fake_loss
+                        ):
+                            params_disc, self.batch_stats_disc, opt_disc = state
 
                 leaves_params, _ = jax.tree_flatten(params_disc) 
                 flat_params_disc = jnp.concatenate([p.flatten() for p in leaves_params])
@@ -1244,6 +1335,7 @@ class Trainer(object):
                 
                 self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, normative_penalty=norm_pen, safety_ratios=safety_ratios, spreads=spreads, adv=False)
 
+                last_adv_max = float(jnp.max(scores_gen_adv))
                 
                 self.avg_mi_loss = jnp.mean(scores_gen_mi)
 
@@ -1315,6 +1407,10 @@ class Trainer(object):
                     self._logger.info(
                         'Iter={0}, real_fake_loss={1:.4f}'.format(
                             i, real_fake_loss))
+                    self._logger.info(
+                        'Iter=%d, d_freq=%d, d_update_rate=%.3f, prototype_lock=%.3f, rescue_rfl=%.3f, rescue_adv_max=%.3f',
+                        i, d_freq, d_update_rate, prototype_lock, dynamic_rescue_rfl, dynamic_rescue_adv_max
+                    )
 
                     # Write metrics to TSV file
                     with open(metrics_log_path, 'a') as f:
@@ -1391,6 +1487,7 @@ class Trainer(object):
             #        params_lattice=self.solver.params_lattice,
             #        occupancy_lattice=self.solver.occupancy_lattice,
             #    )
+            best_score = float(getattr(self.solver_hn, '_best_score', 0.0))
             self._logger.info(
                 'Training done, best_score={0:.4f}'.format(best_score))
 
