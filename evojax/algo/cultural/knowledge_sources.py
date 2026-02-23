@@ -40,6 +40,7 @@ def initialize_metric_history(window_size: int = 100):
         jnp.int32(0),                # [5] count (entries written, capped at window_size)
         jnp.zeros((window_size,)),   # [6] avg_r_intra per generation
         jnp.zeros((window_size,)),   # [7] avg_fitness_adv per generation
+        jnp.zeros((window_size,)),   # [8] avg_r_shape_div per generation
     )
 
 
@@ -54,6 +55,7 @@ def initialize_domain_ks(param_size: int, num_elites: int = 20):
         jnp.full((num_elites,), 1000.0),      # [6] entropy
         jnp.zeros((num_elites,)),             # [7] r_sense (code separation quality)
         jnp.zeros((num_elites,)),             # [8] r_cons (constraint satisfaction)
+        jnp.zeros((num_elites,)),             # [9] r_shape_div (conditional shape diversity)
     )
 
 
@@ -114,7 +116,7 @@ def initialize_normative_ks(param_size: int, pop_size: int = 64):
     )
 
 @jax.jit
-def update_metric_history(belief_space, best_fitness_adv, best_fitness_mi, entropy, best_r_sense, avg_r_intra=0.0, avg_fitness_adv=0.0):
+def update_metric_history(belief_space, best_fitness_adv, best_fitness_mi, entropy, best_r_sense, avg_r_intra=0.0, avg_fitness_adv=0.0, avg_r_shape_div=0.0):
     """Append one generation's key metrics to the circular buffer.
 
     Args:
@@ -125,10 +127,21 @@ def update_metric_history(belief_space, best_fitness_adv, best_fitness_mi, entro
         best_r_sense: scalar, best code separation this generation
         avg_r_intra: scalar, population average within-code variation
         avg_fitness_adv: scalar, population average adversarial fitness
+        avg_r_shape_div: scalar, population average conditional shape diversity
     """
     metric_history = belief_space[6]
-    adv_buf, mi_buf, ent_buf, sense_buf, write_idx, count, intra_buf, adv_avg_buf = metric_history
+    adv_buf, mi_buf, ent_buf, sense_buf, write_idx, count, intra_buf, adv_avg_buf, shape_buf = metric_history
     window_size = adv_buf.shape[0]
+
+    # Keep history finite so slope calculations stay valid even if a transient
+    # upstream metric overflows/underflows.
+    best_fitness_adv = jnp.nan_to_num(best_fitness_adv, nan=0.0, posinf=0.0, neginf=0.0)
+    best_fitness_mi = jnp.nan_to_num(best_fitness_mi, nan=0.0, posinf=0.0, neginf=0.0)
+    entropy = jnp.nan_to_num(entropy, nan=0.0, posinf=0.0, neginf=0.0)
+    best_r_sense = jnp.nan_to_num(best_r_sense, nan=0.0, posinf=0.0, neginf=0.0)
+    avg_r_intra = jnp.nan_to_num(avg_r_intra, nan=0.0, posinf=0.0, neginf=0.0)
+    avg_fitness_adv = jnp.nan_to_num(avg_fitness_adv, nan=0.0, posinf=0.0, neginf=0.0)
+    avg_r_shape_div = jnp.nan_to_num(avg_r_shape_div, nan=0.0, posinf=0.0, neginf=0.0)
 
     adv_buf = adv_buf.at[write_idx].set(best_fitness_adv)
     mi_buf = mi_buf.at[write_idx].set(best_fitness_mi)
@@ -136,10 +149,11 @@ def update_metric_history(belief_space, best_fitness_adv, best_fitness_mi, entro
     sense_buf = sense_buf.at[write_idx].set(best_r_sense)
     intra_buf = intra_buf.at[write_idx].set(avg_r_intra)
     adv_avg_buf = adv_avg_buf.at[write_idx].set(avg_fitness_adv)
+    shape_buf = shape_buf.at[write_idx].set(avg_r_shape_div)
     new_idx = (write_idx + 1) % window_size
     new_count = jnp.minimum(count + 1, window_size)
 
-    updated_metric_history = (adv_buf, mi_buf, ent_buf, sense_buf, new_idx, new_count, intra_buf, adv_avg_buf)
+    updated_metric_history = (adv_buf, mi_buf, ent_buf, sense_buf, new_idx, new_count, intra_buf, adv_avg_buf, shape_buf)
     updated_belief_space = belief_space[:6] + (updated_metric_history,)
     return updated_belief_space
 
@@ -148,17 +162,27 @@ def update_metric_history(belief_space, best_fitness_adv, best_fitness_mi, entro
 def compute_metric_slopes(belief_space):
     """Compute short/medium/long slopes from the metric history circular buffer.
 
-    Returns a tuple of 9 slopes:
+    Returns a tuple of 11 slopes:
         (adv_short, mi_short, adv_med, mi_med, ent_long,
-         sense_short, intra_short, adv_avg_short, sense_med)
+         sense_short, intra_short, adv_avg_short, sense_med,
+         shape_short, shape_med)
 
     Short = last 20 generations, Medium = last 50, Long = full window (100).
     Uses least-squares linear regression.
     Returns 0.0 for any window that doesn't have enough data yet.
     """
     metric_history = belief_space[6]
-    adv_buf, mi_buf, ent_buf, sense_buf, write_idx, count, intra_buf, adv_avg_buf = metric_history
+    adv_buf, mi_buf, ent_buf, sense_buf, write_idx, count, intra_buf, adv_avg_buf, shape_buf = metric_history
     window_size = adv_buf.shape[0]
+
+    # Recover gracefully if an older checkpoint already contains NaNs.
+    adv_buf = jnp.nan_to_num(adv_buf, nan=0.0, posinf=0.0, neginf=0.0)
+    mi_buf = jnp.nan_to_num(mi_buf, nan=0.0, posinf=0.0, neginf=0.0)
+    ent_buf = jnp.nan_to_num(ent_buf, nan=0.0, posinf=0.0, neginf=0.0)
+    sense_buf = jnp.nan_to_num(sense_buf, nan=0.0, posinf=0.0, neginf=0.0)
+    intra_buf = jnp.nan_to_num(intra_buf, nan=0.0, posinf=0.0, neginf=0.0)
+    adv_avg_buf = jnp.nan_to_num(adv_avg_buf, nan=0.0, posinf=0.0, neginf=0.0)
+    shape_buf = jnp.nan_to_num(shape_buf, nan=0.0, posinf=0.0, neginf=0.0)
 
     def _slope_over_last_n(buf, n, write_idx, count):
         """Compute slope over the last n entries of a circular buffer."""
@@ -183,27 +207,47 @@ def compute_metric_slopes(belief_space):
     intra_short   = _slope_over_last_n(intra_buf, 20, write_idx, count)
     adv_avg_short = _slope_over_last_n(adv_avg_buf, 20, write_idx, count)
     sense_med     = _slope_over_last_n(sense_buf, 50, write_idx, count)
+    shape_short   = _slope_over_last_n(shape_buf, 20, write_idx, count)
+    shape_med     = _slope_over_last_n(shape_buf, 50, write_idx, count)
 
     return (adv_short, mi_short, adv_med, mi_med, ent_long,
-            sense_short, intra_short, adv_avg_short, sense_med)
+            sense_short, intra_short, adv_avg_short, sense_med,
+            shape_short, shape_med)
+
+
+@jax.jit
+def _stable_entropy_from_scores(class_scores: jnp.ndarray) -> jnp.ndarray:
+    """Compute entropy from class scores robustly.
+
+    The input is treated as logits/scores. We convert to probabilities with
+    softmax, then compute categorical entropy.
+    """
+    safe_scores = jnp.nan_to_num(class_scores, nan=0.0, posinf=0.0, neginf=0.0)
+    probs = jax.nn.softmax(safe_scores)
+    probs = jnp.clip(probs, 1e-8, 1.0)
+    probs = probs / jnp.maximum(jnp.sum(probs), 1e-8)
+    entropy = -jnp.sum(probs * jnp.log(probs))
+    default_entropy = jnp.log(jnp.array(probs.shape[0], dtype=probs.dtype))
+    return jnp.where(jnp.isfinite(entropy), entropy, default_entropy)
 
 
 @jax.jit
 def update_domain_ks(
     belief_space, best_solution, stdev, best_scaled_noise,
     best_fitness_adv, best_fitness_mi, best_fitness_combined,
-    disc_logit, best_r_sense, best_r_cons
+    disc_logit, best_r_sense, best_r_cons, best_r_shape_div
 ):
     """Update Domain KS: Pareto archive with GAN diagnostic metadata.
 
-    Maintains 20 non-dominated solutions ranked by [|adv|, |mi|, |entropy|].
-    Each archived solution also tracks r_sense and r_cons for failure-mode
-    detection in the adaptive guidance selection.
+    Maintains 20 non-dominated solutions ranked by
+    [|adv|, |mi|, -shape_div, |entropy|].
+    Each archived solution also tracks r_sense/r_cons/r_shape_div for
+    failure-mode detection in adaptive guidance selection.
     """
     domain_ks = belief_space[1]
     (best_solutions, stdevs, best_scaled_noises,
      best_fitnesses_adv, best_fitnesses_mi, best_fitnesses_combined,
-     entropies, r_senses, r_conses) = domain_ks
+     entropies, r_senses, r_conses, r_shape_divs) = domain_ks
 
     # Append new solution
     updated_solutions = jnp.concatenate([best_solutions, best_solution], axis=0)
@@ -213,17 +257,19 @@ def update_domain_ks(
     updated_mi = jnp.concatenate([best_fitnesses_mi, best_fitness_mi.flatten()], axis=0)
     updated_combined = jnp.concatenate([best_fitnesses_combined, best_fitness_combined.flatten()], axis=0)
 
-    safe_logit = jnp.maximum(disc_logit, 1e-8)
-    entropy = jnp.array([jnp.sum(-jnp.log(safe_logit) * safe_logit)])
+    entropy = jnp.array([_stable_entropy_from_scores(disc_logit)])
     updated_entropy = jnp.concatenate([entropies, entropy], axis=0)
 
     updated_r_sense = jnp.concatenate([r_senses, best_r_sense.flatten()], axis=0)
     updated_r_cons = jnp.concatenate([r_conses, best_r_cons.flatten()], axis=0)
+    updated_r_shape_div = jnp.concatenate([r_shape_divs, best_r_shape_div.flatten()], axis=0)
 
-    # Non-dominated sort on [|adv|, |mi|, |entropy|]
+    # Non-dominated sort on [|adv|, |mi|, -shape_div, |entropy|]
+    # (minimization setting: negate shape_div so larger diversity is preferred).
     objectives = jnp.stack([
         jnp.abs(updated_adv),
         jnp.abs(updated_mi),
+        -updated_r_shape_div,
         jnp.abs(updated_entropy)
     ], axis=1)
     ranks = non_dominated_sort_lax(objectives)
@@ -243,6 +289,7 @@ def update_domain_ks(
         updated_entropy[selected],
         updated_r_sense[selected],
         updated_r_cons[selected],
+        updated_r_shape_div[selected],
     )
 
     return belief_space[:1] + (updated_domain_ks,) + belief_space[2:]
@@ -272,8 +319,7 @@ def update_situational_ks(
         [best_fitness_tchebycheff, tchebyscheff_score.flatten()], axis=0
     )
 
-    safe_logit = jnp.maximum(disc_logit, 1e-8)
-    entropy = jnp.array([jnp.sum(-jnp.log(safe_logit) * safe_logit)])
+    entropy = jnp.array([_stable_entropy_from_scores(disc_logit)])
 
     updated_entropy = jnp.concatenate(
         [entropies, entropy], axis=0
@@ -340,8 +386,7 @@ def update_history_ks(
         [best_fitnesses_tchebycheff, tchebyscheff_score.flatten()], axis=0
     )
 
-    safe_logit = jnp.maximum(disc_logit, 1e-8)
-    entropy = jnp.array([jnp.sum(-jnp.log(safe_logit) * safe_logit)])
+    entropy = jnp.array([_stable_entropy_from_scores(disc_logit)])
 
     #entropy = entropy.reshape(-1, 1)
     
@@ -453,12 +498,9 @@ def update_normative_ks(belief_space, fitness_scores, all_spreads, all_safety_ra
     # Average spread across all codes for these elites
     current_elite_avg_spread = jnp.mean(elite_spreads)
     
-    # Get safety ratios of elites
-    elite_ratios = all_safety_ratios[elite_indices] # (k, 10, 10)
-    # We care about the *worst* separation each elite had (the bottleneck)
-    # But we average that bottleneck across the elite group
-    # Logic: "What is the typical minimum safety margin for a top-tier agent?"
-    min_ratios = jnp.min(elite_ratios, axis=(1,2)) # (k,)
+    # We care about the *worst* separation each elite had (the bottleneck),
+    # but use the clamped version so one outlier cannot dominate the standard.
+    min_ratios = jnp.min(elite_ratios_clamped, axis=(1,2)) # (k,)
     current_elite_min_safety = jnp.mean(min_ratios)
     
     # 2. Update Standards
@@ -494,13 +536,13 @@ def _domain_ks_select_index(domain_ks, entropy_long_slope, adv_med_slope):
 
     - Mode collapse risk (entropy dropping): pick highest-entropy solution
       to recover diversity.
-    - Stagnation (adv not improving): pick highest r_sense solution to
-      explore code separation — a different axis of improvement.
+    - Stagnation (adv not improving): pick highest r_shape_div solution to
+      recover within-code conditional diversity.
     - Normal progress: pick solution with best combined fitness (exploit
       the domain's governing rules).
     """
     entropies = domain_ks[6]     # (20,)
-    r_senses = domain_ks[7]      # (20,)
+    r_shape_divs = domain_ks[9]  # (20,)
     combined = domain_ks[5]      # (20,)
 
     # Detect mode collapse: entropy slope is negative (dropping)
@@ -513,11 +555,11 @@ def _domain_ks_select_index(domain_ks, entropy_long_slope, adv_med_slope):
     # Priority: collapse > stagnation > normal
     # (collapse is the most dangerous failure mode)
     idx_entropy = jnp.argmax(entropies)      # highest entropy (recover diversity)
-    idx_sense = jnp.argmax(r_senses)         # best separation (explore new axis)
+    idx_shape_div = jnp.argmax(r_shape_divs) # best conditional shape diversity
     idx_combined = jnp.argmax(combined)      # best overall (exploit)
 
     idx = jnp.where(collapse_risk, idx_entropy,
-          jnp.where(stagnation, idx_sense, idx_combined))
+          jnp.where(stagnation, idx_shape_div, idx_combined))
     return idx
 
 

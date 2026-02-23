@@ -1,0 +1,639 @@
+OrganSMNIST: 2026-02-22 15:52:18,525 [INFO] EvoJAX OrganSMNIST InfoGAN Demo
+OrganSMNIST: 2026-02-22 15:52:18,525 [INFO] ==============================
+OrganSMNIST: 2026-02-22 15:52:26,331 [INFO] GenPolicy.num_params = 188889
+OrganSMNIST: 2026-02-22 15:52:26,331 [INFO] GenPolicy.num_params_hypernet = 37952
+OrganSMNIST: 2026-02-22 15:52:26,453 [INFO] DiscPolicy.num_params = 661708
+OrganSMNIST: 2026-02-22 15:52:26,453 [INFO] DiscPolicy.num_batch_stats = 465
+OrganSMNIST: 2026-02-22 15:52:29,292 [INFO] use_for_loop=False
+OrganSMNIST: 2026-02-22 15:52:29,943 [INFO] Start to train for 290000 iterations.
+OrganSMNIST: 2026-02-22 15:53:28,337 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:53:28,337 [INFO] Iter=100, size=512, max=-1.0536, avg=-1.1312, min=-1.1804, std=0.0216
+OrganSMNIST: 2026-02-22 15:53:28,337 [INFO] Iter=100, size=512, max=-2.3829, avg=-2.3912, min=-2.3982, std=0.0025
+OrganSMNIST: 2026-02-22 15:53:28,338 [INFO] Iter=100, size=512, max=0.2617, avg=0.1980, min=0.1537, std=0.0192
+OrganSMNIST: 2026-02-22 15:53:28,338 [INFO] Iter=100, size=512, max=0.0078, avg=0.0045, min=0.0022, std=0.0011
+OrganSMNIST: 2026-02-22 15:53:28,338 [INFO] Iter=100, size=512, max=1.0000, avg=0.9685, min=0.8590, std=0.0292
+OrganSMNIST: 2026-02-22 15:53:28,338 [INFO] Iter=100, size=512, max=0.0941, avg=0.0640, min=0.0244, std=0.0116
+OrganSMNIST: 2026-02-22 15:53:28,338 [INFO] Iter=100, size=61952, max=100.0000, avg=9.1325, min=0.0030, std=28.7348
+OrganSMNIST: 2026-02-22 15:53:28,339 [INFO] Iter=100, size=5632, max=0.2418, avg=0.1981, min=0.1129, std=0.0190
+OrganSMNIST: 2026-02-22 15:53:28,339 [INFO] Iter=100, real_fake_loss=0.6248
+OrganSMNIST: 2026-02-22 15:53:49,492 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:53:49,493 [INFO] Iter=200, size=512, max=-1.1463, avg=-1.2499, min=-1.3520, std=0.0314
+OrganSMNIST: 2026-02-22 15:53:49,493 [INFO] Iter=200, size=512, max=-2.3639, avg=-2.3861, min=-2.4069, std=0.0062
+OrganSMNIST: 2026-02-22 15:53:49,493 [INFO] Iter=200, size=512, max=0.2978, avg=0.2480, min=0.2028, std=0.0144
+OrganSMNIST: 2026-02-22 15:53:49,493 [INFO] Iter=200, size=512, max=0.0111, avg=0.0055, min=0.0032, std=0.0012
+OrganSMNIST: 2026-02-22 15:53:49,493 [INFO] Iter=200, size=512, max=1.0000, avg=0.9556, min=0.7930, std=0.0412
+OrganSMNIST: 2026-02-22 15:53:49,493 [INFO] Iter=200, size=512, max=0.0954, avg=0.0551, min=0.0017, std=0.0157
+OrganSMNIST: 2026-02-22 15:53:49,494 [INFO] Iter=200, size=61952, max=100.0000, avg=9.1397, min=0.0042, std=28.7326
+OrganSMNIST: 2026-02-22 15:53:49,494 [INFO] Iter=200, size=5632, max=0.2488, avg=0.2010, min=0.0990, std=0.0210
+OrganSMNIST: 2026-02-22 15:53:49,494 [INFO] Iter=200, real_fake_loss=0.6159
+OrganSMNIST: 2026-02-22 15:54:10,799 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:54:10,799 [INFO] Iter=300, size=512, max=-1.1053, avg=-1.3246, min=-1.5367, std=0.0924
+OrganSMNIST: 2026-02-22 15:54:10,799 [INFO] Iter=300, size=512, max=-2.3066, avg=-2.3574, min=-2.4022, std=0.0167
+OrganSMNIST: 2026-02-22 15:54:10,799 [INFO] Iter=300, size=512, max=0.3167, avg=0.2200, min=0.1546, std=0.0299
+OrganSMNIST: 2026-02-22 15:54:10,799 [INFO] Iter=300, size=512, max=0.0183, avg=0.0083, min=0.0024, std=0.0029
+OrganSMNIST: 2026-02-22 15:54:10,799 [INFO] Iter=300, size=512, max=1.0000, avg=0.9874, min=0.7930, std=0.0289
+OrganSMNIST: 2026-02-22 15:54:10,800 [INFO] Iter=300, size=512, max=0.0881, avg=0.0254, min=0.0000, std=0.0187
+OrganSMNIST: 2026-02-22 15:54:10,800 [INFO] Iter=300, size=61952, max=100.0000, avg=9.1685, min=0.0064, std=28.7235
+OrganSMNIST: 2026-02-22 15:54:10,800 [INFO] Iter=300, size=5632, max=0.2622, avg=0.1745, min=0.0578, std=0.0286
+OrganSMNIST: 2026-02-22 15:54:10,800 [INFO] Iter=300, real_fake_loss=0.5393
+OrganSMNIST: 2026-02-22 15:54:32,102 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:54:32,102 [INFO] Iter=400, size=512, max=-1.2454, avg=-1.4637, min=-1.6502, std=0.0651
+OrganSMNIST: 2026-02-22 15:54:32,103 [INFO] Iter=400, size=512, max=-2.2990, avg=-2.3562, min=-2.4142, std=0.0188
+OrganSMNIST: 2026-02-22 15:54:32,103 [INFO] Iter=400, size=512, max=0.2967, avg=0.2645, min=0.2342, std=0.0112
+OrganSMNIST: 2026-02-22 15:54:32,103 [INFO] Iter=400, size=512, max=0.0150, avg=0.0070, min=0.0034, std=0.0020
+OrganSMNIST: 2026-02-22 15:54:32,103 [INFO] Iter=400, size=512, max=1.0000, avg=0.9280, min=0.7427, std=0.0531
+OrganSMNIST: 2026-02-22 15:54:32,103 [INFO] Iter=400, size=512, max=0.1024, avg=0.0604, min=0.0066, std=0.0168
+OrganSMNIST: 2026-02-22 15:54:32,104 [INFO] Iter=400, size=61952, max=100.0000, avg=9.1551, min=0.0044, std=28.7277
+OrganSMNIST: 2026-02-22 15:54:32,104 [INFO] Iter=400, size=5632, max=0.2627, avg=0.2094, min=0.1198, std=0.0214
+OrganSMNIST: 2026-02-22 15:54:32,104 [INFO] Iter=400, real_fake_loss=0.4846
+OrganSMNIST: 2026-02-22 15:54:53,510 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:54:53,510 [INFO] Iter=500, size=512, max=-1.3649, avg=-1.5611, min=-1.7118, std=0.0577
+OrganSMNIST: 2026-02-22 15:54:53,510 [INFO] Iter=500, size=512, max=-2.3524, avg=-2.4110, min=-2.4634, std=0.0204
+OrganSMNIST: 2026-02-22 15:54:53,510 [INFO] Iter=500, size=512, max=0.3134, avg=0.2728, min=0.2422, std=0.0115
+OrganSMNIST: 2026-02-22 15:54:53,510 [INFO] Iter=500, size=512, max=0.0101, avg=0.0043, min=0.0022, std=0.0011
+OrganSMNIST: 2026-02-22 15:54:53,511 [INFO] Iter=500, size=512, max=1.0000, avg=0.9247, min=0.6794, std=0.0673
+OrganSMNIST: 2026-02-22 15:54:53,511 [INFO] Iter=500, size=512, max=0.1175, avg=0.0592, min=0.0050, std=0.0218
+OrganSMNIST: 2026-02-22 15:54:53,511 [INFO] Iter=500, size=61952, max=100.0000, avg=9.1355, min=0.0026, std=28.7339
+OrganSMNIST: 2026-02-22 15:54:53,511 [INFO] Iter=500, size=5632, max=0.2783, avg=0.2053, min=0.0870, std=0.0302
+OrganSMNIST: 2026-02-22 15:54:53,511 [INFO] Iter=500, real_fake_loss=0.4174
+OrganSMNIST: 2026-02-22 15:55:15,076 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:55:15,077 [INFO] Iter=600, size=512, max=-1.5914, avg=-1.8807, min=-2.1722, std=0.0998
+OrganSMNIST: 2026-02-22 15:55:15,077 [INFO] Iter=600, size=512, max=-2.2451, avg=-2.3351, min=-2.4179, std=0.0302
+OrganSMNIST: 2026-02-22 15:55:15,077 [INFO] Iter=600, size=512, max=0.3224, avg=0.2557, min=0.2159, std=0.0169
+OrganSMNIST: 2026-02-22 15:55:15,077 [INFO] Iter=600, size=512, max=0.0187, avg=0.0074, min=0.0027, std=0.0024
+OrganSMNIST: 2026-02-22 15:55:15,077 [INFO] Iter=600, size=512, max=1.0000, avg=0.9795, min=0.8578, std=0.0247
+OrganSMNIST: 2026-02-22 15:55:15,078 [INFO] Iter=600, size=512, max=0.0891, avg=0.0476, min=0.0011, std=0.0158
+OrganSMNIST: 2026-02-22 15:55:15,078 [INFO] Iter=600, size=61952, max=100.0000, avg=9.1806, min=0.0034, std=28.7197
+OrganSMNIST: 2026-02-22 15:55:15,078 [INFO] Iter=600, size=5632, max=0.2582, avg=0.1861, min=0.0604, std=0.0259
+OrganSMNIST: 2026-02-22 15:55:15,078 [INFO] Iter=600, real_fake_loss=0.3776
+OrganSMNIST: 2026-02-22 15:55:36,642 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:55:36,642 [INFO] Iter=700, size=512, max=-1.5598, avg=-1.8324, min=-2.0359, std=0.0782
+OrganSMNIST: 2026-02-22 15:55:36,642 [INFO] Iter=700, size=512, max=-2.2320, avg=-2.3504, min=-2.5134, std=0.0389
+OrganSMNIST: 2026-02-22 15:55:36,643 [INFO] Iter=700, size=512, max=0.2880, avg=0.2354, min=0.2095, std=0.0116
+OrganSMNIST: 2026-02-22 15:55:36,643 [INFO] Iter=700, size=512, max=0.0212, avg=0.0069, min=0.0026, std=0.0023
+OrganSMNIST: 2026-02-22 15:55:36,643 [INFO] Iter=700, size=512, max=1.0000, avg=0.9789, min=0.8248, std=0.0282
+OrganSMNIST: 2026-02-22 15:55:36,643 [INFO] Iter=700, size=512, max=0.1015, avg=0.0545, min=0.0169, std=0.0153
+OrganSMNIST: 2026-02-22 15:55:36,643 [INFO] Iter=700, size=61952, max=100.0000, avg=9.1685, min=0.0026, std=28.7235
+OrganSMNIST: 2026-02-22 15:55:36,644 [INFO] Iter=700, size=5632, max=0.2502, avg=0.1876, min=0.0856, std=0.0248
+OrganSMNIST: 2026-02-22 15:55:36,644 [INFO] Iter=700, real_fake_loss=0.3650
+OrganSMNIST: 2026-02-22 15:55:58,281 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:55:58,281 [INFO] Iter=800, size=512, max=-1.6174, avg=-1.8630, min=-2.1271, std=0.0885
+OrganSMNIST: 2026-02-22 15:55:58,281 [INFO] Iter=800, size=512, max=-2.2378, avg=-2.3412, min=-2.4343, std=0.0329
+OrganSMNIST: 2026-02-22 15:55:58,282 [INFO] Iter=800, size=512, max=0.2813, avg=0.2496, min=0.2086, std=0.0126
+OrganSMNIST: 2026-02-22 15:55:58,282 [INFO] Iter=800, size=512, max=0.0188, avg=0.0067, min=0.0018, std=0.0026
+OrganSMNIST: 2026-02-22 15:55:58,282 [INFO] Iter=800, size=512, max=1.0000, avg=0.9620, min=0.7617, std=0.0481
+OrganSMNIST: 2026-02-22 15:55:58,282 [INFO] Iter=800, size=512, max=0.1185, avg=0.0670, min=0.0078, std=0.0198
+OrganSMNIST: 2026-02-22 15:55:58,282 [INFO] Iter=800, size=61952, max=100.0000, avg=9.1545, min=0.0023, std=28.7279
+OrganSMNIST: 2026-02-22 15:55:58,282 [INFO] Iter=800, size=5632, max=0.2572, avg=0.1961, min=0.0986, std=0.0238
+OrganSMNIST: 2026-02-22 15:55:58,283 [INFO] Iter=800, real_fake_loss=0.3792
+OrganSMNIST: 2026-02-22 15:56:20,025 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:56:20,025 [INFO] Iter=900, size=512, max=-1.7426, avg=-2.0281, min=-2.2860, std=0.0906
+OrganSMNIST: 2026-02-22 15:56:20,025 [INFO] Iter=900, size=512, max=-2.2254, avg=-2.3662, min=-2.4973, std=0.0482
+OrganSMNIST: 2026-02-22 15:56:20,026 [INFO] Iter=900, size=512, max=0.3559, avg=0.2648, min=0.1827, std=0.0313
+OrganSMNIST: 2026-02-22 15:56:20,026 [INFO] Iter=900, size=512, max=0.0121, avg=0.0047, min=0.0017, std=0.0017
+OrganSMNIST: 2026-02-22 15:56:20,026 [INFO] Iter=900, size=512, max=1.0000, avg=0.9676, min=0.8135, std=0.0453
+OrganSMNIST: 2026-02-22 15:56:20,026 [INFO] Iter=900, size=512, max=0.1104, avg=0.0668, min=0.0065, std=0.0203
+OrganSMNIST: 2026-02-22 15:56:20,026 [INFO] Iter=900, size=61952, max=100.0000, avg=9.1482, min=0.0020, std=28.7299
+OrganSMNIST: 2026-02-22 15:56:20,026 [INFO] Iter=900, size=5632, max=0.2572, avg=0.1936, min=0.0950, std=0.0236
+OrganSMNIST: 2026-02-22 15:56:20,027 [INFO] Iter=900, real_fake_loss=0.3557
+OrganSMNIST: 2026-02-22 15:56:41,772 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:56:41,772 [INFO] Iter=1000, size=512, max=-1.9047, avg=-2.1629, min=-2.5050, std=0.0967
+OrganSMNIST: 2026-02-22 15:56:41,772 [INFO] Iter=1000, size=512, max=-2.2316, avg=-2.3792, min=-2.5674, std=0.0569
+OrganSMNIST: 2026-02-22 15:56:41,773 [INFO] Iter=1000, size=512, max=0.3267, avg=0.2640, min=0.2164, std=0.0191
+OrganSMNIST: 2026-02-22 15:56:41,773 [INFO] Iter=1000, size=512, max=0.0151, avg=0.0054, min=0.0018, std=0.0020
+OrganSMNIST: 2026-02-22 15:56:41,773 [INFO] Iter=1000, size=512, max=1.0000, avg=0.9884, min=0.7827, std=0.0292
+OrganSMNIST: 2026-02-22 15:56:41,773 [INFO] Iter=1000, size=512, max=0.1148, avg=0.0418, min=0.0000, std=0.0236
+OrganSMNIST: 2026-02-22 15:56:41,773 [INFO] Iter=1000, size=61952, max=100.0000, avg=9.1618, min=0.0019, std=28.7256
+OrganSMNIST: 2026-02-22 15:56:41,773 [INFO] Iter=1000, size=5632, max=0.2637, avg=0.1677, min=0.0535, std=0.0335
+OrganSMNIST: 2026-02-22 15:56:41,774 [INFO] Iter=1000, real_fake_loss=0.3245
+OrganSMNIST: 2026-02-22 15:57:03,634 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:57:03,634 [INFO] Iter=1100, size=512, max=-1.4670, avg=-1.9923, min=-2.2877, std=0.1172
+OrganSMNIST: 2026-02-22 15:57:03,634 [INFO] Iter=1100, size=512, max=-2.2255, avg=-2.3267, min=-2.4761, std=0.0449
+OrganSMNIST: 2026-02-22 15:57:03,634 [INFO] Iter=1100, size=512, max=0.2984, avg=0.2454, min=0.2064, std=0.0145
+OrganSMNIST: 2026-02-22 15:57:03,635 [INFO] Iter=1100, size=512, max=0.0140, avg=0.0066, min=0.0021, std=0.0022
+OrganSMNIST: 2026-02-22 15:57:03,635 [INFO] Iter=1100, size=512, max=1.0000, avg=0.9737, min=0.7692, std=0.0393
+OrganSMNIST: 2026-02-22 15:57:03,635 [INFO] Iter=1100, size=512, max=0.1231, avg=0.0674, min=0.0084, std=0.0193
+OrganSMNIST: 2026-02-22 15:57:03,635 [INFO] Iter=1100, size=61952, max=100.0000, avg=9.1867, min=0.0020, std=28.7178
+OrganSMNIST: 2026-02-22 15:57:03,635 [INFO] Iter=1100, size=5632, max=0.2637, avg=0.1904, min=0.0748, std=0.0248
+OrganSMNIST: 2026-02-22 15:57:03,636 [INFO] Iter=1100, real_fake_loss=0.3402
+OrganSMNIST: 2026-02-22 15:57:25,479 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:57:25,479 [INFO] Iter=1200, size=512, max=-0.8554, avg=-1.7299, min=-2.4315, std=0.2994
+OrganSMNIST: 2026-02-22 15:57:25,479 [INFO] Iter=1200, size=512, max=-2.2087, avg=-2.3549, min=-2.5410, std=0.0523
+OrganSMNIST: 2026-02-22 15:57:25,479 [INFO] Iter=1200, size=512, max=0.3076, avg=0.2540, min=0.1921, std=0.0169
+OrganSMNIST: 2026-02-22 15:57:25,480 [INFO] Iter=1200, size=512, max=0.0177, avg=0.0063, min=0.0016, std=0.0024
+OrganSMNIST: 2026-02-22 15:57:25,480 [INFO] Iter=1200, size=512, max=1.0000, avg=0.9645, min=0.7168, std=0.0493
+OrganSMNIST: 2026-02-22 15:57:25,480 [INFO] Iter=1200, size=512, max=0.1292, avg=0.0593, min=0.0000, std=0.0265
+OrganSMNIST: 2026-02-22 15:57:25,480 [INFO] Iter=1200, size=61952, max=100.0000, avg=9.1816, min=0.0022, std=28.7194
+OrganSMNIST: 2026-02-22 15:57:25,480 [INFO] Iter=1200, size=5632, max=0.2737, avg=0.1852, min=0.0428, std=0.0355
+OrganSMNIST: 2026-02-22 15:57:25,480 [INFO] Iter=1200, real_fake_loss=0.3775
+OrganSMNIST: 2026-02-22 15:57:47,323 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:57:47,323 [INFO] Iter=1300, size=512, max=-0.2664, avg=-0.6999, min=-1.4870, std=0.2267
+OrganSMNIST: 2026-02-22 15:57:47,324 [INFO] Iter=1300, size=512, max=-2.2535, avg=-2.3480, min=-2.5082, std=0.0413
+OrganSMNIST: 2026-02-22 15:57:47,324 [INFO] Iter=1300, size=512, max=0.3605, avg=0.2929, min=0.2222, std=0.0246
+OrganSMNIST: 2026-02-22 15:57:47,324 [INFO] Iter=1300, size=512, max=0.0192, avg=0.0068, min=0.0008, std=0.0032
+OrganSMNIST: 2026-02-22 15:57:47,324 [INFO] Iter=1300, size=512, max=1.0000, avg=0.9369, min=0.5635, std=0.0906
+OrganSMNIST: 2026-02-22 15:57:47,324 [INFO] Iter=1300, size=512, max=0.1540, avg=0.0517, min=0.0000, std=0.0389
+OrganSMNIST: 2026-02-22 15:57:47,325 [INFO] Iter=1300, size=61952, max=100.0000, avg=9.1771, min=0.0022, std=28.7209
+OrganSMNIST: 2026-02-22 15:57:47,325 [INFO] Iter=1300, size=5632, max=0.3055, avg=0.1767, min=0.0201, std=0.0555
+OrganSMNIST: 2026-02-22 15:57:47,325 [INFO] Iter=1300, real_fake_loss=0.7184
+OrganSMNIST: 2026-02-22 15:58:09,197 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:58:09,197 [INFO] Iter=1400, size=512, max=-0.3005, avg=-1.2406, min=-2.1590, std=0.3617
+OrganSMNIST: 2026-02-22 15:58:09,197 [INFO] Iter=1400, size=512, max=-2.2128, avg=-2.3138, min=-2.4166, std=0.0295
+OrganSMNIST: 2026-02-22 15:58:09,198 [INFO] Iter=1400, size=512, max=0.3959, avg=0.2085, min=0.0788, std=0.0562
+OrganSMNIST: 2026-02-22 15:58:09,198 [INFO] Iter=1400, size=512, max=0.0160, avg=0.0061, min=0.0011, std=0.0027
+OrganSMNIST: 2026-02-22 15:58:09,198 [INFO] Iter=1400, size=512, max=1.0000, avg=0.9722, min=0.6849, std=0.0484
+OrganSMNIST: 2026-02-22 15:58:09,198 [INFO] Iter=1400, size=512, max=0.1243, avg=0.0421, min=0.0000, std=0.0324
+OrganSMNIST: 2026-02-22 15:58:09,198 [INFO] Iter=1400, size=61952, max=100.0000, avg=9.1762, min=0.0036, std=28.7211
+OrganSMNIST: 2026-02-22 15:58:09,199 [INFO] Iter=1400, size=5632, max=0.2716, avg=0.1611, min=0.0210, std=0.0481
+OrganSMNIST: 2026-02-22 15:58:09,199 [INFO] Iter=1400, real_fake_loss=0.5517
+OrganSMNIST: 2026-02-22 15:58:31,146 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:58:31,146 [INFO] Iter=1500, size=512, max=-0.3193, avg=-0.8419, min=-1.5331, std=0.2437
+OrganSMNIST: 2026-02-22 15:58:31,146 [INFO] Iter=1500, size=512, max=-2.1387, avg=-2.2765, min=-2.4963, std=0.0457
+OrganSMNIST: 2026-02-22 15:58:31,146 [INFO] Iter=1500, size=512, max=0.3476, avg=0.2009, min=0.0658, std=0.0593
+OrganSMNIST: 2026-02-22 15:58:31,146 [INFO] Iter=1500, size=512, max=0.0217, avg=0.0093, min=0.0016, std=0.0036
+OrganSMNIST: 2026-02-22 15:58:31,147 [INFO] Iter=1500, size=512, max=1.0000, avg=0.9804, min=0.3865, std=0.0497
+OrganSMNIST: 2026-02-22 15:58:31,147 [INFO] Iter=1500, size=512, max=0.1215, avg=0.0416, min=0.0000, std=0.0330
+OrganSMNIST: 2026-02-22 15:58:31,147 [INFO] Iter=1500, size=61952, max=100.0000, avg=9.2513, min=0.0053, std=28.6976
+OrganSMNIST: 2026-02-22 15:58:31,147 [INFO] Iter=1500, size=5632, max=0.2629, avg=0.1511, min=0.0110, std=0.0475
+OrganSMNIST: 2026-02-22 15:58:31,147 [INFO] Iter=1500, real_fake_loss=0.5921
+OrganSMNIST: 2026-02-22 15:58:55,479 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:58:55,479 [INFO] Iter=1600, size=512, max=-0.5293, avg=-0.9160, min=-1.4387, std=0.1287
+OrganSMNIST: 2026-02-22 15:58:55,479 [INFO] Iter=1600, size=512, max=-1.9076, avg=-2.2375, min=-2.6375, std=0.1209
+OrganSMNIST: 2026-02-22 15:58:55,479 [INFO] Iter=1600, size=512, max=0.2735, avg=0.1812, min=0.1074, std=0.0314
+OrganSMNIST: 2026-02-22 15:58:55,479 [INFO] Iter=1600, size=512, max=0.0288, avg=0.0098, min=0.0005, std=0.0049
+OrganSMNIST: 2026-02-22 15:58:55,480 [INFO] Iter=1600, size=512, max=1.0000, avg=0.9743, min=0.0951, std=0.0887
+OrganSMNIST: 2026-02-22 15:58:55,480 [INFO] Iter=1600, size=512, max=0.1148, avg=0.0239, min=0.0000, std=0.0217
+OrganSMNIST: 2026-02-22 15:58:55,480 [INFO] Iter=1600, size=61952, max=100.0000, avg=9.3326, min=0.0036, std=28.6726
+OrganSMNIST: 2026-02-22 15:58:55,480 [INFO] Iter=1600, size=5632, max=0.2431, avg=0.1187, min=0.0039, std=0.0450
+OrganSMNIST: 2026-02-22 15:58:55,480 [INFO] Iter=1600, real_fake_loss=0.5514
+OrganSMNIST: 2026-02-22 15:59:19,840 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:59:19,840 [INFO] Iter=1700, size=512, max=-0.7498, avg=-1.0251, min=-1.3006, std=0.0868
+OrganSMNIST: 2026-02-22 15:59:19,840 [INFO] Iter=1700, size=512, max=-1.9168, avg=-2.2427, min=-2.7413, std=0.1250
+OrganSMNIST: 2026-02-22 15:59:19,841 [INFO] Iter=1700, size=512, max=0.2429, avg=0.1718, min=0.1039, std=0.0243
+OrganSMNIST: 2026-02-22 15:59:19,841 [INFO] Iter=1700, size=512, max=0.0201, avg=0.0073, min=0.0005, std=0.0029
+OrganSMNIST: 2026-02-22 15:59:19,841 [INFO] Iter=1700, size=512, max=1.0000, avg=0.9907, min=0.2585, std=0.0501
+OrganSMNIST: 2026-02-22 15:59:19,841 [INFO] Iter=1700, size=512, max=0.1293, avg=0.0470, min=0.0000, std=0.0283
+OrganSMNIST: 2026-02-22 15:59:19,841 [INFO] Iter=1700, size=61952, max=100.0000, avg=9.3061, min=0.0044, std=28.6809
+OrganSMNIST: 2026-02-22 15:59:19,841 [INFO] Iter=1700, size=5632, max=0.2382, avg=0.1301, min=0.0086, std=0.0392
+OrganSMNIST: 2026-02-22 15:59:19,842 [INFO] Iter=1700, real_fake_loss=0.4913
+OrganSMNIST: 2026-02-22 15:59:44,225 [INFO] Generator:
+OrganSMNIST: 2026-02-22 15:59:44,225 [INFO] Iter=1800, size=512, max=-0.9186, avg=-1.1971, min=-1.4888, std=0.0902
+OrganSMNIST: 2026-02-22 15:59:44,225 [INFO] Iter=1800, size=512, max=-1.6097, avg=-2.1371, min=-2.9585, std=0.1961
+OrganSMNIST: 2026-02-22 15:59:44,225 [INFO] Iter=1800, size=512, max=0.2273, avg=0.1548, min=0.0747, std=0.0232
+OrganSMNIST: 2026-02-22 15:59:44,226 [INFO] Iter=1800, size=512, max=0.0295, avg=0.0113, min=0.0026, std=0.0041
+OrganSMNIST: 2026-02-22 15:59:44,226 [INFO] Iter=1800, size=512, max=1.0000, avg=0.9884, min=0.8130, std=0.0235
+OrganSMNIST: 2026-02-22 15:59:44,226 [INFO] Iter=1800, size=512, max=0.0978, avg=0.0381, min=0.0000, std=0.0194
+OrganSMNIST: 2026-02-22 15:59:44,226 [INFO] Iter=1800, size=61952, max=100.0000, avg=9.4691, min=0.0054, std=28.6315
+OrganSMNIST: 2026-02-22 15:59:44,226 [INFO] Iter=1800, size=5632, max=0.2084, avg=0.1071, min=0.0183, std=0.0342
+OrganSMNIST: 2026-02-22 15:59:44,226 [INFO] Iter=1800, real_fake_loss=0.4849
+OrganSMNIST: 2026-02-22 16:00:08,563 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:00:08,563 [INFO] Iter=1900, size=512, max=-0.8600, avg=-1.1796, min=-1.4836, std=0.1132
+OrganSMNIST: 2026-02-22 16:00:08,563 [INFO] Iter=1900, size=512, max=-1.5825, avg=-2.2828, min=-3.1766, std=0.2732
+OrganSMNIST: 2026-02-22 16:00:08,563 [INFO] Iter=1900, size=512, max=0.2148, avg=0.1450, min=0.0669, std=0.0263
+OrganSMNIST: 2026-02-22 16:00:08,564 [INFO] Iter=1900, size=512, max=0.0255, avg=0.0095, min=0.0004, std=0.0043
+OrganSMNIST: 2026-02-22 16:00:08,564 [INFO] Iter=1900, size=512, max=1.0000, avg=0.9701, min=0.3006, std=0.0784
+OrganSMNIST: 2026-02-22 16:00:08,564 [INFO] Iter=1900, size=512, max=0.1087, avg=0.0314, min=0.0000, std=0.0230
+OrganSMNIST: 2026-02-22 16:00:08,564 [INFO] Iter=1900, size=61952, max=100.0000, avg=9.3969, min=0.0035, std=28.6532
+OrganSMNIST: 2026-02-22 16:00:08,564 [INFO] Iter=1900, size=5632, max=0.2102, avg=0.0976, min=0.0095, std=0.0370
+OrganSMNIST: 2026-02-22 16:00:08,564 [INFO] Iter=1900, real_fake_loss=0.4679
+OrganSMNIST: 2026-02-22 16:00:32,881 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:00:32,882 [INFO] Iter=2000, size=512, max=-0.9312, avg=-1.3278, min=-1.6539, std=0.1276
+OrganSMNIST: 2026-02-22 16:00:32,882 [INFO] Iter=2000, size=512, max=-1.4318, avg=-2.1115, min=-3.5634, std=0.3221
+OrganSMNIST: 2026-02-22 16:00:32,882 [INFO] Iter=2000, size=512, max=0.2308, avg=0.1311, min=0.0465, std=0.0283
+OrganSMNIST: 2026-02-22 16:00:32,882 [INFO] Iter=2000, size=512, max=0.0344, avg=0.0127, min=0.0008, std=0.0053
+OrganSMNIST: 2026-02-22 16:00:32,882 [INFO] Iter=2000, size=512, max=1.0000, avg=0.9777, min=0.5098, std=0.0370
+OrganSMNIST: 2026-02-22 16:00:32,882 [INFO] Iter=2000, size=512, max=0.1098, avg=0.0332, min=0.0000, std=0.0211
+OrganSMNIST: 2026-02-22 16:00:32,883 [INFO] Iter=2000, size=61952, max=100.0000, avg=9.5656, min=0.0033, std=28.6033
+OrganSMNIST: 2026-02-22 16:00:32,883 [INFO] Iter=2000, size=5632, max=0.2062, avg=0.0972, min=0.0156, std=0.0347
+OrganSMNIST: 2026-02-22 16:00:32,883 [INFO] Iter=2000, real_fake_loss=0.4344
+OrganSMNIST: 2026-02-22 16:00:57,238 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:00:57,238 [INFO] Iter=2100, size=512, max=-0.9993, avg=-1.3712, min=-1.6047, std=0.0954
+OrganSMNIST: 2026-02-22 16:00:57,239 [INFO] Iter=2100, size=512, max=-1.4189, avg=-2.2225, min=-3.7468, std=0.3358
+OrganSMNIST: 2026-02-22 16:00:57,239 [INFO] Iter=2100, size=512, max=0.2216, avg=0.1201, min=0.0650, std=0.0239
+OrganSMNIST: 2026-02-22 16:00:57,239 [INFO] Iter=2100, size=512, max=0.0262, avg=0.0101, min=0.0022, std=0.0043
+OrganSMNIST: 2026-02-22 16:00:57,239 [INFO] Iter=2100, size=512, max=1.0000, avg=0.9886, min=0.7506, std=0.0288
+OrganSMNIST: 2026-02-22 16:00:57,239 [INFO] Iter=2100, size=512, max=0.1303, avg=0.0306, min=0.0000, std=0.0194
+OrganSMNIST: 2026-02-22 16:00:57,240 [INFO] Iter=2100, size=61952, max=100.0000, avg=9.4460, min=0.0048, std=28.6383
+OrganSMNIST: 2026-02-22 16:00:57,240 [INFO] Iter=2100, size=5632, max=0.2173, avg=0.0933, min=0.0129, std=0.0295
+OrganSMNIST: 2026-02-22 16:00:57,240 [INFO] Iter=2100, real_fake_loss=0.4158
+OrganSMNIST: 2026-02-22 16:01:21,506 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:01:21,506 [INFO] Iter=2200, size=512, max=-0.8344, avg=-1.3949, min=-1.9093, std=0.1812
+OrganSMNIST: 2026-02-22 16:01:21,506 [INFO] Iter=2200, size=512, max=-1.5747, avg=-2.2861, min=-3.9848, std=0.3538
+OrganSMNIST: 2026-02-22 16:01:21,507 [INFO] Iter=2200, size=512, max=0.2045, avg=0.1277, min=0.0617, std=0.0279
+OrganSMNIST: 2026-02-22 16:01:21,507 [INFO] Iter=2200, size=512, max=0.0327, avg=0.0102, min=0.0007, std=0.0045
+OrganSMNIST: 2026-02-22 16:01:21,507 [INFO] Iter=2200, size=512, max=1.0000, avg=0.9818, min=0.4384, std=0.0449
+OrganSMNIST: 2026-02-22 16:01:21,507 [INFO] Iter=2200, size=512, max=0.1065, avg=0.0361, min=0.0000, std=0.0221
+OrganSMNIST: 2026-02-22 16:01:21,507 [INFO] Iter=2200, size=61952, max=100.0000, avg=9.4263, min=0.0054, std=28.6445
+OrganSMNIST: 2026-02-22 16:01:21,508 [INFO] Iter=2200, size=5632, max=0.2106, avg=0.0977, min=0.0118, std=0.0338
+OrganSMNIST: 2026-02-22 16:01:21,508 [INFO] Iter=2200, real_fake_loss=0.4251
+OrganSMNIST: 2026-02-22 16:01:45,805 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:01:45,805 [INFO] Iter=2300, size=512, max=-1.0134, avg=-1.4581, min=-1.8822, std=0.1565
+OrganSMNIST: 2026-02-22 16:01:45,805 [INFO] Iter=2300, size=512, max=-1.4614, avg=-2.2573, min=-3.7176, std=0.3382
+OrganSMNIST: 2026-02-22 16:01:45,805 [INFO] Iter=2300, size=512, max=0.2048, avg=0.1244, min=0.0493, std=0.0232
+OrganSMNIST: 2026-02-22 16:01:45,805 [INFO] Iter=2300, size=512, max=0.0245, avg=0.0101, min=0.0005, std=0.0043
+OrganSMNIST: 2026-02-22 16:01:45,805 [INFO] Iter=2300, size=512, max=1.0000, avg=0.9774, min=0.2062, std=0.0649
+OrganSMNIST: 2026-02-22 16:01:45,806 [INFO] Iter=2300, size=512, max=0.0926, avg=0.0286, min=0.0000, std=0.0181
+OrganSMNIST: 2026-02-22 16:01:45,806 [INFO] Iter=2300, size=61952, max=100.0000, avg=9.4672, min=0.0054, std=28.6319
+OrganSMNIST: 2026-02-22 16:01:45,806 [INFO] Iter=2300, size=5632, max=0.1925, avg=0.0874, min=0.0071, std=0.0295
+OrganSMNIST: 2026-02-22 16:01:45,806 [INFO] Iter=2300, real_fake_loss=0.4117
+OrganSMNIST: 2026-02-22 16:02:10,041 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:02:10,041 [INFO] Iter=2400, size=512, max=-1.0718, avg=-1.5045, min=-1.8192, std=0.1267
+OrganSMNIST: 2026-02-22 16:02:10,041 [INFO] Iter=2400, size=512, max=-1.4989, avg=-2.1805, min=-3.3054, std=0.2903
+OrganSMNIST: 2026-02-22 16:02:10,041 [INFO] Iter=2400, size=512, max=0.1980, avg=0.1340, min=0.0483, std=0.0225
+OrganSMNIST: 2026-02-22 16:02:10,041 [INFO] Iter=2400, size=512, max=0.0353, avg=0.0124, min=0.0014, std=0.0049
+OrganSMNIST: 2026-02-22 16:02:10,041 [INFO] Iter=2400, size=512, max=1.0000, avg=0.9844, min=0.4766, std=0.0461
+OrganSMNIST: 2026-02-22 16:02:10,042 [INFO] Iter=2400, size=512, max=0.0916, avg=0.0341, min=0.0000, std=0.0185
+OrganSMNIST: 2026-02-22 16:02:10,042 [INFO] Iter=2400, size=61952, max=100.0000, avg=9.5294, min=0.0036, std=28.6130
+OrganSMNIST: 2026-02-22 16:02:10,042 [INFO] Iter=2400, size=5632, max=0.1922, avg=0.0945, min=0.0131, std=0.0299
+OrganSMNIST: 2026-02-22 16:02:10,042 [INFO] Iter=2400, real_fake_loss=0.3928
+OrganSMNIST: 2026-02-22 16:02:34,349 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:02:34,349 [INFO] Iter=2500, size=512, max=-0.9373, avg=-1.5492, min=-1.8812, std=0.1753
+OrganSMNIST: 2026-02-22 16:02:34,349 [INFO] Iter=2500, size=512, max=-1.3802, avg=-2.2943, min=-3.5311, std=0.3686
+OrganSMNIST: 2026-02-22 16:02:34,349 [INFO] Iter=2500, size=512, max=0.1995, avg=0.1420, min=0.0621, std=0.0230
+OrganSMNIST: 2026-02-22 16:02:34,349 [INFO] Iter=2500, size=512, max=0.0297, avg=0.0129, min=0.0006, std=0.0050
+OrganSMNIST: 2026-02-22 16:02:34,349 [INFO] Iter=2500, size=512, max=1.0000, avg=0.9909, min=0.2038, std=0.0519
+OrganSMNIST: 2026-02-22 16:02:34,350 [INFO] Iter=2500, size=512, max=0.1245, avg=0.0499, min=0.0000, std=0.0242
+OrganSMNIST: 2026-02-22 16:02:34,350 [INFO] Iter=2500, size=61952, max=100.0000, avg=9.4391, min=0.0043, std=28.6402
+OrganSMNIST: 2026-02-22 16:02:34,350 [INFO] Iter=2500, size=5632, max=0.2322, avg=0.1160, min=0.0090, std=0.0360
+OrganSMNIST: 2026-02-22 16:02:34,350 [INFO] Iter=2500, real_fake_loss=0.3966
+OrganSMNIST: 2026-02-22 16:02:58,603 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:02:58,603 [INFO] Iter=2600, size=512, max=-0.9208, avg=-1.6161, min=-2.0789, std=0.1900
+OrganSMNIST: 2026-02-22 16:02:58,603 [INFO] Iter=2600, size=512, max=-1.6236, avg=-2.6445, min=-4.7939, std=0.5610
+OrganSMNIST: 2026-02-22 16:02:58,603 [INFO] Iter=2600, size=512, max=0.2591, avg=0.1476, min=0.0633, std=0.0341
+OrganSMNIST: 2026-02-22 16:02:58,603 [INFO] Iter=2600, size=512, max=0.0269, avg=0.0089, min=0.0014, std=0.0043
+OrganSMNIST: 2026-02-22 16:02:58,604 [INFO] Iter=2600, size=512, max=1.0000, avg=0.9905, min=0.5303, std=0.0327
+OrganSMNIST: 2026-02-22 16:02:58,604 [INFO] Iter=2600, size=512, max=0.1698, avg=0.0531, min=0.0000, std=0.0307
+OrganSMNIST: 2026-02-22 16:02:58,604 [INFO] Iter=2600, size=61952, max=100.0000, avg=9.3559, min=0.0040, std=28.6659
+OrganSMNIST: 2026-02-22 16:02:58,604 [INFO] Iter=2600, size=5632, max=0.2541, avg=0.1175, min=0.0200, std=0.0407
+OrganSMNIST: 2026-02-22 16:02:58,604 [INFO] Iter=2600, real_fake_loss=0.3861
+OrganSMNIST: 2026-02-22 16:03:22,908 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:03:22,908 [INFO] Iter=2700, size=512, max=-1.1180, avg=-1.4701, min=-1.8524, std=0.1256
+OrganSMNIST: 2026-02-22 16:03:22,909 [INFO] Iter=2700, size=512, max=-1.5104, avg=-2.4480, min=-3.7418, std=0.4117
+OrganSMNIST: 2026-02-22 16:03:22,909 [INFO] Iter=2700, size=512, max=0.1944, avg=0.1183, min=0.0484, std=0.0264
+OrganSMNIST: 2026-02-22 16:03:22,909 [INFO] Iter=2700, size=512, max=0.0234, avg=0.0080, min=0.0013, std=0.0036
+OrganSMNIST: 2026-02-22 16:03:22,909 [INFO] Iter=2700, size=512, max=1.0000, avg=0.9908, min=0.6116, std=0.0243
+OrganSMNIST: 2026-02-22 16:03:22,909 [INFO] Iter=2700, size=512, max=0.1042, avg=0.0390, min=0.0000, std=0.0207
+OrganSMNIST: 2026-02-22 16:03:22,910 [INFO] Iter=2700, size=61952, max=100.0000, avg=9.3582, min=0.0048, std=28.6650
+OrganSMNIST: 2026-02-22 16:03:22,910 [INFO] Iter=2700, size=5632, max=0.1934, avg=0.0988, min=0.0190, std=0.0294
+OrganSMNIST: 2026-02-22 16:03:22,910 [INFO] Iter=2700, real_fake_loss=0.3932
+OrganSMNIST: 2026-02-22 16:03:47,252 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:03:47,252 [INFO] Iter=2800, size=512, max=-0.8803, avg=-1.5373, min=-1.9855, std=0.1828
+OrganSMNIST: 2026-02-22 16:03:47,252 [INFO] Iter=2800, size=512, max=-1.6123, avg=-2.5229, min=-4.6321, std=0.3837
+OrganSMNIST: 2026-02-22 16:03:47,253 [INFO] Iter=2800, size=512, max=0.2357, avg=0.1334, min=0.0523, std=0.0286
+OrganSMNIST: 2026-02-22 16:03:47,253 [INFO] Iter=2800, size=512, max=0.0252, avg=0.0079, min=0.0010, std=0.0034
+OrganSMNIST: 2026-02-22 16:03:47,253 [INFO] Iter=2800, size=512, max=1.0000, avg=0.9899, min=0.3660, std=0.0439
+OrganSMNIST: 2026-02-22 16:03:47,253 [INFO] Iter=2800, size=512, max=0.1191, avg=0.0402, min=0.0000, std=0.0252
+OrganSMNIST: 2026-02-22 16:03:47,253 [INFO] Iter=2800, size=61952, max=100.0000, avg=9.3180, min=0.0040, std=28.6772
+OrganSMNIST: 2026-02-22 16:03:47,254 [INFO] Iter=2800, size=5632, max=0.2230, avg=0.1027, min=0.0158, std=0.0331
+OrganSMNIST: 2026-02-22 16:03:47,254 [INFO] Iter=2800, real_fake_loss=0.3893
+OrganSMNIST: 2026-02-22 16:04:11,640 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:04:11,640 [INFO] Iter=2900, size=512, max=-1.0845, avg=-1.6237, min=-2.0104, std=0.1607
+OrganSMNIST: 2026-02-22 16:04:11,640 [INFO] Iter=2900, size=512, max=-1.5730, avg=-2.4976, min=-4.2148, std=0.4367
+OrganSMNIST: 2026-02-22 16:04:11,640 [INFO] Iter=2900, size=512, max=0.2217, avg=0.1310, min=0.0523, std=0.0280
+OrganSMNIST: 2026-02-22 16:04:11,640 [INFO] Iter=2900, size=512, max=0.0272, avg=0.0085, min=0.0004, std=0.0040
+OrganSMNIST: 2026-02-22 16:04:11,641 [INFO] Iter=2900, size=512, max=1.0000, avg=0.9924, min=0.4461, std=0.0382
+OrganSMNIST: 2026-02-22 16:04:11,641 [INFO] Iter=2900, size=512, max=0.1413, avg=0.0406, min=0.0000, std=0.0235
+OrganSMNIST: 2026-02-22 16:04:11,641 [INFO] Iter=2900, size=61952, max=100.0000, avg=9.3575, min=0.0021, std=28.6652
+OrganSMNIST: 2026-02-22 16:04:11,641 [INFO] Iter=2900, size=5632, max=0.2184, avg=0.1010, min=0.0168, std=0.0309
+OrganSMNIST: 2026-02-22 16:04:11,641 [INFO] Iter=2900, real_fake_loss=0.3929
+OrganSMNIST: 2026-02-22 16:04:36,070 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:04:36,070 [INFO] Iter=3000, size=512, max=-0.8451, avg=-1.4784, min=-1.9950, std=0.1839
+OrganSMNIST: 2026-02-22 16:04:36,071 [INFO] Iter=3000, size=512, max=-1.6208, avg=-2.3975, min=-3.7888, std=0.3596
+OrganSMNIST: 2026-02-22 16:04:36,071 [INFO] Iter=3000, size=512, max=0.2084, avg=0.1186, min=0.0483, std=0.0301
+OrganSMNIST: 2026-02-22 16:04:36,071 [INFO] Iter=3000, size=512, max=0.0238, avg=0.0070, min=0.0004, std=0.0036
+OrganSMNIST: 2026-02-22 16:04:36,071 [INFO] Iter=3000, size=512, max=1.0000, avg=0.9733, min=0.2239, std=0.0906
+OrganSMNIST: 2026-02-22 16:04:36,071 [INFO] Iter=3000, size=512, max=0.0886, avg=0.0247, min=0.0000, std=0.0201
+OrganSMNIST: 2026-02-22 16:04:36,072 [INFO] Iter=3000, size=61952, max=100.0000, avg=9.3613, min=0.0044, std=28.6641
+OrganSMNIST: 2026-02-22 16:04:36,072 [INFO] Iter=3000, size=5632, max=0.1782, avg=0.0850, min=0.0057, std=0.0292
+OrganSMNIST: 2026-02-22 16:04:36,072 [INFO] Iter=3000, real_fake_loss=0.4151
+OrganSMNIST: 2026-02-22 16:05:00,475 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:05:00,475 [INFO] Iter=3100, size=512, max=-0.9653, avg=-1.4150, min=-1.9338, std=0.1495
+OrganSMNIST: 2026-02-22 16:05:00,475 [INFO] Iter=3100, size=512, max=-1.3185, avg=-2.2416, min=-3.8185, std=0.3767
+OrganSMNIST: 2026-02-22 16:05:00,475 [INFO] Iter=3100, size=512, max=0.2254, avg=0.1240, min=0.0525, std=0.0299
+OrganSMNIST: 2026-02-22 16:05:00,475 [INFO] Iter=3100, size=512, max=0.0302, avg=0.0101, min=0.0008, std=0.0049
+OrganSMNIST: 2026-02-22 16:05:00,476 [INFO] Iter=3100, size=512, max=1.0000, avg=0.9805, min=0.4692, std=0.0576
+OrganSMNIST: 2026-02-22 16:05:00,476 [INFO] Iter=3100, size=512, max=0.1009, avg=0.0246, min=0.0000, std=0.0218
+OrganSMNIST: 2026-02-22 16:05:00,476 [INFO] Iter=3100, size=61952, max=100.0000, avg=9.4524, min=0.0033, std=28.6363
+OrganSMNIST: 2026-02-22 16:05:00,476 [INFO] Iter=3100, size=5632, max=0.2072, avg=0.0858, min=0.0092, std=0.0297
+OrganSMNIST: 2026-02-22 16:05:00,476 [INFO] Iter=3100, real_fake_loss=0.3855
+OrganSMNIST: 2026-02-22 16:05:24,862 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:05:24,862 [INFO] Iter=3200, size=512, max=-1.2965, avg=-1.6340, min=-2.0410, std=0.0987
+OrganSMNIST: 2026-02-22 16:05:24,862 [INFO] Iter=3200, size=512, max=-1.4369, avg=-2.4717, min=-4.2403, std=0.4644
+OrganSMNIST: 2026-02-22 16:05:24,862 [INFO] Iter=3200, size=512, max=0.2149, avg=0.1248, min=0.0690, std=0.0253
+OrganSMNIST: 2026-02-22 16:05:24,862 [INFO] Iter=3200, size=512, max=0.0301, avg=0.0114, min=0.0022, std=0.0044
+OrganSMNIST: 2026-02-22 16:05:24,863 [INFO] Iter=3200, size=512, max=1.0000, avg=0.9980, min=0.9235, std=0.0072
+OrganSMNIST: 2026-02-22 16:05:24,863 [INFO] Iter=3200, size=512, max=0.1069, avg=0.0455, min=0.0044, std=0.0202
+OrganSMNIST: 2026-02-22 16:05:24,863 [INFO] Iter=3200, size=61952, max=100.0000, avg=9.4608, min=0.0023, std=28.6338
+OrganSMNIST: 2026-02-22 16:05:24,863 [INFO] Iter=3200, size=5632, max=0.1936, avg=0.1094, min=0.0209, std=0.0297
+OrganSMNIST: 2026-02-22 16:05:24,863 [INFO] Iter=3200, real_fake_loss=0.3812
+OrganSMNIST: 2026-02-22 16:05:49,202 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:05:49,203 [INFO] Iter=3300, size=512, max=-2.1802, avg=-2.4737, min=-2.8332, std=0.1049
+OrganSMNIST: 2026-02-22 16:05:49,203 [INFO] Iter=3300, size=512, max=-1.7609, avg=-2.2362, min=-3.0675, std=0.2217
+OrganSMNIST: 2026-02-22 16:05:49,203 [INFO] Iter=3300, size=512, max=0.2272, avg=0.1408, min=0.0906, std=0.0222
+OrganSMNIST: 2026-02-22 16:05:49,203 [INFO] Iter=3300, size=512, max=0.0243, avg=0.0090, min=0.0019, std=0.0035
+OrganSMNIST: 2026-02-22 16:05:49,203 [INFO] Iter=3300, size=512, max=1.0000, avg=0.9998, min=0.9829, std=0.0016
+OrganSMNIST: 2026-02-22 16:05:49,203 [INFO] Iter=3300, size=512, max=0.1188, avg=0.0345, min=0.0000, std=0.0187
+OrganSMNIST: 2026-02-22 16:05:49,204 [INFO] Iter=3300, size=61952, max=100.0000, avg=9.3519, min=0.0030, std=28.6669
+OrganSMNIST: 2026-02-22 16:05:49,204 [INFO] Iter=3300, size=5632, max=0.2144, avg=0.1082, min=0.0406, std=0.0240
+OrganSMNIST: 2026-02-22 16:05:49,204 [INFO] Iter=3300, real_fake_loss=0.3234
+OrganSMNIST: 2026-02-22 16:06:13,591 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:06:13,591 [INFO] Iter=3400, size=512, max=-2.1607, avg=-2.4341, min=-2.8695, std=0.1014
+OrganSMNIST: 2026-02-22 16:06:13,591 [INFO] Iter=3400, size=512, max=-1.6098, avg=-2.3678, min=-3.9756, std=0.3612
+OrganSMNIST: 2026-02-22 16:06:13,592 [INFO] Iter=3400, size=512, max=0.2632, avg=0.1699, min=0.1166, std=0.0236
+OrganSMNIST: 2026-02-22 16:06:13,592 [INFO] Iter=3400, size=512, max=0.0307, avg=0.0120, min=0.0029, std=0.0046
+OrganSMNIST: 2026-02-22 16:06:13,592 [INFO] Iter=3400, size=512, max=1.0000, avg=0.9967, min=0.8456, std=0.0137
+OrganSMNIST: 2026-02-22 16:06:13,592 [INFO] Iter=3400, size=512, max=0.1572, avg=0.0579, min=0.0092, std=0.0234
+OrganSMNIST: 2026-02-22 16:06:13,592 [INFO] Iter=3400, size=61952, max=100.0000, avg=9.4427, min=0.0015, std=28.6395
+OrganSMNIST: 2026-02-22 16:06:13,593 [INFO] Iter=3400, size=5632, max=0.2470, avg=0.1309, min=0.0297, std=0.0362
+OrganSMNIST: 2026-02-22 16:06:13,593 [INFO] Iter=3400, real_fake_loss=0.3294
+OrganSMNIST: 2026-02-22 16:06:37,949 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:06:37,950 [INFO] Iter=3500, size=512, max=-1.7162, avg=-2.0517, min=-2.5557, std=0.1347
+OrganSMNIST: 2026-02-22 16:06:37,950 [INFO] Iter=3500, size=512, max=-1.4589, avg=-2.1245, min=-3.4521, std=0.3061
+OrganSMNIST: 2026-02-22 16:06:37,950 [INFO] Iter=3500, size=512, max=0.2225, avg=0.1224, min=0.0686, std=0.0277
+OrganSMNIST: 2026-02-22 16:06:37,950 [INFO] Iter=3500, size=512, max=0.0268, avg=0.0119, min=0.0018, std=0.0047
+OrganSMNIST: 2026-02-22 16:06:37,950 [INFO] Iter=3500, size=512, max=1.0000, avg=0.9992, min=0.8947, std=0.0059
+OrganSMNIST: 2026-02-22 16:06:37,950 [INFO] Iter=3500, size=512, max=0.1289, avg=0.0323, min=0.0000, std=0.0225
+OrganSMNIST: 2026-02-22 16:06:37,951 [INFO] Iter=3500, size=61952, max=100.0000, avg=9.4520, min=0.0052, std=28.6358
+OrganSMNIST: 2026-02-22 16:06:37,951 [INFO] Iter=3500, size=5632, max=0.2570, avg=0.1024, min=0.0369, std=0.0304
+OrganSMNIST: 2026-02-22 16:06:37,951 [INFO] Iter=3500, real_fake_loss=0.3327
+OrganSMNIST: 2026-02-22 16:07:02,483 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:07:02,483 [INFO] Iter=3600, size=512, max=-2.3394, avg=-2.7031, min=-3.0921, std=0.1215
+OrganSMNIST: 2026-02-22 16:07:02,483 [INFO] Iter=3600, size=512, max=-1.0390, avg=-2.2494, min=-4.8003, std=0.5864
+OrganSMNIST: 2026-02-22 16:07:02,483 [INFO] Iter=3600, size=512, max=0.3005, avg=0.1585, min=0.0911, std=0.0365
+OrganSMNIST: 2026-02-22 16:07:02,484 [INFO] Iter=3600, size=512, max=0.0417, avg=0.0188, min=0.0044, std=0.0068
+OrganSMNIST: 2026-02-22 16:07:02,484 [INFO] Iter=3600, size=512, max=1.0000, avg=0.9923, min=0.7407, std=0.0241
+OrganSMNIST: 2026-02-22 16:07:02,484 [INFO] Iter=3600, size=512, max=0.1826, avg=0.0619, min=0.0023, std=0.0340
+OrganSMNIST: 2026-02-22 16:07:02,484 [INFO] Iter=3600, size=61952, max=100.0000, avg=9.6439, min=0.0028, std=28.5808
+OrganSMNIST: 2026-02-22 16:07:02,484 [INFO] Iter=3600, size=5632, max=0.2682, avg=0.1303, min=0.0224, std=0.0432
+OrganSMNIST: 2026-02-22 16:07:02,484 [INFO] Iter=3600, real_fake_loss=0.2986
+OrganSMNIST: 2026-02-22 16:07:26,967 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:07:26,967 [INFO] Iter=3700, size=512, max=-1.8456, avg=-2.3034, min=-2.7208, std=0.1482
+OrganSMNIST: 2026-02-22 16:07:26,967 [INFO] Iter=3700, size=512, max=-1.0600, avg=-2.1169, min=-3.9623, std=0.4484
+OrganSMNIST: 2026-02-22 16:07:26,967 [INFO] Iter=3700, size=512, max=0.2162, avg=0.1459, min=0.0908, std=0.0206
+OrganSMNIST: 2026-02-22 16:07:26,967 [INFO] Iter=3700, size=512, max=0.0543, avg=0.0202, min=0.0027, std=0.0091
+OrganSMNIST: 2026-02-22 16:07:26,968 [INFO] Iter=3700, size=512, max=1.0000, avg=0.9974, min=0.9301, std=0.0090
+OrganSMNIST: 2026-02-22 16:07:26,968 [INFO] Iter=3700, size=512, max=0.1198, avg=0.0516, min=0.0013, std=0.0205
+OrganSMNIST: 2026-02-22 16:07:26,968 [INFO] Iter=3700, size=61952, max=100.0000, avg=9.6891, min=0.0022, std=28.5669
+OrganSMNIST: 2026-02-22 16:07:26,968 [INFO] Iter=3700, size=5632, max=0.2342, avg=0.1207, min=0.0285, std=0.0346
+OrganSMNIST: 2026-02-22 16:07:26,968 [INFO] Iter=3700, real_fake_loss=0.3533
+OrganSMNIST: 2026-02-22 16:07:51,383 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:07:51,383 [INFO] Iter=3800, size=512, max=-0.8758, avg=-1.4757, min=-2.0751, std=0.2261
+OrganSMNIST: 2026-02-22 16:07:51,383 [INFO] Iter=3800, size=512, max=-1.1357, avg=-2.1914, min=-3.6789, std=0.4165
+OrganSMNIST: 2026-02-22 16:07:51,383 [INFO] Iter=3800, size=512, max=0.2282, avg=0.1367, min=0.0759, std=0.0234
+OrganSMNIST: 2026-02-22 16:07:51,383 [INFO] Iter=3800, size=512, max=0.0448, avg=0.0154, min=0.0004, std=0.0075
+OrganSMNIST: 2026-02-22 16:07:51,384 [INFO] Iter=3800, size=512, max=1.0000, avg=0.9717, min=0.3757, std=0.0560
+OrganSMNIST: 2026-02-22 16:07:51,384 [INFO] Iter=3800, size=512, max=0.1233, avg=0.0370, min=0.0000, std=0.0222
+OrganSMNIST: 2026-02-22 16:07:51,384 [INFO] Iter=3800, size=61952, max=100.0000, avg=9.6188, min=0.0048, std=28.5880
+OrganSMNIST: 2026-02-22 16:07:51,384 [INFO] Iter=3800, size=5632, max=0.2016, avg=0.0990, min=0.0096, std=0.0376
+OrganSMNIST: 2026-02-22 16:07:51,384 [INFO] Iter=3800, real_fake_loss=0.3987
+OrganSMNIST: 2026-02-22 16:08:15,783 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:08:15,783 [INFO] Iter=3900, size=512, max=-1.0517, avg=-1.5017, min=-1.8890, std=0.1562
+OrganSMNIST: 2026-02-22 16:08:15,783 [INFO] Iter=3900, size=512, max=-1.2376, avg=-2.1532, min=-3.3019, std=0.3790
+OrganSMNIST: 2026-02-22 16:08:15,783 [INFO] Iter=3900, size=512, max=0.1869, avg=0.1153, min=0.0468, std=0.0262
+OrganSMNIST: 2026-02-22 16:08:15,783 [INFO] Iter=3900, size=512, max=0.0353, avg=0.0122, min=0.0005, std=0.0053
+OrganSMNIST: 2026-02-22 16:08:15,784 [INFO] Iter=3900, size=512, max=1.0000, avg=0.9802, min=0.2308, std=0.0745
+OrganSMNIST: 2026-02-22 16:08:15,784 [INFO] Iter=3900, size=512, max=0.1039, avg=0.0398, min=0.0000, std=0.0226
+OrganSMNIST: 2026-02-22 16:08:15,784 [INFO] Iter=3900, size=61952, max=100.0000, avg=9.5352, min=0.0050, std=28.6114
+OrganSMNIST: 2026-02-22 16:08:15,784 [INFO] Iter=3900, size=5632, max=0.1924, avg=0.0945, min=0.0069, std=0.0319
+OrganSMNIST: 2026-02-22 16:08:15,784 [INFO] Iter=3900, real_fake_loss=0.3838
+OrganSMNIST: 2026-02-22 16:08:40,183 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:08:40,183 [INFO] Iter=4000, size=512, max=-0.9888, avg=-1.6537, min=-2.1354, std=0.1396
+OrganSMNIST: 2026-02-22 16:08:40,183 [INFO] Iter=4000, size=512, max=-1.2717, avg=-2.3288, min=-4.7296, std=0.4690
+OrganSMNIST: 2026-02-22 16:08:40,183 [INFO] Iter=4000, size=512, max=0.2068, avg=0.1139, min=0.0490, std=0.0283
+OrganSMNIST: 2026-02-22 16:08:40,183 [INFO] Iter=4000, size=512, max=0.0365, avg=0.0111, min=0.0003, std=0.0058
+OrganSMNIST: 2026-02-22 16:08:40,183 [INFO] Iter=4000, size=512, max=1.0000, avg=0.9096, min=0.0835, std=0.1467
+OrganSMNIST: 2026-02-22 16:08:40,184 [INFO] Iter=4000, size=512, max=0.0875, avg=0.0218, min=0.0000, std=0.0199
+OrganSMNIST: 2026-02-22 16:08:40,184 [INFO] Iter=4000, size=61952, max=100.0000, avg=9.5791, min=0.0061, std=28.5978
+OrganSMNIST: 2026-02-22 16:08:40,184 [INFO] Iter=4000, size=5632, max=0.1778, avg=0.0737, min=0.0017, std=0.0344
+OrganSMNIST: 2026-02-22 16:08:40,184 [INFO] Iter=4000, real_fake_loss=0.3821
+OrganSMNIST: 2026-02-22 16:09:04,641 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:09:04,641 [INFO] Iter=4100, size=512, max=-0.9952, avg=-1.5355, min=-1.9588, std=0.1579
+OrganSMNIST: 2026-02-22 16:09:04,642 [INFO] Iter=4100, size=512, max=-1.3687, avg=-2.3621, min=-4.5987, std=0.4534
+OrganSMNIST: 2026-02-22 16:09:04,642 [INFO] Iter=4100, size=512, max=0.2105, avg=0.1084, min=0.0402, std=0.0286
+OrganSMNIST: 2026-02-22 16:09:04,642 [INFO] Iter=4100, size=512, max=0.0292, avg=0.0090, min=0.0008, std=0.0042
+OrganSMNIST: 2026-02-22 16:09:04,642 [INFO] Iter=4100, size=512, max=1.0000, avg=0.9323, min=0.4061, std=0.0963
+OrganSMNIST: 2026-02-22 16:09:04,642 [INFO] Iter=4100, size=512, max=0.0881, avg=0.0212, min=0.0000, std=0.0184
+OrganSMNIST: 2026-02-22 16:09:04,642 [INFO] Iter=4100, size=61952, max=100.0000, avg=9.4850, min=0.0026, std=28.6269
+OrganSMNIST: 2026-02-22 16:09:04,643 [INFO] Iter=4100, size=5632, max=0.1832, avg=0.0730, min=0.0055, std=0.0306
+OrganSMNIST: 2026-02-22 16:09:04,643 [INFO] Iter=4100, real_fake_loss=0.3855
+OrganSMNIST: 2026-02-22 16:09:29,050 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:09:29,051 [INFO] Iter=4200, size=512, max=-1.0614, avg=-1.5532, min=-1.8586, std=0.1340
+OrganSMNIST: 2026-02-22 16:09:29,051 [INFO] Iter=4200, size=512, max=-1.1782, avg=-2.2868, min=-3.9538, std=0.4553
+OrganSMNIST: 2026-02-22 16:09:29,051 [INFO] Iter=4200, size=512, max=0.1959, avg=0.1149, min=0.0417, std=0.0238
+OrganSMNIST: 2026-02-22 16:09:29,051 [INFO] Iter=4200, size=512, max=0.0311, avg=0.0115, min=0.0009, std=0.0053
+OrganSMNIST: 2026-02-22 16:09:29,051 [INFO] Iter=4200, size=512, max=1.0000, avg=0.9815, min=0.3673, std=0.0550
+OrganSMNIST: 2026-02-22 16:09:29,051 [INFO] Iter=4200, size=512, max=0.1096, avg=0.0332, min=0.0000, std=0.0209
+OrganSMNIST: 2026-02-22 16:09:29,052 [INFO] Iter=4200, size=61952, max=100.0000, avg=9.4674, min=0.0013, std=28.6318
+OrganSMNIST: 2026-02-22 16:09:29,052 [INFO] Iter=4200, size=5632, max=0.1941, avg=0.0884, min=0.0138, std=0.0290
+OrganSMNIST: 2026-02-22 16:09:29,052 [INFO] Iter=4200, real_fake_loss=0.3772
+OrganSMNIST: 2026-02-22 16:09:53,404 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:09:53,404 [INFO] Iter=4300, size=512, max=-0.8359, avg=-1.4653, min=-1.8322, std=0.1370
+OrganSMNIST: 2026-02-22 16:09:53,404 [INFO] Iter=4300, size=512, max=-1.1628, avg=-2.1615, min=-4.1687, std=0.4624
+OrganSMNIST: 2026-02-22 16:09:53,404 [INFO] Iter=4300, size=512, max=0.1894, avg=0.1159, min=0.0505, std=0.0244
+OrganSMNIST: 2026-02-22 16:09:53,404 [INFO] Iter=4300, size=512, max=0.0380, avg=0.0135, min=0.0009, std=0.0058
+OrganSMNIST: 2026-02-22 16:09:53,404 [INFO] Iter=4300, size=512, max=1.0000, avg=0.9703, min=0.2238, std=0.0747
+OrganSMNIST: 2026-02-22 16:09:53,405 [INFO] Iter=4300, size=512, max=0.1150, avg=0.0337, min=0.0000, std=0.0215
+OrganSMNIST: 2026-02-22 16:09:53,405 [INFO] Iter=4300, size=61952, max=100.0000, avg=9.5903, min=0.0041, std=28.5959
+OrganSMNIST: 2026-02-22 16:09:53,405 [INFO] Iter=4300, size=5632, max=0.2096, avg=0.0895, min=0.0062, std=0.0324
+OrganSMNIST: 2026-02-22 16:09:53,405 [INFO] Iter=4300, real_fake_loss=0.3665
+OrganSMNIST: 2026-02-22 16:10:17,826 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:10:17,826 [INFO] Iter=4400, size=512, max=-1.0943, avg=-1.6641, min=-2.1085, std=0.1645
+OrganSMNIST: 2026-02-22 16:10:17,826 [INFO] Iter=4400, size=512, max=-1.2902, avg=-2.2251, min=-3.9758, std=0.3777
+OrganSMNIST: 2026-02-22 16:10:17,826 [INFO] Iter=4400, size=512, max=0.1775, avg=0.1107, min=0.0551, std=0.0223
+OrganSMNIST: 2026-02-22 16:10:17,826 [INFO] Iter=4400, size=512, max=0.0245, avg=0.0107, min=0.0009, std=0.0045
+OrganSMNIST: 2026-02-22 16:10:17,826 [INFO] Iter=4400, size=512, max=1.0000, avg=0.9802, min=0.4120, std=0.0445
+OrganSMNIST: 2026-02-22 16:10:17,827 [INFO] Iter=4400, size=512, max=0.0910, avg=0.0263, min=0.0000, std=0.0182
+OrganSMNIST: 2026-02-22 16:10:17,827 [INFO] Iter=4400, size=61952, max=100.0000, avg=9.5527, min=0.0030, std=28.6064
+OrganSMNIST: 2026-02-22 16:10:17,827 [INFO] Iter=4400, size=5632, max=0.1793, avg=0.0822, min=0.0157, std=0.0267
+OrganSMNIST: 2026-02-22 16:10:17,827 [INFO] Iter=4400, real_fake_loss=0.3477
+OrganSMNIST: 2026-02-22 16:10:42,232 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:10:42,232 [INFO] Iter=4500, size=512, max=-1.0414, avg=-1.6209, min=-2.1042, std=0.2228
+OrganSMNIST: 2026-02-22 16:10:42,232 [INFO] Iter=4500, size=512, max=-1.3796, avg=-2.3482, min=-4.0099, std=0.4558
+OrganSMNIST: 2026-02-22 16:10:42,232 [INFO] Iter=4500, size=512, max=0.2082, avg=0.1218, min=0.0457, std=0.0304
+OrganSMNIST: 2026-02-22 16:10:42,232 [INFO] Iter=4500, size=512, max=0.0378, avg=0.0100, min=0.0003, std=0.0053
+OrganSMNIST: 2026-02-22 16:10:42,232 [INFO] Iter=4500, size=512, max=1.0000, avg=0.9671, min=0.1885, std=0.1017
+OrganSMNIST: 2026-02-22 16:10:42,233 [INFO] Iter=4500, size=512, max=0.1284, avg=0.0353, min=0.0000, std=0.0261
+OrganSMNIST: 2026-02-22 16:10:42,233 [INFO] Iter=4500, size=61952, max=100.0000, avg=9.4174, min=0.0024, std=28.6477
+OrganSMNIST: 2026-02-22 16:10:42,233 [INFO] Iter=4500, size=5632, max=0.2129, avg=0.0931, min=0.0084, std=0.0358
+OrganSMNIST: 2026-02-22 16:10:42,233 [INFO] Iter=4500, real_fake_loss=0.3647
+OrganSMNIST: 2026-02-22 16:11:06,578 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:11:06,579 [INFO] Iter=4600, size=512, max=-0.9097, avg=-1.5762, min=-2.1143, std=0.2593
+OrganSMNIST: 2026-02-22 16:11:06,579 [INFO] Iter=4600, size=512, max=-1.5844, avg=-2.4030, min=-3.9400, std=0.3966
+OrganSMNIST: 2026-02-22 16:11:06,579 [INFO] Iter=4600, size=512, max=0.2249, avg=0.1267, min=0.0470, std=0.0303
+OrganSMNIST: 2026-02-22 16:11:06,579 [INFO] Iter=4600, size=512, max=0.0289, avg=0.0102, min=0.0003, std=0.0051
+OrganSMNIST: 2026-02-22 16:11:06,579 [INFO] Iter=4600, size=512, max=1.0000, avg=0.9769, min=0.1794, std=0.0998
+OrganSMNIST: 2026-02-22 16:11:06,579 [INFO] Iter=4600, size=512, max=0.1292, avg=0.0444, min=0.0000, std=0.0259
+OrganSMNIST: 2026-02-22 16:11:06,580 [INFO] Iter=4600, size=61952, max=100.0000, avg=9.3885, min=0.0022, std=28.6560
+OrganSMNIST: 2026-02-22 16:11:06,580 [INFO] Iter=4600, size=5632, max=0.2144, avg=0.1046, min=0.0071, std=0.0357
+OrganSMNIST: 2026-02-22 16:11:06,580 [INFO] Iter=4600, real_fake_loss=0.3710
+OrganSMNIST: 2026-02-22 16:11:30,974 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:11:30,975 [INFO] Iter=4700, size=512, max=-1.0751, avg=-1.6771, min=-2.1317, std=0.1833
+OrganSMNIST: 2026-02-22 16:11:30,975 [INFO] Iter=4700, size=512, max=-1.3706, avg=-2.3007, min=-3.7599, std=0.3894
+OrganSMNIST: 2026-02-22 16:11:30,975 [INFO] Iter=4700, size=512, max=0.2073, avg=0.1179, min=0.0384, std=0.0287
+OrganSMNIST: 2026-02-22 16:11:30,975 [INFO] Iter=4700, size=512, max=0.0306, avg=0.0099, min=0.0003, std=0.0052
+OrganSMNIST: 2026-02-22 16:11:30,975 [INFO] Iter=4700, size=512, max=1.0000, avg=0.9537, min=0.1229, std=0.1154
+OrganSMNIST: 2026-02-22 16:11:30,976 [INFO] Iter=4700, size=512, max=0.0909, avg=0.0218, min=0.0000, std=0.0179
+OrganSMNIST: 2026-02-22 16:11:30,976 [INFO] Iter=4700, size=61952, max=100.0000, avg=9.4917, min=0.0032, std=28.6246
+OrganSMNIST: 2026-02-22 16:11:30,976 [INFO] Iter=4700, size=5632, max=0.1936, avg=0.0766, min=0.0053, std=0.0287
+OrganSMNIST: 2026-02-22 16:11:30,976 [INFO] Iter=4700, real_fake_loss=0.3663
+OrganSMNIST: 2026-02-22 16:11:55,304 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:11:55,304 [INFO] Iter=4800, size=512, max=-0.9273, avg=-1.4480, min=-2.2460, std=0.2672
+OrganSMNIST: 2026-02-22 16:11:55,304 [INFO] Iter=4800, size=512, max=-1.3202, avg=-2.3474, min=-4.1834, std=0.3965
+OrganSMNIST: 2026-02-22 16:11:55,304 [INFO] Iter=4800, size=512, max=0.2238, avg=0.1198, min=0.0482, std=0.0359
+OrganSMNIST: 2026-02-22 16:11:55,305 [INFO] Iter=4800, size=512, max=0.0341, avg=0.0088, min=0.0003, std=0.0052
+OrganSMNIST: 2026-02-22 16:11:55,305 [INFO] Iter=4800, size=512, max=1.0000, avg=0.9481, min=0.1559, std=0.1420
+OrganSMNIST: 2026-02-22 16:11:55,305 [INFO] Iter=4800, size=512, max=0.1331, avg=0.0380, min=0.0000, std=0.0292
+OrganSMNIST: 2026-02-22 16:11:55,305 [INFO] Iter=4800, size=61952, max=100.0000, avg=9.3503, min=0.0036, std=28.6679
+OrganSMNIST: 2026-02-22 16:11:55,305 [INFO] Iter=4800, size=5632, max=0.2198, avg=0.0961, min=0.0045, std=0.0405
+OrganSMNIST: 2026-02-22 16:11:55,305 [INFO] Iter=4800, real_fake_loss=0.3770
+OrganSMNIST: 2026-02-22 16:12:19,666 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:12:19,666 [INFO] Iter=4900, size=512, max=-1.1377, avg=-1.6384, min=-2.0133, std=0.1545
+OrganSMNIST: 2026-02-22 16:12:19,666 [INFO] Iter=4900, size=512, max=-1.4695, avg=-2.5679, min=-4.1892, std=0.4721
+OrganSMNIST: 2026-02-22 16:12:19,666 [INFO] Iter=4900, size=512, max=0.2089, avg=0.1347, min=0.0499, std=0.0275
+OrganSMNIST: 2026-02-22 16:12:19,666 [INFO] Iter=4900, size=512, max=0.0247, avg=0.0097, min=0.0006, std=0.0041
+OrganSMNIST: 2026-02-22 16:12:19,666 [INFO] Iter=4900, size=512, max=1.0000, avg=0.9934, min=0.4006, std=0.0444
+OrganSMNIST: 2026-02-22 16:12:19,667 [INFO] Iter=4900, size=512, max=0.1183, avg=0.0477, min=0.0000, std=0.0231
+OrganSMNIST: 2026-02-22 16:12:19,667 [INFO] Iter=4900, size=61952, max=100.0000, avg=9.3638, min=0.0014, std=28.6633
+OrganSMNIST: 2026-02-22 16:12:19,667 [INFO] Iter=4900, size=5632, max=0.2010, avg=0.1078, min=0.0124, std=0.0296
+OrganSMNIST: 2026-02-22 16:12:19,667 [INFO] Iter=4900, real_fake_loss=0.3896
+OrganSMNIST: 2026-02-22 16:12:44,085 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:12:44,085 [INFO] Iter=5000, size=512, max=-0.8827, avg=-1.5764, min=-2.1176, std=0.2186
+OrganSMNIST: 2026-02-22 16:12:44,085 [INFO] Iter=5000, size=512, max=-1.3695, avg=-2.3587, min=-3.6521, std=0.4034
+OrganSMNIST: 2026-02-22 16:12:44,085 [INFO] Iter=5000, size=512, max=0.2135, avg=0.1257, min=0.0566, std=0.0275
+OrganSMNIST: 2026-02-22 16:12:44,085 [INFO] Iter=5000, size=512, max=0.0249, avg=0.0091, min=0.0004, std=0.0044
+OrganSMNIST: 2026-02-22 16:12:44,085 [INFO] Iter=5000, size=512, max=1.0000, avg=0.9807, min=0.3239, std=0.0575
+OrganSMNIST: 2026-02-22 16:12:44,086 [INFO] Iter=5000, size=512, max=0.0963, avg=0.0319, min=0.0000, std=0.0231
+OrganSMNIST: 2026-02-22 16:12:44,086 [INFO] Iter=5000, size=61952, max=100.0000, avg=9.4026, min=0.0021, std=28.6518
+OrganSMNIST: 2026-02-22 16:12:44,086 [INFO] Iter=5000, size=5632, max=0.1991, avg=0.0944, min=0.0135, std=0.0329
+OrganSMNIST: 2026-02-22 16:12:44,086 [INFO] Iter=5000, real_fake_loss=0.3534
+OrganSMNIST: 2026-02-22 16:12:44,174 [INFO] Checkpoint saved at iteration 5000 -> ./log/organsmnist/checkpoints/checkpoint_5000.pkl
+OrganSMNIST: 2026-02-22 16:13:08,488 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:13:08,488 [INFO] Iter=5100, size=512, max=-1.2118, avg=-1.7462, min=-2.1031, std=0.1752
+OrganSMNIST: 2026-02-22 16:13:08,489 [INFO] Iter=5100, size=512, max=-1.6964, avg=-2.5200, min=-3.9272, std=0.4181
+OrganSMNIST: 2026-02-22 16:13:08,489 [INFO] Iter=5100, size=512, max=0.2346, avg=0.1344, min=0.0416, std=0.0335
+OrganSMNIST: 2026-02-22 16:13:08,489 [INFO] Iter=5100, size=512, max=0.0204, avg=0.0079, min=0.0007, std=0.0036
+OrganSMNIST: 2026-02-22 16:13:08,489 [INFO] Iter=5100, size=512, max=1.0000, avg=0.9589, min=0.1192, std=0.1119
+OrganSMNIST: 2026-02-22 16:13:08,489 [INFO] Iter=5100, size=512, max=0.1089, avg=0.0337, min=0.0000, std=0.0241
+OrganSMNIST: 2026-02-22 16:13:08,490 [INFO] Iter=5100, size=61952, max=100.0000, avg=9.3670, min=0.0044, std=28.6624
+OrganSMNIST: 2026-02-22 16:13:08,490 [INFO] Iter=5100, size=5632, max=0.1989, avg=0.0900, min=0.0037, std=0.0353
+OrganSMNIST: 2026-02-22 16:13:08,490 [INFO] Iter=5100, real_fake_loss=0.3663
+OrganSMNIST: 2026-02-22 16:13:32,866 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:13:32,866 [INFO] Iter=5200, size=512, max=-1.0556, avg=-1.7662, min=-2.2107, std=0.2047
+OrganSMNIST: 2026-02-22 16:13:32,866 [INFO] Iter=5200, size=512, max=-1.5358, avg=-2.1486, min=-3.4129, std=0.2527
+OrganSMNIST: 2026-02-22 16:13:32,866 [INFO] Iter=5200, size=512, max=0.1828, avg=0.1086, min=0.0540, std=0.0215
+OrganSMNIST: 2026-02-22 16:13:32,866 [INFO] Iter=5200, size=512, max=0.0259, avg=0.0099, min=0.0015, std=0.0040
+OrganSMNIST: 2026-02-22 16:13:32,866 [INFO] Iter=5200, size=512, max=1.0000, avg=0.9877, min=0.6941, std=0.0341
+OrganSMNIST: 2026-02-22 16:13:32,867 [INFO] Iter=5200, size=512, max=0.1070, avg=0.0251, min=0.0000, std=0.0175
+OrganSMNIST: 2026-02-22 16:13:32,867 [INFO] Iter=5200, size=61952, max=100.0000, avg=9.4498, min=0.0063, std=28.6368
+OrganSMNIST: 2026-02-22 16:13:32,867 [INFO] Iter=5200, size=5632, max=0.1942, avg=0.0854, min=0.0239, std=0.0254
+OrganSMNIST: 2026-02-22 16:13:32,867 [INFO] Iter=5200, real_fake_loss=0.3574
+OrganSMNIST: 2026-02-22 16:13:57,297 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:13:57,297 [INFO] Iter=5300, size=512, max=-1.2915, avg=-1.9487, min=-2.4220, std=0.1477
+OrganSMNIST: 2026-02-22 16:13:57,297 [INFO] Iter=5300, size=512, max=-1.5129, avg=-2.7506, min=-4.7667, std=0.5180
+OrganSMNIST: 2026-02-22 16:13:57,297 [INFO] Iter=5300, size=512, max=0.2510, avg=0.1409, min=0.0666, std=0.0303
+OrganSMNIST: 2026-02-22 16:13:57,297 [INFO] Iter=5300, size=512, max=0.0224, avg=0.0076, min=0.0008, std=0.0030
+OrganSMNIST: 2026-02-22 16:13:57,298 [INFO] Iter=5300, size=512, max=1.0000, avg=0.9987, min=0.8223, std=0.0098
+OrganSMNIST: 2026-02-22 16:13:57,298 [INFO] Iter=5300, size=512, max=0.1419, avg=0.0546, min=0.0000, std=0.0272
+OrganSMNIST: 2026-02-22 16:13:57,298 [INFO] Iter=5300, size=61952, max=100.0000, avg=9.2952, min=0.0013, std=28.6845
+OrganSMNIST: 2026-02-22 16:13:57,298 [INFO] Iter=5300, size=5632, max=0.2259, avg=0.1182, min=0.0277, std=0.0320
+OrganSMNIST: 2026-02-22 16:13:57,298 [INFO] Iter=5300, real_fake_loss=0.3856
+OrganSMNIST: 2026-02-22 16:14:21,651 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:14:21,651 [INFO] Iter=5400, size=512, max=-1.9200, avg=-2.3846, min=-2.7492, std=0.1574
+OrganSMNIST: 2026-02-22 16:14:21,652 [INFO] Iter=5400, size=512, max=-1.4190, avg=-2.5458, min=-3.7570, std=0.4245
+OrganSMNIST: 2026-02-22 16:14:21,652 [INFO] Iter=5400, size=512, max=0.2539, avg=0.1814, min=0.0984, std=0.0252
+OrganSMNIST: 2026-02-22 16:14:21,652 [INFO] Iter=5400, size=512, max=0.0322, avg=0.0132, min=0.0036, std=0.0050
+OrganSMNIST: 2026-02-22 16:14:21,652 [INFO] Iter=5400, size=512, max=1.0000, avg=0.9930, min=0.8638, std=0.0168
+OrganSMNIST: 2026-02-22 16:14:21,652 [INFO] Iter=5400, size=512, max=0.1469, avg=0.0707, min=0.0021, std=0.0251
+OrganSMNIST: 2026-02-22 16:14:21,653 [INFO] Iter=5400, size=61952, max=100.0000, avg=9.4353, min=0.0047, std=28.6423
+OrganSMNIST: 2026-02-22 16:14:21,653 [INFO] Iter=5400, size=5632, max=0.2465, avg=0.1459, min=0.0264, std=0.0403
+OrganSMNIST: 2026-02-22 16:14:21,653 [INFO] Iter=5400, real_fake_loss=0.3378
+OrganSMNIST: 2026-02-22 16:14:46,035 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:14:46,035 [INFO] Iter=5500, size=512, max=-1.9503, avg=-2.2577, min=-2.6111, std=0.1204
+OrganSMNIST: 2026-02-22 16:14:46,035 [INFO] Iter=5500, size=512, max=-1.5017, avg=-2.3015, min=-3.5732, std=0.3405
+OrganSMNIST: 2026-02-22 16:14:46,036 [INFO] Iter=5500, size=512, max=0.2524, avg=0.1635, min=0.1006, std=0.0283
+OrganSMNIST: 2026-02-22 16:14:46,036 [INFO] Iter=5500, size=512, max=0.0314, avg=0.0131, min=0.0027, std=0.0045
+OrganSMNIST: 2026-02-22 16:14:46,036 [INFO] Iter=5500, size=512, max=1.0000, avg=0.9966, min=0.8053, std=0.0132
+OrganSMNIST: 2026-02-22 16:14:46,036 [INFO] Iter=5500, size=512, max=0.1618, avg=0.0649, min=0.0097, std=0.0231
+OrganSMNIST: 2026-02-22 16:14:46,036 [INFO] Iter=5500, size=61952, max=100.0000, avg=9.4284, min=0.0026, std=28.6437
+OrganSMNIST: 2026-02-22 16:14:46,036 [INFO] Iter=5500, size=5632, max=0.2605, avg=0.1412, min=0.0314, std=0.0337
+OrganSMNIST: 2026-02-22 16:14:46,037 [INFO] Iter=5500, real_fake_loss=0.3332
+OrganSMNIST: 2026-02-22 16:15:10,424 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:15:10,424 [INFO] Iter=5600, size=512, max=-1.9050, avg=-2.1559, min=-2.5582, std=0.1108
+OrganSMNIST: 2026-02-22 16:15:10,424 [INFO] Iter=5600, size=512, max=-1.5594, avg=-2.2590, min=-3.3516, std=0.3209
+OrganSMNIST: 2026-02-22 16:15:10,425 [INFO] Iter=5600, size=512, max=0.2237, avg=0.1292, min=0.0755, std=0.0276
+OrganSMNIST: 2026-02-22 16:15:10,425 [INFO] Iter=5600, size=512, max=0.0269, avg=0.0091, min=0.0021, std=0.0039
+OrganSMNIST: 2026-02-22 16:15:10,425 [INFO] Iter=5600, size=512, max=1.0000, avg=0.9996, min=0.9487, std=0.0032
+OrganSMNIST: 2026-02-22 16:15:10,425 [INFO] Iter=5600, size=512, max=0.1302, avg=0.0403, min=0.0000, std=0.0243
+OrganSMNIST: 2026-02-22 16:15:10,425 [INFO] Iter=5600, size=61952, max=100.0000, avg=9.3701, min=0.0024, std=28.6614
+OrganSMNIST: 2026-02-22 16:15:10,425 [INFO] Iter=5600, size=5632, max=0.2292, avg=0.1137, min=0.0319, std=0.0299
+OrganSMNIST: 2026-02-22 16:15:10,425 [INFO] Iter=5600, real_fake_loss=0.3364
+OrganSMNIST: 2026-02-22 16:15:34,892 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:15:34,892 [INFO] Iter=5700, size=512, max=-2.2743, avg=-2.5622, min=-2.9753, std=0.1222
+OrganSMNIST: 2026-02-22 16:15:34,892 [INFO] Iter=5700, size=512, max=-1.3328, avg=-2.0620, min=-3.6697, std=0.3983
+OrganSMNIST: 2026-02-22 16:15:34,892 [INFO] Iter=5700, size=512, max=0.2505, avg=0.1479, min=0.0830, std=0.0293
+OrganSMNIST: 2026-02-22 16:15:34,892 [INFO] Iter=5700, size=512, max=0.0322, avg=0.0141, min=0.0040, std=0.0047
+OrganSMNIST: 2026-02-22 16:15:34,892 [INFO] Iter=5700, size=512, max=1.0000, avg=0.9971, min=0.8789, std=0.0101
+OrganSMNIST: 2026-02-22 16:15:34,893 [INFO] Iter=5700, size=512, max=0.1152, avg=0.0358, min=0.0012, std=0.0200
+OrganSMNIST: 2026-02-22 16:15:34,893 [INFO] Iter=5700, size=61952, max=100.0000, avg=9.6083, min=0.0034, std=28.5890
+OrganSMNIST: 2026-02-22 16:15:34,893 [INFO] Iter=5700, size=5632, max=0.2349, avg=0.1082, min=0.0217, std=0.0330
+OrganSMNIST: 2026-02-22 16:15:34,893 [INFO] Iter=5700, real_fake_loss=0.3060
+OrganSMNIST: 2026-02-22 16:15:59,348 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:15:59,348 [INFO] Iter=5800, size=512, max=-2.2732, avg=-2.5549, min=-2.9202, std=0.0939
+OrganSMNIST: 2026-02-22 16:15:59,348 [INFO] Iter=5800, size=512, max=-1.1703, avg=-2.2003, min=-3.5232, std=0.4298
+OrganSMNIST: 2026-02-22 16:15:59,348 [INFO] Iter=5800, size=512, max=0.2521, avg=0.1589, min=0.0955, std=0.0277
+OrganSMNIST: 2026-02-22 16:15:59,348 [INFO] Iter=5800, size=512, max=0.0465, avg=0.0176, min=0.0041, std=0.0068
+OrganSMNIST: 2026-02-22 16:15:59,349 [INFO] Iter=5800, size=512, max=1.0000, avg=0.9935, min=0.8638, std=0.0164
+OrganSMNIST: 2026-02-22 16:15:59,349 [INFO] Iter=5800, size=512, max=0.1427, avg=0.0425, min=0.0000, std=0.0249
+OrganSMNIST: 2026-02-22 16:15:59,349 [INFO] Iter=5800, size=61952, max=100.0000, avg=9.6560, min=0.0067, std=28.5765
+OrganSMNIST: 2026-02-22 16:15:59,349 [INFO] Iter=5800, size=5632, max=0.2635, avg=0.1122, min=0.0252, std=0.0385
+OrganSMNIST: 2026-02-22 16:15:59,349 [INFO] Iter=5800, real_fake_loss=0.3255
+OrganSMNIST: 2026-02-22 16:16:23,658 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:16:23,658 [INFO] Iter=5900, size=512, max=-2.1033, avg=-2.4358, min=-2.7325, std=0.1093
+OrganSMNIST: 2026-02-22 16:16:23,658 [INFO] Iter=5900, size=512, max=-1.2192, avg=-2.0890, min=-3.7662, std=0.3968
+OrganSMNIST: 2026-02-22 16:16:23,659 [INFO] Iter=5900, size=512, max=0.2239, avg=0.1269, min=0.0718, std=0.0252
+OrganSMNIST: 2026-02-22 16:16:23,659 [INFO] Iter=5900, size=512, max=0.0332, avg=0.0131, min=0.0016, std=0.0053
+OrganSMNIST: 2026-02-22 16:16:23,659 [INFO] Iter=5900, size=512, max=1.0000, avg=0.9999, min=0.9842, std=0.0011
+OrganSMNIST: 2026-02-22 16:16:23,659 [INFO] Iter=5900, size=512, max=0.0915, avg=0.0344, min=0.0002, std=0.0204
+OrganSMNIST: 2026-02-22 16:16:23,659 [INFO] Iter=5900, size=61952, max=100.0000, avg=9.5189, min=0.0027, std=28.6159
+OrganSMNIST: 2026-02-22 16:16:23,660 [INFO] Iter=5900, size=5632, max=0.2162, avg=0.1045, min=0.0413, std=0.0277
+OrganSMNIST: 2026-02-22 16:16:23,660 [INFO] Iter=5900, real_fake_loss=0.3025
+OrganSMNIST: 2026-02-22 16:16:48,001 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:16:48,002 [INFO] Iter=6000, size=512, max=-1.8712, avg=-2.3109, min=-2.7889, std=0.1532
+OrganSMNIST: 2026-02-22 16:16:48,002 [INFO] Iter=6000, size=512, max=-1.3387, avg=-2.2033, min=-3.9422, std=0.4359
+OrganSMNIST: 2026-02-22 16:16:48,002 [INFO] Iter=6000, size=512, max=0.2529, avg=0.1451, min=0.0915, std=0.0278
+OrganSMNIST: 2026-02-22 16:16:48,002 [INFO] Iter=6000, size=512, max=0.0340, avg=0.0135, min=0.0033, std=0.0058
+OrganSMNIST: 2026-02-22 16:16:48,002 [INFO] Iter=6000, size=512, max=1.0000, avg=0.9993, min=0.9208, std=0.0048
+OrganSMNIST: 2026-02-22 16:16:48,003 [INFO] Iter=6000, size=512, max=0.1332, avg=0.0478, min=0.0050, std=0.0224
+OrganSMNIST: 2026-02-22 16:16:48,003 [INFO] Iter=6000, size=61952, max=100.0000, avg=9.4518, min=0.0044, std=28.6362
+OrganSMNIST: 2026-02-22 16:16:48,003 [INFO] Iter=6000, size=5632, max=0.2453, avg=0.1182, min=0.0324, std=0.0294
+OrganSMNIST: 2026-02-22 16:16:48,003 [INFO] Iter=6000, real_fake_loss=0.3112
+OrganSMNIST: 2026-02-22 16:17:12,318 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:17:12,318 [INFO] Iter=6100, size=512, max=-0.5685, avg=-1.3686, min=-2.2965, std=0.3336
+OrganSMNIST: 2026-02-22 16:17:12,318 [INFO] Iter=6100, size=512, max=-1.1958, avg=-2.0511, min=-3.5249, std=0.3795
+OrganSMNIST: 2026-02-22 16:17:12,318 [INFO] Iter=6100, size=512, max=0.1884, avg=0.1228, min=0.0688, std=0.0234
+OrganSMNIST: 2026-02-22 16:17:12,319 [INFO] Iter=6100, size=512, max=0.0417, avg=0.0167, min=0.0006, std=0.0084
+OrganSMNIST: 2026-02-22 16:17:12,319 [INFO] Iter=6100, size=512, max=1.0000, avg=0.9588, min=0.2668, std=0.1009
+OrganSMNIST: 2026-02-22 16:17:12,319 [INFO] Iter=6100, size=512, max=0.0867, avg=0.0292, min=0.0000, std=0.0212
+OrganSMNIST: 2026-02-22 16:17:12,319 [INFO] Iter=6100, size=61952, max=100.0000, avg=9.6359, min=0.0013, std=28.5822
+OrganSMNIST: 2026-02-22 16:17:12,320 [INFO] Iter=6100, size=5632, max=0.1995, avg=0.0931, min=0.0064, std=0.0372
+OrganSMNIST: 2026-02-22 16:17:12,320 [INFO] Iter=6100, real_fake_loss=0.3930
+OrganSMNIST: 2026-02-22 16:17:36,675 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:17:36,675 [INFO] Iter=6200, size=512, max=-0.9842, avg=-1.8148, min=-2.4046, std=0.2520
+OrganSMNIST: 2026-02-22 16:17:36,675 [INFO] Iter=6200, size=512, max=-0.9878, avg=-2.2244, min=-3.9637, std=0.4678
+OrganSMNIST: 2026-02-22 16:17:36,675 [INFO] Iter=6200, size=512, max=0.1976, avg=0.1214, min=0.0395, std=0.0290
+OrganSMNIST: 2026-02-22 16:17:36,675 [INFO] Iter=6200, size=512, max=0.0418, avg=0.0156, min=0.0005, std=0.0075
+OrganSMNIST: 2026-02-22 16:17:36,675 [INFO] Iter=6200, size=512, max=1.0000, avg=0.9679, min=0.3460, std=0.0898
+OrganSMNIST: 2026-02-22 16:17:36,675 [INFO] Iter=6200, size=512, max=0.1234, avg=0.0462, min=0.0000, std=0.0274
+OrganSMNIST: 2026-02-22 16:17:36,676 [INFO] Iter=6200, size=61952, max=100.0000, avg=9.5490, min=0.0031, std=28.6077
+OrganSMNIST: 2026-02-22 16:17:36,676 [INFO] Iter=6200, size=5632, max=0.2079, avg=0.0979, min=0.0109, std=0.0378
+OrganSMNIST: 2026-02-22 16:17:36,676 [INFO] Iter=6200, real_fake_loss=0.3623
+OrganSMNIST: 2026-02-22 16:18:00,988 [INFO] Generator:
+OrganSMNIST: 2026-02-22 16:18:00,988 [INFO] Iter=6300, size=512, max=-1.1213, avg=-1.5545, min=-2.0790, std=0.1798
+OrganSMNIST: 2026-02-22 16:18:00,988 [INFO] Iter=6300, size=512, max=-1.3927, avg=-2.3388, min=-3.5833, std=0.4000
+OrganSMNIST: 2026-02-22 16:18:00,988 [INFO] Iter=6300, size=512, max=0.2057, avg=0.1142, min=0.0375, std=0.0296
+OrganSMNIST: 2026-02-22 16:18:00,989 [INFO] Iter=6300, size=512, max=0.0291, avg=0.0101, min=0.0003, std=0.0054
+OrganSMNIST: 2026-02-22 16:18:00,989 [INFO] Iter=6300, size=512, max=1.0000, avg=0.9538, min=0.2131, std=0.1242
+OrganSMNIST: 2026-02-22 16:18:00,989 [INFO] Iter=6300, size=512, max=0.0920, avg=0.0297, min=0.0000, std=0.0206
+OrganSMNIST: 2026-02-22 16:18:00,989 [INFO] Iter=6300, size=61952, max=100.0000, avg=9.4612, min=0.0038, std=28.6337
+OrganSMNIST: 2026-02-22 16:18:00,989 [INFO] Iter=6300, size=5632, max=0.1823, avg=0.0813, min=0.0066, std=0.0303
+OrganSMNIST: 2026-02-22 16:18:00,989 [INFO] Iter=6300, real_fake_loss=0.3810

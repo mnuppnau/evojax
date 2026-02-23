@@ -124,8 +124,11 @@ class ParameterAdapter:
             layer_ids_list.append(np.full(n_chunks, layer_idx))
             chunk_ids_list.append(np.arange(n_chunks))
 
-        self.layer_ids = jnp.array(np.concatenate(layer_ids_list))
-        self.chunk_ids = jnp.array(np.concatenate(chunk_ids_list))
+        layer_ids_np = np.concatenate(layer_ids_list).astype(np.int32)
+        chunk_ids_np = np.concatenate(chunk_ids_list).astype(np.int32)
+
+        self.layer_ids = jnp.array(layer_ids_np)
+        self.chunk_ids = jnp.array(chunk_ids_np)
         self.total_chunks = len(self.layer_ids)
         
         # --- C. Define Geometric Context (The New Part) ---
@@ -149,8 +152,10 @@ class ParameterAdapter:
         self.split_indices = np.cumsum(self.param_sizes)[:-1]
 
         # --- D. Input Dimensions ---
-        self.N_LAYERS = 20   
-        self.N_CHUNKS = 100  
+        # Derive embedding sizes from the actual generator parameter layout.
+        # This avoids silent truncation when capacity changes increase chunks.
+        self.N_LAYERS = int(layer_ids_np.max()) + 1
+        self.N_CHUNKS = int(chunk_ids_np.max()) + 1
         # +2 comes from the new Depth and Scale features
         self.INPUT_DIM = self.N_LAYERS + self.N_CHUNKS + 2 
 

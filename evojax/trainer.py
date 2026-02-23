@@ -1014,6 +1014,27 @@ class Trainer(object):
         self._checkpoint_dir = checkpoint_dir or (os.path.join(log_dir, 'checkpoints') if log_dir else None)
         self._checkpoint_interval = checkpoint_interval
         self._resume_from = resume_from
+        self._metrics_tsv_path = os.path.join(log_dir, 'metrics.tsv') if log_dir else None
+        self._ks_tsv_path = os.path.join(log_dir, 'ks_weights.tsv') if log_dir else None
+        self._metrics_tsv_header = [
+            'iter',
+            'adv_max', 'adv_avg', 'adv_min', 'adv_std',
+            'mi_max', 'mi_avg', 'mi_min', 'mi_std',
+            'r_cons_avg', 'r_sense_avg', 'r_intra_avg', 'r_shape_div_avg', 'r_shape_div_min_avg',
+            'norm_pen_avg', 'safety_avg', 'spread_avg',
+            'real_fake_loss',
+            'ca_blend', 'ca_rfl_gate', 'ca_has_data', 'ks_winner',
+        ]
+        self._ks_tsv_header = [
+            'iter',
+            'adv_short', 'mi_short', 'adv_med', 'mi_med', 'ent_long',
+            'sense_short', 'intra_short', 'adv_avg_short', 'sense_med', 'shape_short', 'shape_med', 'shape_div_avg', 'shape_div_min_avg', 'shape_div_score_avg',
+            'w_adv', 'w_mi', 'w_div', 'w_sense', 'w_intra', 'w_shape', 'mi_guard', 'w_cons_floor', 'w_norm',
+            'ks_dom_score', 'ks_sit_score', 'ks_hist_score', 'ks_topo_score',
+            'ks_dom_weight', 'ks_sit_weight', 'ks_hist_weight', 'ks_topo_weight',
+            'ks_winner',
+            'ks_win_dom', 'ks_win_sit', 'ks_win_hist', 'ks_win_topo',
+        ]
 
         self._log_scores_fn = log_scores_fn or (lambda x, y, z: None)
 
@@ -1057,6 +1078,166 @@ class Trainer(object):
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
         self.solver_disc = optax.adam(learning_rate=0.0001, b1=0.5, b2=0.999)
+
+    def _init_structured_logs(self, resume_mode: bool) -> None:
+        if self._log_dir is None:
+            return
+        os.makedirs(self._log_dir, exist_ok=True)
+
+        def _ensure_file(path, header, append):
+            if path is None:
+                return
+            file_exists = os.path.exists(path)
+            mode = 'a' if append else 'w'
+            if (not file_exists) and append:
+                mode = 'w'
+            with open(path, mode, encoding='utf-8') as fp:
+                if (not file_exists) or mode == 'w':
+                    fp.write('\t'.join(header) + '\n')
+
+        _ensure_file(self._metrics_tsv_path, self._metrics_tsv_header, append=resume_mode)
+        _ensure_file(self._ks_tsv_path, self._ks_tsv_header, append=resume_mode)
+
+    @staticmethod
+    def _to_scalar(value, default=np.nan) -> float:
+        if value is None:
+            return float(default)
+        arr = np.asarray(value)
+        if arr.size == 0:
+            return float(default)
+        if arr.ndim == 0:
+            return float(arr)
+        return float(arr.reshape(-1)[0])
+
+    @staticmethod
+    def _nan_stat(arr, fn_name: str) -> float:
+        arr = np.asarray(arr, dtype=np.float64)
+        if arr.size == 0:
+            return float(np.nan)
+        fn = getattr(np, fn_name)
+        return float(fn(arr))
+
+    @staticmethod
+    def _format_tsv_value(value) -> str:
+        arr = np.asarray(value)
+        if arr.ndim == 0:
+            v = float(arr)
+            if np.isnan(v):
+                return 'nan'
+            if np.isinf(v):
+                return 'inf' if v > 0 else '-inf'
+            return f'{v:.6f}'
+        return str(arr.tolist())
+
+    def _append_tsv_row(self, path: Optional[str], row_values) -> None:
+        if path is None:
+            return
+        with open(path, 'a', encoding='utf-8') as fp:
+            fp.write('\t'.join(self._format_tsv_value(v) for v in row_values) + '\n')
+
+    def _write_structured_rows(
+            self,
+            iteration: int,
+            scores_gen_adv: np.ndarray,
+            scores_gen_mi: np.ndarray,
+            r_cons: np.ndarray,
+            r_sense: np.ndarray,
+            r_intra: np.ndarray,
+            r_shape_div: np.ndarray,
+            r_shape_div_min: np.ndarray,
+            norm_pen: np.ndarray,
+            safety_ratios: np.ndarray,
+            spreads: np.ndarray,
+            real_fake_loss: float) -> None:
+        if self._metrics_tsv_path is None or self._ks_tsv_path is None:
+            return
+
+        diagnostics = {}
+        if hasattr(self.solver_hn, 'get_diagnostics'):
+            try:
+                diagnostics = self.solver_hn.get_diagnostics() or {}
+            except Exception as err:
+                self._logger.warning('Structured diagnostics unavailable at iter %d: %s', iteration, err)
+
+        metrics_row = [
+            iteration,
+            self._nan_stat(scores_gen_adv, 'nanmax'),
+            self._nan_stat(scores_gen_adv, 'nanmean'),
+            self._nan_stat(scores_gen_adv, 'nanmin'),
+            self._nan_stat(scores_gen_adv, 'nanstd'),
+            self._nan_stat(scores_gen_mi, 'nanmax'),
+            self._nan_stat(scores_gen_mi, 'nanmean'),
+            self._nan_stat(scores_gen_mi, 'nanmin'),
+            self._nan_stat(scores_gen_mi, 'nanstd'),
+            self._nan_stat(r_cons, 'nanmean'),
+            self._nan_stat(r_sense, 'nanmean'),
+            self._nan_stat(r_intra, 'nanmean'),
+            self._nan_stat(r_shape_div, 'nanmean'),
+            self._nan_stat(r_shape_div_min, 'nanmean'),
+            self._nan_stat(norm_pen, 'nanmean'),
+            self._nan_stat(safety_ratios, 'nanmean'),
+            self._nan_stat(spreads, 'nanmean'),
+            float(real_fake_loss),
+            self._to_scalar(diagnostics.get('ca_blend')),
+            self._to_scalar(diagnostics.get('ca_rfl_gate')),
+            self._to_scalar(diagnostics.get('ca_has_data')),
+            self._to_scalar(diagnostics.get('ks_winner')),
+        ]
+        self._append_tsv_row(self._metrics_tsv_path, metrics_row)
+
+        ks_winner_counts = diagnostics.get('ks_winner_counts')
+        if ks_winner_counts is None:
+            ks_winner_counts = np.array([np.nan, np.nan, np.nan, np.nan], dtype=np.float64)
+        else:
+            ks_winner_counts = np.asarray(ks_winner_counts, dtype=np.float64).reshape(-1)
+            if ks_winner_counts.size < 4:
+                ks_winner_counts = np.pad(
+                    ks_winner_counts,
+                    (0, 4 - ks_winner_counts.size),
+                    mode='constant',
+                    constant_values=np.nan
+                )
+
+        ks_row = [
+            iteration,
+            self._to_scalar(diagnostics.get('adv_short')),
+            self._to_scalar(diagnostics.get('mi_short')),
+            self._to_scalar(diagnostics.get('adv_med')),
+            self._to_scalar(diagnostics.get('mi_med')),
+            self._to_scalar(diagnostics.get('ent_long')),
+            self._to_scalar(diagnostics.get('sense_short')),
+            self._to_scalar(diagnostics.get('intra_short')),
+            self._to_scalar(diagnostics.get('adv_avg_short')),
+            self._to_scalar(diagnostics.get('sense_med')),
+            self._to_scalar(diagnostics.get('shape_short')),
+            self._to_scalar(diagnostics.get('shape_med')),
+            self._to_scalar(diagnostics.get('shape_div_avg')),
+            self._to_scalar(diagnostics.get('shape_div_min_avg')),
+            self._to_scalar(diagnostics.get('shape_div_score_avg')),
+            self._to_scalar(diagnostics.get('w_adv')),
+            self._to_scalar(diagnostics.get('w_mi')),
+            self._to_scalar(diagnostics.get('w_div')),
+            self._to_scalar(diagnostics.get('w_sense')),
+            self._to_scalar(diagnostics.get('w_intra')),
+            self._to_scalar(diagnostics.get('w_shape')),
+            self._to_scalar(diagnostics.get('mi_guard')),
+            self._to_scalar(diagnostics.get('w_cons_floor')),
+            self._to_scalar(diagnostics.get('w_norm')),
+            self._to_scalar(diagnostics.get('ks_dom_score')),
+            self._to_scalar(diagnostics.get('ks_sit_score')),
+            self._to_scalar(diagnostics.get('ks_hist_score')),
+            self._to_scalar(diagnostics.get('ks_topo_score')),
+            self._to_scalar(diagnostics.get('ks_dom_weight')),
+            self._to_scalar(diagnostics.get('ks_sit_weight')),
+            self._to_scalar(diagnostics.get('ks_hist_weight')),
+            self._to_scalar(diagnostics.get('ks_topo_weight')),
+            self._to_scalar(diagnostics.get('ks_winner')),
+            self._to_scalar(ks_winner_counts[0]),
+            self._to_scalar(ks_winner_counts[1]),
+            self._to_scalar(ks_winner_counts[2]),
+            self._to_scalar(ks_winner_counts[3]),
+        ]
+        self._append_tsv_row(self._ks_tsv_path, ks_row)
 
     def run(self, demo_mode: bool = False) -> float:
 
@@ -1113,6 +1294,8 @@ class Trainer(object):
                     logger=self._logger,
                 )
                 start_iter += 1  # Resume from the next iteration
+
+            self._init_structured_logs(resume_mode=(start_iter > 0))
            
             num_mini_batches = self.num_mini_batches
            
@@ -1186,6 +1369,10 @@ class Trainer(object):
                 leaves_batch_stats_disc, _ = jax.tree_flatten(self.batch_stats_disc)
                 flat_batch_stats_disc = jnp.concatenate([p.flatten() for p in leaves_batch_stats_disc])
 
+                # Feed discriminator health into CA blend gating (if supported).
+                if hasattr(self.solver_hn, 'set_runtime_metrics'):
+                    self.solver_hn.set_runtime_metrics(real_fake_loss=float(real_fake_loss))
+
                 params_hn, belief_space = self.solver_hn.ask()
                 
                 topographic_ks = belief_space[4]
@@ -1194,7 +1381,7 @@ class Trainer(object):
                 #jax.debug.print('topographic_ks shape: {} ', topographic_ks.shape)
                 #avg_per_code = topographic_ks[0]
                 
-                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, norm_pen, safety_ratios, spreads = self.sim_mgr_gen.eval_params(
+                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, norm_pen, safety_ratios, spreads = self.sim_mgr_gen.eval_params(
                 params_gen=params_hn, params_disc=flat_params_disc, batch_stats_disc=flat_batch_stats_disc, topographic_ks=topographic_ks, normative_ks=normative_ks, generator=True, test=False
                 )
 
@@ -1202,7 +1389,7 @@ class Trainer(object):
                 if isinstance(self.solver_hn, QualityDiversityMethod):
                     self.solver_hn.observe_bd(bds_gen)
                 
-                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, normative_penalty=norm_pen, safety_ratios=safety_ratios, spreads=spreads, adv=False)
+                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, r_shape_div=r_shape_div, r_shape_div_min=r_shape_div_min, normative_penalty=norm_pen, safety_ratios=safety_ratios, spreads=spreads, adv=False)
 
                 
                 self.avg_mi_loss = jnp.mean(scores_gen_mi)
@@ -1251,6 +1438,20 @@ class Trainer(object):
                             i, r_intra.size, r_intra.max(), r_intra.mean(),
                             r_intra.min(), r_intra.std()))
 
+                    r_shape_div = np.array(r_shape_div)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, r_shape_div.size, r_shape_div.max(), r_shape_div.mean(),
+                            r_shape_div.min(), r_shape_div.std()))
+
+                    r_shape_div_min = np.array(r_shape_div_min)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, r_shape_div_min.size, r_shape_div_min.max(), r_shape_div_min.mean(),
+                            r_shape_div_min.min(), r_shape_div_min.std()))
+
                     norm_pen = np.array(norm_pen)
                     self._logger.info(
                         'Iter={0}, size={1}, max={2:.4f}, '
@@ -1275,6 +1476,21 @@ class Trainer(object):
                     self._logger.info(
                         'Iter={0}, real_fake_loss={1:.4f}'.format(
                             i, real_fake_loss))
+
+                    self._write_structured_rows(
+                        iteration=i,
+                        scores_gen_adv=scores_gen_adv,
+                        scores_gen_mi=scores_mi,
+                        r_cons=r_cons,
+                        r_sense=r_sense,
+                        r_intra=r_intra,
+                        r_shape_div=r_shape_div,
+                        r_shape_div_min=r_shape_div_min,
+                        norm_pen=norm_pen,
+                        safety_ratios=safety_ratios,
+                        spreads=spreads,
+                        real_fake_loss=float(real_fake_loss),
+                    )
                     
                     #with open('/home/gh0st/Downloads/pgpe_main.csv', 'a') as file:
                         #file.write(f'Iter: {i}, Max: {scores.max()}, Mean: {scores.mean()}, Std: {scores.std()}, Min: {scores.min()}\n')

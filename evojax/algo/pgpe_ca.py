@@ -45,6 +45,12 @@ from evojax.algo.cultural.knowledge_sources import (
 )
 
 from evojax.algo.cultural.helper_functions import non_dominated_sort_lax
+from evojax.algo.cultural.helper_functions import (
+    situational_score,
+    historical_score,
+    topographic_score,
+    domain_score,
+)
 from evojax.algo.cultural.population_space import update_population
 
 try:
@@ -242,6 +248,12 @@ class PGPE(NEAlgorithm):
         solution_ranking: bool = True,
         seed: int = 0,
         belief_space: jnp.ndarray = None,
+        ca_blend_coeff: float = 0.05,
+        ca_blend_start_iter: int = 0,
+        ca_blend_ramp_iters: int = 1,
+        ca_blend_rfl_lo: float = -1.0,
+        ca_blend_rfl_hi: float = -1.0,
+        shape_div_weight: float = 0.12,
         logger: logging.Logger = None,
     ):
         """Initialization function.
@@ -261,6 +273,12 @@ class PGPE(NEAlgorithm):
             stdev_max_change - Maximum allowed change for stdev in abs values.
             solution_ranking - Should we treat the fitness as rankings or not.
             seed - Random seed for parameters sampling.
+            ca_blend_coeff - Maximum CA gradient blend ratio when CA data is valid.
+            ca_blend_start_iter - Iteration to start ramping CA blend.
+            ca_blend_ramp_iters - Ramp length for CA blend schedule.
+            ca_blend_rfl_lo - Optional lower bound of real_fake_loss gate.
+            ca_blend_rfl_hi - Optional upper bound of real_fake_loss gate.
+            shape_div_weight - Weight for conditional shape diversity reward.
         """
 
         if logger is None:
@@ -277,6 +295,15 @@ class PGPE(NEAlgorithm):
                 )
             )
         self._num_directions = self.pop_size // 2
+        self._ca_blend_coeff = float(max(ca_blend_coeff, 0.0))
+        self._ca_blend_start_iter = int(max(ca_blend_start_iter, 0))
+        self._ca_blend_ramp_iters = int(max(ca_blend_ramp_iters, 1))
+        self._ca_blend_rfl_lo = float(ca_blend_rfl_lo)
+        self._ca_blend_rfl_hi = float(ca_blend_rfl_hi)
+        self._shape_div_weight = float(max(shape_div_weight, 0.0))
+        self._runtime_real_fake_loss = np.nan
+        self._debug_last = {}
+        self._ks_winner_counts = np.zeros((4,), dtype=np.int64)
 
         self.MIN_DIVERSITY = 0.005
 
@@ -340,6 +367,23 @@ class PGPE(NEAlgorithm):
         self.belief_space = belief_space if belief_space is not None else initialize_belief_space(
             population_size=self.pop_size, param_size=abs(param_size), key=subkey)
 
+    def set_runtime_metrics(self, real_fake_loss: Optional[float] = None) -> None:
+        """Pass training-loop runtime metrics into PGPE_CA adaptive controls."""
+        if real_fake_loss is not None:
+            self._runtime_real_fake_loss = float(real_fake_loss)
+
+    def get_diagnostics(self) -> dict:
+        """Return lightweight runtime diagnostics for structured logging."""
+        diag = {}
+        for key, value in self._debug_last.items():
+            arr = np.asarray(value)
+            if arr.ndim == 0:
+                diag[key] = float(arr)
+            else:
+                diag[key] = arr.astype(np.float64)
+        diag["ks_winner_counts"] = self._ks_winner_counts.copy()
+        return diag
+
     def get_top_idx(self) -> jnp.ndarray:
         """Get the index of the top solution."""
         return self._top_indices
@@ -366,7 +410,7 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], safety_ratios: Union[np.ndarray, jnp.ndarray], spreads: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], r_shape_div: Union[np.ndarray, jnp.ndarray], r_shape_div_min: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], safety_ratios: Union[np.ndarray, jnp.ndarray], spreads: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
 
        
         #if avg_r_anchor < 0.0009:
@@ -735,7 +779,18 @@ class PGPE(NEAlgorithm):
         # Compute metric slopes from CA belief space
         slopes = compute_metric_slopes(self.belief_space)
         (adv_short, mi_short, adv_med, mi_med, ent_long,
-         sense_short, intra_short, adv_avg_short, sense_med) = slopes
+         sense_short, intra_short, adv_avg_short, sense_med, shape_short, shape_med) = slopes
+
+        # Mirror KS scoring used by the guidance functions for structured logs.
+        ks_dom_score = domain_score(adv_med, mi_med, ent_long)
+        ks_sit_score = situational_score(adv_short, mi_short)
+        ks_hist_score = historical_score(ent_long, adv_short)
+        ks_topo_score = topographic_score(ent_long, adv_med)
+        ks_scores = jnp.array(
+            [ks_dom_score, ks_sit_score, ks_hist_score, ks_topo_score],
+            dtype=jnp.float32,
+        )
+        ks_weights_dbg = jax.nn.softmax(ks_scores / 2.0)
 
         # CA adaptation: adjust weights based on detected trends.
         # Positive slope = metric improving, Negative = metric declining.
@@ -747,33 +802,64 @@ class PGPE(NEAlgorithm):
         w_adv = w_adv_base + adv_distress
         w_div = w_div_base - adv_distress * 0.5  # ease off diversity when D is crushing
 
-        # 2. If r_sense is spiking too fast (divergence precursor), reduce w_sense
+        # 2. If MI quality is stalling/declining, temporarily increase MI pressure.
+        #    This is intentionally conservative: we only add up to +0.20.
+        mi_distress_short = jnp.clip(-mi_short * 30.0, 0.0, 0.15)
+        mi_distress_med = jnp.clip(-mi_med * 20.0, 0.0, 0.10)
+        mi_distress = jnp.clip(mi_distress_short + mi_distress_med, 0.0, 0.20)
+        w_mi = w_mi_base + mi_distress
+        # When MI is in distress, ease off pixel diversity slightly so pressure
+        # shifts toward informative code alignment instead of texture variance.
+        w_div = w_div - mi_distress * 0.25
+
+        # 3. If r_sense is spiking too fast (divergence precursor), reduce w_sense
         #    sense_short > 0 means separation is increasing (good, but too fast = bad)
         sense_overshoot = jnp.clip(sense_short * 100.0 - 0.5, 0.0, 0.08)
-        w_sense = w_sense_base - sense_overshoot
+        # If separation stays weak, give a modest sense boost.
+        sense_target = 0.03
+        sense_mean = jnp.mean(r_sense)
+        sense_deficit = jnp.clip((sense_target - sense_mean) * 2.5, 0.0, 0.08)
+        sense_decline = jnp.clip(-sense_med * 25.0, 0.0, 0.05)
+        w_sense = w_sense_base - sense_overshoot + sense_deficit + sense_decline
 
-        # 3. If r_intra is dropping (within-code variation collapsing), boost w_intra
+        # 4. If r_intra is dropping (within-code variation collapsing), boost w_intra
         #    so PGPE rewards members that maintain within-code variety (use z-noise)
         intra_distress = jnp.clip(-intra_short * 100.0, 0.0, 0.15)
         w_intra_base = 0.15
         w_intra = w_intra_base + intra_distress  # CA boosts when codes are tightening
+        # 4b. Conditional shape-diversity pressure: increase when shape-div
+        # trend is declining; keep strict caps to avoid destabilizing adv.
+        shape_distress = jnp.clip(-shape_short * 30.0, 0.0, 0.10)
+        shape_relief = jnp.clip(shape_short * 15.0, 0.0, 0.04)
+        w_shape = self._shape_div_weight + shape_distress - shape_relief
+        w_shape = jnp.clip(w_shape, 0.02, 0.20)
 
-        # 4. r_cons floor penalty: penalize only when centroid consistency drops
+        # 5. r_cons floor penalty: penalize only when centroid consistency drops
         #    below a minimum threshold. This prevents drift without over-anchoring.
         cons_floor = 0.05
         cons_shortfall = jnp.maximum(0.0, cons_floor - r_cons)  # per-member penalty
         w_cons_floor = 0.1
 
-        # 5. MI weight stays stable (less sensitive to short-term dynamics)
-        w_mi = w_mi_base
-
         # Ensure no weight goes negative
         w_adv = jnp.maximum(w_adv, 0.1)
         w_div = jnp.maximum(w_div, 0.1)
-        w_sense = jnp.maximum(w_sense, 0.02)
+        w_mi = jnp.clip(w_mi, 0.05, 0.35)
+        w_sense = jnp.clip(w_sense, 0.02, 0.25)
+
+        # MI guard: when worst-code shape diversity collapses, reduce MI
+        # pressure so optimization cannot improve MI by prototype collapse.
+        shape_min_pop = jnp.mean(r_shape_div_min)
+        shape_min_target = 0.10
+        mi_guard = jnp.clip((shape_min_target - shape_min_pop) * 3.0, 0.0, 0.12)
+        w_mi = jnp.clip(w_mi - mi_guard, 0.05, 0.35)
+        w_shape = jnp.clip(w_shape + (mi_guard * 0.5), 0.02, 0.20)
 
         # Normative: keep low
         w_norm = w_norm_base * ca_weight
+
+        # Collapse-sensitive conditional diversity score:
+        # prioritize the worst code while retaining global mean.
+        shape_score = 0.7 * r_shape_div_min + 0.3 * r_shape_div
 
         # 3. Calculate Fitness (all rank_normalize for scale parity)
         fitness_scores = (
@@ -782,6 +868,7 @@ class PGPE(NEAlgorithm):
             + (rank_normalize(r_sense) * w_sense)          # Feature-space code separation
             + (rank_normalize(pop_var) * w_div)            # Pixel-space code diversity
             + (rank_normalize(r_intra) * w_intra)          # Within-code variation (use z-noise)
+            + (rank_normalize(shape_score) * w_shape)      # Conditional shape variation (min+mean)
             - (rank_normalize(cons_shortfall) * w_cons_floor) # Penalize centroid drift below floor
             - (rank_normalize(normative_penalty) * w_norm) # Safety/spread limits
         )
@@ -793,8 +880,22 @@ class PGPE(NEAlgorithm):
         #fitness_scores = fitness_adv + fitness_mi*0.18 + fitness_con*0.013 # + r_sense - normative_penalty*w_norm - r_cons*0.1
         #else:#if self._t < 160000:
         #cultural_score = r_sense + r_intra + r_cons + fitness_con
-        spreads = spreads.reshape(512, 11, 1)
-        safety_ratios = safety_ratios.reshape(512, 11, 11)
+        # Keep reshaping population metrics dynamic so experiments with
+        # different population sizes / class counts do not require code edits.
+        n_members = fitness_scores.shape[0]
+
+        if spreads.ndim == 1:
+            n_codes = max(spreads.shape[0] // n_members, 1)
+            spreads = spreads.reshape((n_members, n_codes, 1))
+        elif spreads.ndim == 2 and spreads.shape[0] == n_members:
+            spreads = spreads[:, :, None]
+
+        if safety_ratios.ndim == 1:
+            n_codes = max(int(np.sqrt(safety_ratios.shape[0] // n_members)), 1)
+            safety_ratios = safety_ratios.reshape((n_members, n_codes, n_codes))
+        elif safety_ratios.ndim == 2 and safety_ratios.shape[0] == n_members:
+            n_codes = max(int(np.sqrt(safety_ratios.shape[1])), 1)
+            safety_ratios = safety_ratios.reshape((n_members, n_codes, n_codes))
 
         self.belief_space = update_normative_ks(
             self.belief_space,
@@ -819,10 +920,19 @@ class PGPE(NEAlgorithm):
         best_fitness_combined = jnp.array([fitness_scores.flatten()[best_idx]])
         best_r_sense = jnp.array([r_sense.flatten()[best_idx]])
         best_r_cons = jnp.array([r_cons.flatten()[best_idx]])
+        best_r_shape_div = jnp.array([shape_score.flatten()[best_idx]])
 
-        # Population-level entropy proxy from disc_logits (averaged across individuals and samples)
-        mean_disc_logit = jnp.mean(disc_logits, axis=(0, 1))  # (11,) avg class probs
-        pop_entropy = jnp.sum(-jnp.log(mean_disc_logit + 1e-8) * mean_disc_logit)
+        # Population-level entropy proxy from discriminator class scores.
+        # Convert scores -> probabilities first to avoid log of negative values.
+        mean_disc_scores = jnp.mean(disc_logits, axis=(0, 1))  # (n_codes,)
+        mean_disc_probs = jax.nn.softmax(
+            jnp.nan_to_num(mean_disc_scores, nan=0.0, posinf=0.0, neginf=0.0)
+        )
+        mean_disc_probs = jnp.clip(mean_disc_probs, 1e-8, 1.0)
+        mean_disc_probs = mean_disc_probs / jnp.maximum(jnp.sum(mean_disc_probs), 1e-8)
+        pop_entropy = -jnp.sum(mean_disc_probs * jnp.log(mean_disc_probs))
+        default_entropy = jnp.log(jnp.array(mean_disc_probs.shape[0], dtype=mean_disc_probs.dtype))
+        pop_entropy = jnp.where(jnp.isfinite(pop_entropy), pop_entropy, default_entropy)
 
         # Update metric history (rolling buffer for slope computation)
         self.belief_space = update_metric_history(
@@ -833,27 +943,28 @@ class PGPE(NEAlgorithm):
             jnp.max(r_sense),
             avg_r_intra=jnp.mean(r_intra),
             avg_fitness_adv=jnp.mean(fitness_adv),
+            avg_r_shape_div=jnp.mean(shape_score),
         )
 
         # Domain KS: Pareto front with GAN diagnostic metadata (r_sense, r_cons)
         self.belief_space = update_domain_ks(
             self.belief_space, best_solution, self._stdev,
             best_scaled_noise, best_fitness_adv, best_fitness_mi,
-            best_fitness_combined, mean_disc_logit, best_r_sense, best_r_cons
+            best_fitness_combined, mean_disc_scores, best_r_sense, best_r_cons, best_r_shape_div
         )
 
         # Situational KS: tracks the single best solution (most exploitative)
         self.belief_space = update_situational_ks(
             self.belief_space, best_solution, self._stdev,
             best_scaled_noise, best_fitness_adv, best_fitness_mi,
-            best_fitness_combined, mean_disc_logit
+            best_fitness_combined, mean_disc_scores
         )
 
         # Historical KS: archive of best solutions across generations
         self.belief_space = update_history_ks(
             self.belief_space, best_solution, self._stdev,
             best_scaled_noise, best_fitness_adv, best_fitness_mi,
-            best_fitness_combined, mean_disc_logit
+            best_fitness_combined, mean_disc_scores
         )
 
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,False)
@@ -885,9 +996,32 @@ class PGPE(NEAlgorithm):
         ca_grad_center = jnp.nan_to_num(ca_grad_center, nan=0.0)
         ca_grad_stdev = jnp.nan_to_num(ca_grad_stdev, nan=0.0)
 
-        # Only blend when archives have real, non-zero data
+        # Only blend when archives have real, non-zero data.
         has_ca_data = jnp.any(ca_center_g != 0.0) & jnp.all(jnp.isfinite(ca_center_g))
-        ca_blend = 0.05 * jnp.float32(has_ca_data)
+        # Delay + ramp the CA blend so early adversarial alignment is learned
+        # from REINFORCE first, then CA guidance phases in.
+        blend_progress = jnp.clip(
+            (self._t - self._ca_blend_start_iter) / float(self._ca_blend_ramp_iters),
+            0.0,
+            1.0,
+        )
+        blend_target = self._ca_blend_coeff * blend_progress
+
+        # Optional runtime gate from discriminator health.
+        # Gate is active only if both bounds are valid and ordered.
+        rfl_gate = jnp.float32(1.0)
+        if self._ca_blend_rfl_hi > self._ca_blend_rfl_lo >= 0.0:
+            rfl = jnp.array(self._runtime_real_fake_loss, dtype=jnp.float32)
+            finite = jnp.isfinite(rfl)
+            # Soft shoulders around [lo, hi] to avoid on/off jitter.
+            shoulder = jnp.float32(0.05)
+            lo = jnp.float32(self._ca_blend_rfl_lo)
+            hi = jnp.float32(self._ca_blend_rfl_hi)
+            gate_low = jnp.clip((rfl - (lo - shoulder)) / shoulder, 0.0, 1.0)
+            gate_high = jnp.clip(((hi + shoulder) - rfl) / shoulder, 0.0, 1.0)
+            rfl_gate = jnp.where(finite, jnp.minimum(gate_low, gate_high), 0.0)
+
+        ca_blend = blend_target * jnp.float32(has_ca_data) * rfl_gate
 
         # Scale CA direction to match REINFORCE gradient magnitude so the
         # blend ratio is meaningful.  ClipUp normalizes center grad anyway;
@@ -914,6 +1048,48 @@ class PGPE(NEAlgorithm):
             (1.0 - ca_blend) * grad_stdev + ca_blend * ca_grad_stdev,
             grad_stdev
         )
+
+        # Cache diagnostics for trainer-side structured TSV logging.
+        ks_winner_idx = int(np.asarray(ks_winner))
+        if 0 <= ks_winner_idx < self._ks_winner_counts.size:
+            self._ks_winner_counts[ks_winner_idx] += 1
+        self._debug_last = {
+            "adv_short": adv_short,
+            "mi_short": mi_short,
+            "adv_med": adv_med,
+            "mi_med": mi_med,
+            "ent_long": ent_long,
+            "sense_short": sense_short,
+            "intra_short": intra_short,
+            "adv_avg_short": adv_avg_short,
+            "sense_med": sense_med,
+            "shape_short": shape_short,
+            "shape_med": shape_med,
+            "w_adv": w_adv,
+            "w_mi": w_mi,
+            "w_div": w_div,
+            "w_sense": w_sense,
+            "w_intra": w_intra,
+            "w_shape": w_shape,
+            "w_cons_floor": w_cons_floor,
+            "w_norm": w_norm,
+            "mi_guard": mi_guard,
+            "ca_blend": ca_blend,
+            "ca_has_data": jnp.float32(has_ca_data),
+            "ca_rfl_gate": rfl_gate,
+            "shape_div_avg": jnp.mean(r_shape_div),
+            "shape_div_min_avg": jnp.mean(r_shape_div_min),
+            "shape_div_score_avg": jnp.mean(shape_score),
+            "ks_dom_score": ks_scores[0],
+            "ks_sit_score": ks_scores[1],
+            "ks_hist_score": ks_scores[2],
+            "ks_topo_score": ks_scores[3],
+            "ks_dom_weight": ks_weights_dbg[0],
+            "ks_sit_weight": ks_weights_dbg[1],
+            "ks_hist_weight": ks_weights_dbg[2],
+            "ks_topo_weight": ks_weights_dbg[3],
+            "ks_winner": jnp.array(ks_winner_idx, dtype=jnp.float32),
+        }
 
         self._opt_state = self._opt_update(
                 self._t // self._lr_decay_steps, -grad_center, self._opt_state

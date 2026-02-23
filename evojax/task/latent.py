@@ -486,8 +486,10 @@ class Latent_Points(VectorizedTask):
             # Unpack Knowledge Sources
             #hist_centroids, hist_velocity = topographic_ks
             #pop_avg_spread, pop_min_safety = normative_ks
-            hist_centroids = state.hist_centroids.reshape(self.n_classes,256) # Ensure correct shape
-            hist_velocity = state.hist_velocity.reshape(self.n_classes,256)   # Ensure correct shape
+            # Keep this shape dynamic so discriminator feature width changes
+            # do not require latent-task code edits.
+            hist_centroids = jnp.reshape(state.hist_centroids, (self.n_classes, -1))
+            hist_velocity = jnp.reshape(state.hist_velocity, (self.n_classes, -1))
 
             pop_avg_spread = state.pop_avg_spread
             pop_min_safety = state.pop_min_safety
@@ -570,6 +572,18 @@ class Latent_Points(VectorizedTask):
             above = 1.0 - jnp.clip((spread_flat - 0.2) / 0.2, 0.0, 1.0)
             reward_k = jnp.minimum(below, above)
             r_intra = jnp.mean(reward_k)
+
+            # Conditional shape diversity proxies in discriminator feature space:
+            #   mean  = average Var[f_D(G(z,c)) | c]
+            #   min   = worst-code Var[f_D(G(z,c)) | c]
+            # The worst-code signal catches partial collapse that mean-only
+            # metrics can hide.
+            sq_dists = jnp.sum((q_flat - assigned_centroids) ** 2, axis=-1)
+            shape_var_by_code = (state.cat_codes.T @ sq_dists[:, None]) / jnp.maximum(count_per_code, 1e-5)
+            r_shape_div_mean = jnp.mean(shape_var_by_code)
+            r_shape_div_min = jnp.min(shape_var_by_code)
+            r_shape_div_mean = jnp.nan_to_num(r_shape_div_mean, nan=0.0, posinf=0.0, neginf=0.0)
+            r_shape_div_min = jnp.nan_to_num(r_shape_div_min, nan=0.0, posinf=0.0, neginf=0.0)
         
             # --- 7. NORMATIVE PENALTIES (Auto-Calibrated) ---
             
@@ -612,6 +626,8 @@ class Latent_Points(VectorizedTask):
                 r_cons,
                 r_sense,
                 r_intra,
+                r_shape_div_mean,
+                r_shape_div_min,
                 normative_penalty,
                 safety_ratios,
                 spreads,

@@ -23,6 +23,12 @@ Example command to run this script: `python train_organsmnist.py --gpu-id=0`
 import argparse
 import os
 import shutil
+import sys
+
+# Ensure the workspace package is imported when running this script directly.
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from jax import random
 from evojax import Trainer
@@ -55,6 +61,24 @@ def parse_args():
     parser.add_argument(
         '--init-std-gen', type=float, default=0.03, help='Initial std.')
     parser.add_argument(
+        '--ca-blend-coeff', type=float, default=0.05,
+        help='CA gradient blend coefficient (set 0.0 to disable CA blend).')
+    parser.add_argument(
+        '--ca-blend-start-iter', type=int, default=3000,
+        help='Iteration to start ramping CA blend.')
+    parser.add_argument(
+        '--ca-blend-ramp-iters', type=int, default=2000,
+        help='Iterations to ramp CA blend to --ca-blend-coeff.')
+    parser.add_argument(
+        '--ca-blend-rfl-lo', type=float, default=0.40,
+        help='Optional lower real_fake_loss gate for CA blend (negative disables gate).')
+    parser.add_argument(
+        '--ca-blend-rfl-hi', type=float, default=0.58,
+        help='Optional upper real_fake_loss gate for CA blend (negative disables gate).')
+    parser.add_argument(
+        '--shape-div-weight', type=float, default=0.12,
+        help='Weight for conditional feature-space shape diversity reward.')
+    parser.add_argument(
         '--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument(
         '--checkpoint-interval', type=int, default=10000,
@@ -79,6 +103,15 @@ def main(config):
         name='OrganSMNIST', log_dir=log_dir, debug=config.debug)
     logger.info('EvoJAX OrganSMNIST InfoGAN Demo')
     logger.info('=' * 30)
+    logger.info(
+        'CA blend schedule: coeff=%.4f start=%d ramp=%d rfl_gate=[%.3f, %.3f] shape_div_weight=%.3f',
+        config.ca_blend_coeff,
+        config.ca_blend_start_iter,
+        config.ca_blend_ramp_iters,
+        config.ca_blend_rfl_lo,
+        config.ca_blend_rfl_hi,
+        config.shape_div_weight,
+    )
 
     policy_gen = GenPolicy(logger=logger)
 
@@ -108,6 +141,12 @@ def main(config):
         logger=logger,
         seed=config.seed,
         belief_space=belief_space,
+        ca_blend_coeff=config.ca_blend_coeff,
+        ca_blend_start_iter=config.ca_blend_start_iter,
+        ca_blend_ramp_iters=config.ca_blend_ramp_iters,
+        ca_blend_rfl_lo=config.ca_blend_rfl_lo,
+        ca_blend_rfl_hi=config.ca_blend_rfl_hi,
+        shape_div_weight=config.shape_div_weight,
     )
 
     # Train.
