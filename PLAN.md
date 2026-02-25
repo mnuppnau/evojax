@@ -1,435 +1,178 @@
-# EvoJAX Hyper-InfoGAN + Cultural Algorithms Plan (Branch `claude/evolve-infogan-hypernetworks-s3r6d-stable-67132f2`)
+# EvoJAX Hyper-InfoGAN + CA Plan (BloodMNIST Pivot)
 
-## Section A: Current Snapshot
+Branch: `claude/bloodmnist-unsupervised-ablation`  
+Date: 2026-02-25
 
-### A.1 Research Direction
+## 1) Research Pivot Summary
 
-This branch is currently the best practical baseline for OrganSMNIST among the recent runs:
+We are pivoting from OrganSMNIST to BloodMNIST for the **method-development track** while preserving the long-term goal:
 
-- It keeps discriminator learning healthy (`real_fake_loss` usually in the useful `0.4-0.6` band).
-- It produces meaningfully better visual diversity/contrast than the recent unstable runs.
-- It already contains the core CA structure (belief space + KS + CA-guided fitness shaping), but CA guidance is only partially functioning due to at least one critical bug (documented below).
+- Fully unsupervised InfoGAN-style latent discovery.
+- CA-guided evolutionary stabilization (PGPE + belief space/KS).
+- Future transfer to IMDB + transformer hard-attention (non-backprop-centered).
 
-This aligns with the medium-term goal:
+Reason for pivot:
 
-- stabilize InfoGAN-style evolution on a harder dataset (OrganSMNIST),
-- then transfer the CA mechanisms to IMDB/Transformer with minimal retuning.
+- OrganSMNIST runs frequently produce repeated within-code shapes despite improved D/G balance.
+- BloodMNIST has stronger natural morphology separation and is a better near-term benchmark for discrete unsupervised structure learning.
 
-### A.2 Current Architecture (as implemented on `67132f2`)
+Important constraint:
 
-1. **Generator training**:
-- HyperNetwork evolved with PGPE (`evojax/algo/pgpe_ca.py`).
-- PGPE population default: `512`.
-- HyperNetwork params: `33,344` (log output).
-- Generator params: `188,889` (log output).
-
-2. **Discriminator training**:
-- Backprop with Adam `lr=1e-4`, `b1=0.5`, `b2=0.999` (`evojax/trainer.py`).
-- D updates every `3` iterations before `1500`, then every iteration.
-- D update accepted only when `real_fake_loss > 0.3`.
-
-3. **Fitness components used in PGPE** (`evojax/algo/pgpe_ca.py`):
-- `fitness_adv`, `fitness_mi`, `r_sense`, `pop_var`, `r_intra`, `cons_shortfall`, `normative_penalty`.
-- Rank-normalization used before weighting.
-- CA slope-driven weight modulation for `w_adv`, `w_div`, `w_sense`, `w_intra`.
-
-4. **Belief space / CA components**:
-- Domain, situational, historical, topographic, normative KS.
-- Metric-history slopes (short/medium/long windows).
-- CA gradient blend into PGPE gradient is now runtime-configurable:
-  - `--ca-blend-coeff`
-  - `--ca-blend-start-iter`
-  - `--ca-blend-ramp-iters`
-  - `--ca-blend-rfl-lo`, `--ca-blend-rfl-hi` (optional real/fake-loss gate band)
-
-5. **Task**:
-- OrganSMNIST, 11 discrete codes.
-- Latent input: 63 noise + 11 one-hot code.
-
-### A.3 What Is Working vs Not Working
-
-**Working now**
-- Training does not immediately collapse.
-- Discriminator signal is generally in a healthy range.
-- Generated samples show increased complexity vs recent unstable branches.
-
-**Not yet solved**
-- Convergence is still inconsistent in the critical adversarial phase.
-- Disentanglement is improved but still partial.
-- CA guidance is active, but net benefit is still phase-dependent and requires
-  better objective alignment.
-- MI improvement is still partially achieved via within-code prototype collapse
-  (high `I(c;x)` with weak `I(z;x|c)`), which hurts OrganSMNIST realism.
+- Training remains **unsupervised** (no class labels in optimization losses).
+- Labels are only used for dataset loading and external evaluation.
 
 ---
 
-## Section B: Empirical Summary (Current 12k Run)
+## 2) Current Codebase State (This Branch)
 
-Source: `log/organsmnist/OrganSMNIST.txt` and `iteration-*.npy` from this branch/run.
+### 2.1 Dataset/Model Adaptation
 
-### B.1 Training Dynamics
+Code has been updated to support BloodMNIST (8 classes) end-to-end:
 
-Across 120 logged points (iterations `100..12000`):
+- `examples/train_bloodmnist.py` added.
+- `GenPolicy` now supports configurable:
+  - `n_classes`
+  - `noise_dim`
+  - `image_size`
+  - `image_channels`
+- Generator output channels are configurable (`1` grayscale / `3` RGB).
+- Trainer now supports configurable:
+  - `dataset_name` (`organsmnist` / `bloodmnist`)
+  - `n_classes`
+  - `latent_dim`
+  - `image_size`
+  - `image_channels`
+  - `data_root`
+- BloodMNIST Option-A grayscale pivot is now implemented:
+  - RGB BloodMNIST is converted to luminance at load time in:
+    - `evojax/trainer.py`
+    - `evojax/task/latent.py`
+  - `examples/train_bloodmnist.py` now runs with `image_channels=1`.
 
-- `real_fake_loss` mean `0.4725` (min `0.3036`, max `0.6259`).
-- `102/120` logged points had `real_fake_loss` in `[0.4, 0.6]`.
-- `fitness_adv max > -0.6` occurred `7/120` times (brief spikes, not persistent collapse).
-- `r_sense avg` increased from early regime (~`0.03`) to later regime (~`0.078` on 7k-12k window).
-- `r_intra avg` remained high overall (~`0.936` full run mean), with occasional dips.
+### 2.2 CA + Shape-Diversity Controller (from prior phase)
 
-Interpretation:
+The collapse-sensitive Route 2 controller remains active:
 
-- This confirms your observation: this branch is materially healthier than the recent unstable runs.
-- The adversarial game is active rather than frozen, and diversity signals are present.
+- `shape_score = 0.7 * shape_div_min + 0.3 * shape_div_mean`
+- adaptive `w_shape` with clamp
+- MI guard when worst-code shape diversity collapses
+- shape-div slopes added to metric history (`shape_short`, `shape_med`)
 
-### B.2 Image-Side Proxy Metrics (from `iteration-*.npy`)
+### 2.3 Belief Space / KS Generalization
 
-Computed over saved snapshots `1000..12000`:
-
-- Detail proxy (mean abs Laplacian): first-3 snapshots `0.2402` -> last-3 snapshots `0.5724`.
-- Between-code variance proxy: first-3 `0.5390` -> last-3 `0.7052`.
-- Intra/Between ratio: first-3 `0.571` -> last-3 `0.281` (better code separation trend).
-
-Interpretation:
-
-- Structural complexity and inter-code separation are improving through training.
-- This branch is a valid foundation for stabilization + disentanglement work.
-
-### B.3 Post-Phase-1 Ablation (6k, CA Blend ON vs OFF)
-
-Comparison run window: `100..5900`.
-
-- `real_fake_loss` in `[0.4, 0.6]`: OFF `0.475` vs ON `0.237`
-- `real_fake_loss < 0.4`: OFF `0.492` vs ON `0.712`
-- `fitness_mi` mean: OFF `-1.0598` vs ON `-2.3182`
-- `r_sense` mean: OFF `0.0463` vs ON `0.0099`
-- Laplacian detail proxy (2k-5k): OFF `0.2704` vs ON `0.0610`
-- Between-code variance (2k-5k): OFF `0.8983` vs ON `0.1586`
-
-Interpretation:
-
-- For this branch/regime, early fixed CA blend (`0.05`) was too aggressive.
-- Disabling CA blend improved discriminator balance and visual detail.
-- CA should phase in later, not from iteration 0.
+- Normative KS initialization now uses dynamic `num_codes`.
+- Belief-space init now passes `num_codes` through to normative/topographic setup.
+- Sim manager rollout buffers now infer code dimension from task state.
 
 ---
 
-## Section C: Change History and What to Reuse Incrementally
+## 3) Immediate Execution Plan
 
-### C.1 From `285f5df` -> `67132f2` (important deltas)
+## Phase A - BloodMNIST Bring-Up (No Objective Changes)
 
-Main deltas observed in code history:
-
-1. Early D throttling schedule (`d_freq=3` before 1.5k, then `1`).
-2. D update acceptance changed to strict threshold (`real_fake_loss > 0.3` only).
-3. CA metric history expanded (added `avg_r_intra`, `avg_fitness_adv` slopes).
-4. Fitness formula added:
-- `r_intra` reward term.
-- `r_cons` floor penalty (`cons_shortfall`).
-5. Code-pixel diversity made brightness-normalized in generator fitness path.
-
-### C.2 What should be retried from newer branch, but incrementally
-
-From `claude/evolve-infogan-hypernetworks-s3r6d` (large unstable integration), reintroduce only in controlled stages:
-
-1. Better metric/KS logging (`metrics.tsv`, `ks_weights.tsv`) for diagnosis.
-2. Runtime-controlled CA knobs (blend schedule, adaptive D controls), but one mechanism at a time.
-3. Capacity upgrades (HN and Generator) only after CA correctness bugs are fixed and baseline is re-validated.
-
-### C.3 What to defer
-
-Per-layer multi-hypernetwork evolution should be deferred until:
-
-- single-hypernetwork training is reliably stable on OrganSMNIST,
-- CA guidance is validated as active and beneficial,
-- ablations show capacity-limited failure rather than controller failure.
-
----
-
-## Section D: Bug / Risk Audit (Current Branch)
-
-Status note: the major Phase 1 correctness bugs listed below were fixed in-code;
-they are retained here as audit history and regression checks.
-
-### D.1 Critical (must fix first)
-
-1. **CA guidance likely disabled by NaN entropy path**
-- File: `evojax/algo/pgpe_ca.py:824`, `evojax/algo/pgpe_ca.py:825`
-- Issue: entropy uses raw logits as if probabilities: `log(mean_disc_logit)`.
-- Evidence from checkpoint (`checkpoint_latest.pkl`):
-  - metric history entropy buffer contains all NaNs,
-  - `ent_long` slope is NaN,
-  - CA guidance output is non-finite,
-  - `has_ca_data` gate evaluates false, so blend is skipped.
-- Impact: belief-space guidance is not effectively influencing PGPE center/stdev.
-
-2. **HyperNetwork chunk-ID truncation / representational collapse**
-- File: `evojax/policy/convnet.py:153`, `evojax/policy/convnet.py:159`
-- Issue: `N_CHUNKS` hard-coded to `100`, but actual max chunk id is `199` with current generator/chunk size.
-- Effect: chunk IDs `>=100` map to all-zero one-hot; many chunks lose identity.
-- Impact: weaker controllability and reduced expressive capacity, directly hurting image quality/disentanglement.
-
-### D.2 High priority
-
-3. **Hard-coded population reshape in PGPE tell**
-- File: `evojax/algo/pgpe_ca.py:796`, `evojax/algo/pgpe_ca.py:797`
-- Issue: forces `spreads` and `safety_ratios` to population `512`.
-- Impact: non-general, brittle, blocks reproducible scaling and future task transfer.
-
-4. **Normative clamp logic is overwritten**
-- File: `evojax/algo/cultural/knowledge_sources.py:444` and `evojax/algo/cultural/knowledge_sources.py:457`
-- Issue: clamped `elite_ratios_clamped` path is computed, then replaced by unclamped recomputation.
-- Impact: normative KS behavior does not match intended robust safety handling.
-
-5. **Latent task hard-codes feature width `256`**
-- File: `evojax/task/latent.py:489`, `evojax/task/latent.py:490`
-- Issue: reshapes historical centroids/velocity to fixed feature dim.
-- Impact: breaks when discriminator feature dimension changes; blocks easy model scaling/transfer.
-
-### D.3 Medium priority
-
-6. **Trainer demo mode references undefined variable**
-- File: `evojax/trainer.py:1075`
-- Issue: `params` is undefined in demo branch.
-- Impact: demo/test path is broken.
-
-7. **KS scoring bias not parameterized**
-- File: `evojax/algo/cultural/helper_functions.py:313`
-- Issue: hard-coded `+0.897` bias in domain score.
-- Impact: can dominate KS selection in opaque ways; should be explicit/configurable.
-
-8. **Shape flattening obscures structure in sim manager**
-- File: `evojax/sim_mgr.py:618` and `evojax/sim_mgr.py:643`
-- Issue: safety/spread tensors are flattened/reduced then later re-shaped externally.
-- Impact: reduces clarity, creates hidden coupling with hard-coded reshape logic.
-
----
-
-## Section E: Incremental Execution Plan (Tasks + Subtasks)
-
-## Phase 0: Lock Baseline + Instrumentation (no behavior change)
-
-- [x] Task 0.1: Add structured metric logging for each training run.
-  - [x] Write `metrics.tsv` with iteration-level summaries.
-  - [x] Write `ks_weights.tsv` with active weights, slopes, and KS-selection stats.
-  - [x] Keep existing text log for backward compatibility.
-
-- [ ] Task 0.2: Add a tiny checkpoint-inspection utility.
-  - [ ] Print NaN counts in metric buffers.
-  - [ ] Print CA blend activation rate.
-  - [ ] Print KS selection distribution.
+- [ ] A1: Run smoke training (2k-4k) on BloodMNIST with current settings.
+  - Confirm no shape errors in rollout, D-step, checkpointing, or image export.
+- [ ] A2: Verify logging fields exist and are finite:
+  - `r_shape_div_avg`
+  - `r_shape_div_min_avg`
+  - `shape_short`, `shape_med`
+  - `mi_guard`, `w_shape`
+- [ ] A3: Save first baseline run artifacts at checkpoints 5k / 8k / 11k.
 
 Success criteria:
-- Diagnostics can confirm whether CA guidance is actually active during a run.
 
-## Phase 1: Correctness Fixes (minimal, isolated)
+- Training runs without runtime shape bugs.
+- D/G balance remains in usable range (`real_fake_loss` occupancy in `[0.4, 0.6]`).
+- Metrics TSV and KS TSV are complete for BloodMNIST runs.
 
-- [x] Task 1.1: Fix entropy path in CA history update.
-  - [x] Convert logits to probabilities (`softmax`) before entropy.
-  - [x] Guard with finite checks and fallback value.
-  - [x] Verify checkpoint no longer accumulates NaN-driven CA disablement.
+## Phase B - BloodMNIST Ablations (Disentanglement-Focused)
 
-- [x] Task 1.2: Fix dynamic chunk dimensions in `ParameterAdapter`.
-  - [x] Replace hard-coded `N_LAYERS/N_CHUNKS`.
-  - [x] Derive from actual adapter maps.
-  - [x] Validate no out-of-range chunk IDs in one-hot path.
-
-- [x] Task 1.3: Remove hard-coded `512` from PGPE reshape path.
-  - [x] Reshape based on runtime population and `n_classes`.
-  - [x] Keep shape logic dynamic for spread/safety tensors.
-
-- [x] Task 1.4: Fix normative clamp overwrite.
-  - [x] Keep single clamped path.
-  - [x] Preserve elite-safety computation on clamped ratios only.
-
-- [x] Task 1.5: Remove hard-coded `256` in latent KS reshapes.
-  - [x] Infer feature dimension dynamically via reshape.
-  - [x] Remove fixed discriminator-feature assumption from latent task.
-
-Phase 1 completion notes:
-- CA slope computation now sanitizes NaNs so legacy checkpoints can recover without manual reset.
-- CA guidance from the latest checkpoint is finite and blend-eligible again (`has_ca_data=True` in local checkpoint inspection).
-- HyperNetwork input dimensionality increased (dynamic chunk encoding), so `num_params_hypernet` changed from `33344` to `37952` for this generator layout.
-- `examples/train_organsmnist.py` now forces workspace-local imports to avoid accidental use of stale site-packages code.
-
-Success criteria:
-- Same config still runs.
-- CA guidance finite and blend gate can turn on.
-- No regressions in 2k smoke run.
-
-## Phase 2: Re-validate `67132f2` behavior after bug fixes
-
-- [ ] Task 2.1: Run 3 seeds to 12k with unchanged training knobs (except explicit CA-blend ablation).
-  - [x] Seed-1 A/B completed (fixed CA blend `0.05` vs `0.0`) through ~6k.
-  - [ ] Add seeds 2-3 for confirmation.
-  - [ ] Compare `real_fake_loss` occupancy in `[0.4, 0.6]`.
-  - [ ] Compare `fitness_adv max` excursions above `-0.6`.
-  - [ ] Compare disentanglement proxies from `iteration-*.npy`.
-  - [x] Added structured A/B comparer utility: `scripts/compare_metrics_tsv.py`.
-
-- [ ] Task 2.2: Define pass/fail gate.
-  - [ ] Pass if at least 2/3 seeds match or improve current baseline.
-  - [ ] Fail => rollback only the offending fix set, not whole branch.
-
-- [x] Task 2.4: Route 2 instrumentation for conditional diversity objective.
-  - [x] Added `r_shape_div` in latent task as feature-space conditional diversity proxy (`Var[f_D(G(z,c)) | c]`).
-  - [x] Propagated `r_shape_div` through `sim_mgr`, `trainer`, and `metrics.tsv`.
-  - [x] Added `w_shape`/`shape_div_avg` diagnostics to `ks_weights.tsv`.
-
-- [x] Task 2.5: Route 2 objective + Domain KS archive pivot.
-  - [x] Added `rank_normalize(r_shape_div) * w_shape` to PGPE fitness blend.
-  - [x] Extended Domain KS archive schema with `r_shape_div`.
-  - [x] Extended Domain KS Pareto axes to `[|adv|, |mi|, -shape_div, |entropy|]`.
-  - [x] Updated Domain KS stagnation selector to prefer highest `r_shape_div`.
-
-- [x] Task 2.6: Route 2 collapse-sensitive refinement (T05).
-  - [x] Replaced mean-only shape reward with weighted min+mean score:
-    `shape_score = 0.7 * shape_div_min + 0.3 * shape_div_mean`.
-  - [x] Added `r_shape_div_min` to rollout/trainer logging (`metrics.tsv`).
-  - [x] Added shape-div trend to CA metric history and slopes (`shape_short`, `shape_med`).
-  - [x] Made `w_shape` CA-adaptive with strict clamp (`0.02..0.20`).
-  - [x] Added MI guard: when `shape_div_min` drops below target, reduce `w_mi`.
-
-- [x] Task 2.3: Add delayed/ramped CA blend control path.
-  - [x] `PGPE_CA` accepts CA schedule/gate args.
-  - [x] `Trainer` passes runtime `real_fake_loss` to solver.
-  - [x] `train_organsmnist.py` exposes CLI knobs and logs schedule.
-
-Current default schedule:
-- `--ca-blend-coeff=0.05`
-- `--ca-blend-start-iter=3000`
-- `--ca-blend-ramp-iters=2000`
-- `--ca-blend-rfl-lo=0.40`
-- `--ca-blend-rfl-hi=0.58`
-
-## Phase 3: Controlled Stabilization Knobs (one-at-a-time experiments)
-
-- [ ] Task 3.1: D-schedule A/B tests (single variable changes).
-  - [ ] A: current schedule (`3->1`, threshold `0.3`).
-  - [ ] B: phase schedule (`3->2->1`) with same threshold.
-  - [ ] C: same schedule with threshold sweep (`0.30`, `0.33`, `0.36`).
-
-- [ ] Task 3.2: CA blend ramp tests.
-  - [ ] Start iteration sweep (`0`, `500`, `1000`).
-  - [ ] Blend max sweep (`0.01`, `0.025`, `0.05`).
-  - [ ] Keep all other knobs fixed.
-
-- [ ] Task 3.3: Weight adaptation logic tests.
-  - [ ] Compare current distress logic vs inverted logic from later branch.
-  - [ ] Keep D schedule fixed while testing this.
-
-- [x] Task 3.4: Add conservative MI/sense distress adaptation.
-  - [x] MI distress: increase `w_mi` when short/medium MI slopes are negative.
-  - [x] Sense deficit: increase `w_sense` when `r_sense` remains below target.
-  - [x] Keep bounded clamps (`w_mi <= 0.35`, `w_sense <= 0.25`) to avoid instability.
-  - [ ] Validate through 12k A/B against prior delayed-CA run.
+- [x] B1: Baseline no-CA run (`ca_blend_coeff=0.0`).
+  - Outcome (11.5k): persistent D dominance (`real_fake_loss` mostly `<0.30`).
+- [ ] B1b: No-CA with D-control retune.
+  - New knobs: `disc_update_gate`, `disc_warmup_freq`, `disc_warmup_iters`, `disc_lr`.
+  - Initial setting: gate `0.40`, warmup `1/5` until `3k`, D lr `7e-5`.
+- [ ] B1c: No-CA with grayscale BloodMNIST (Option A).
+  - Motivation: remove independent RGB shortcut; focus PGPE + InfoGAN on morphology.
+  - Implemented as luminance conversion in both trainer data path and latent RFF real-class path.
+- [ ] B1d: No-CA anti-saturation Generator activation update.
+  - Replace intermediate `tanh` with `leaky_relu(0.2)` (both policy and trainer Generator copies).
+  - Keep bounded output but soften final clamp with `tanh(x / 2.0)`.
+  - Goal: increase phenotype sensitivity for PGPE perturbations.
+- [ ] B1e: No-CA explicit saturation penalty in PGPE fitness.
+  - Add `sat_frac = mean(|x| > 0.85)` per member from generated pixels.
+  - Penalize only excess above `sat_target=0.10` with ramped weight.
+  - Goal: prevent collapse into binary/saturated shortcuts after ~3k-5k.
+- [ ] B1f: Reflection-padding Generator convs + stronger sat penalty sweep.
+  - Replace zero-padding (`SAME`) with explicit reflection padding + `VALID` convs.
+  - Run with `sat_penalty_weight` in `0.25-0.30`.
+  - Goal: remove edge-line shortcut and raise anti-saturation selection pressure.
+- [ ] B1g: Saturation-aware adversarial governor.
+  - Add dynamic cap on rank-normalized adversarial term when `sat_excess` is high.
+  - Suppress `adv_distress`-driven `w_adv` boosts during high-saturation phases.
+  - Goal: keep adversarial signal informative without letting it overwhelm anti-saturation pressure.
+- [ ] B1h: Discriminator regulation (soft rollback on prolonged low rfl).
+  - Trigger when `real_fake_loss` stays below threshold for K log intervals.
+  - Apply partial blend of D params/batch-stats toward anchor D state; reset D optimizer.
+  - Goal: recover from stuck-strong D regimes without permanently shrinking model capacity.
+- [ ] B1i: Reduced discriminator capacity (Option 2).
+  - Lower discriminator base channels for BloodMNIST (`disc_features=32`).
+  - Propagate discriminator feature width into belief-space topographic feature dim.
+  - Goal: narrow D/G learning-speed gap by construction.
+- [ ] B1j: Decaying discriminator-input noise schedule.
+  - Increase D input noise early and decay slowly over training.
+  - Apply the same schedule to both D-step updates and rollout/eval discriminator inputs.
+  - Fix topographic KS broadcast edge-case at `disc_features=16` (`8*64=512`) so
+    centroid tensors are never interpreted as per-pop scalars.
+  - Goal: regularize early D shortcuts without permanently washing out signal.
+- [ ] B2: CA blend run (`0.03`) with same seed/config.
+- [ ] B3: CA blend run (`0.015`) with same seed/config.
+- [ ] B4: T05 controller run (collapse-sensitive shape score + MI guard).
+- [ ] B5: Shape-weight sweep on T05 (`shape_div_weight`: `0.08`, `0.12`, `0.16`).
 
 Success criteria:
-- Reduce frequency of bad adversarial dips without flattening image detail.
 
-## Phase 4: Image Quality + Disentanglement (capacity changes only after stability)
+- Improve within-code structural diversity at 11k without destabilizing adv fitness.
+- Avoid MI “improvement” that corresponds to repeated per-code prototypes.
 
-- [ ] Task 4.1: Generator capacity ladder.
-  - [ ] Small conv-depth increase first.
-  - [ ] Then feature-width increase.
-  - [ ] Re-evaluate chunk-id distribution after each change.
+## Phase C - Unsupervised Global Structure (No Labels in Loss)
 
-- [ ] Task 4.2: HyperNetwork capacity ladder.
-  - [ ] Expand hidden width incrementally.
-  - [ ] Monitor sensitivity of `fitness_adv` and `real_fake_loss`.
+- [ ] C1: Add unsupervised prototype alignment in discriminator feature space:
+  - Build prototypes by online clustering of real data features.
+  - Align code centroids to prototypes with permutation-invariant objective.
+- [ ] C2: Keep conditional local diversity objective (T05) active.
+- [ ] C3: Compare against T05-only to validate additive value.
 
-- [ ] Task 4.3: Disentanglement-focused evaluation.
-  - [ ] Track within-code diversity and between-code separation explicitly.
-  - [ ] Add code-conditioned fixed-z panel and fixed-code varying-z panel outputs.
+Success criteria:
 
----
-
-## Section F: CA Generalization Plan for IMDB + Transformer
-
-Goal: make CA task-agnostic, with task-specific adapters only.
-
-### F.1 CA core vs task adapters
-
-- [ ] Separate CA core signals from image-only signals.
-- [ ] Define a generic metric interface:
-  - `quality_signal`
-  - `info_signal`
-  - `separation_signal`
-  - `intra_variation_signal`
-  - `safety_signal`
-- [ ] Map OrganSMNIST metrics and future IMDB/Transformer metrics to this interface.
-
-### F.2 Remove image hard-codings
-
-- [ ] Eliminate fixed constants (`11`, `28x28`, `256`) from CA-relevant paths.
-- [ ] Centralize task metadata (num classes, feature dims, batch struct) in one config object.
-
-### F.3 Transformer readiness (without committing to per-layer HN yet)
-
-- [ ] Keep single-HN evolution as baseline path.
-- [ ] Add optional module for per-block parameter grouping later.
-- [ ] Gate per-layer/per-block evolution behind demonstrated need.
-
-Recommendation:
-- Do **not** make per-layer hypernetwork evolution a prerequisite for IMDB transition.
-- First prove CA-correctness + stable adaptation on one robust baseline pipeline.
+- Better code-level semantic separation than T05-only.
+- Preserved within-code variation.
+- No supervised labels used for optimization.
 
 ---
 
-## Section G: Immediate Next Actions
+## 4) Suggested BloodMNIST Baseline Command
 
-1. Run 12k Route 2 validation with current conservative CA settings:
-   - `python examples/train_organsmnist.py --gpu-id='0,1' --checkpoint-interval=5000 --ca-blend-coeff=0.015 --ca-blend-start-iter=4500 --ca-blend-ramp-iters=3000 --ca-blend-rfl-lo=0.43 --ca-blend-rfl-hi=0.56 --shape-div-weight=0.12`
-2. Compare new run vs prior controls with structured logs:
-   - `python scripts/compare_metrics_tsv.py --control <control_metrics.tsv> --treatment <route2_metrics.tsv> --iter-min 1000 --iter-max 12000`
-   - Primary: `adv_max_mean`, `real_fake_loss in [0.4,0.6]`, `mi_avg_mean`, `r_shape_div_mean`, `r_shape_div_min_mean`.
-3. If `r_shape_div` improves but `mi_avg` regresses hard:
-   - lower `w_shape` first (before touching D schedule),
-   - keep Domain KS 4-axis archive in place,
-   - re-test with one-variable change only.
-4. Keep `ABLATION_TRIAL_LOG.txt` updated after each code/config change so image checkpoints (11k) map to exact trial conditions.
+```bash
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0 \
+  --ca-blend-start-iter=4500 \
+  --ca-blend-ramp-iters=3000 \
+  --ca-blend-rfl-lo=0.43 \
+  --ca-blend-rfl-hi=0.56 \
+  --shape-div-weight=0.12
+```
 
 ---
 
-## Section H: Route 2 Pivot (I(c;x) + I(z;x|c))
+## 5) Paper-Oriented Tracking Rules
 
-### H.1 Why we pivoted
-
-Recent A/B runs showed that stronger CA blend often improved D/G balance (`real_fake_loss`)
-but produced weaker within-code variation. This is consistent with MI-only pressure
-favoring code prototypes: codes become distinguishable, while variation from `z` collapses.
-
-### H.2 Core hypothesis
-
-For OrganSMNIST (and likely many medical datasets), useful disentanglement requires:
-
-- high `I(c;x)` (code distinguishability), and
-- high `I(z;x|c)` (meaningful within-code shape variation).
-
-Optimizing only the first can improve MI numerically while harming visual realism/diversity.
-
-### H.3 Code changes made for Route 2
-
-1. Added `r_shape_div` conditional diversity proxy:
-   - `evojax/task/latent.py` computes per-code feature variance in discriminator feature space.
-2. Threaded `r_shape_div` through the training stack:
-   - `evojax/sim_mgr.py` rollout carry/aggregation/returns.
-   - `evojax/trainer.py` logging + TSV metrics (`r_shape_div_avg`).
-3. Updated optimizer objective and CA archive:
-   - `evojax/algo/pgpe_ca.py` adds `w_shape * rank_normalize(r_shape_div)`.
-   - `evojax/algo/cultural/knowledge_sources.py` adds Domain KS `r_shape_div` archive field.
-   - Domain Pareto front now includes `-shape_div` (maximize shape diversity under minimization sorter).
-   - `examples/train_organsmnist.py` exposes `--shape-div-weight` for A/B sweeps without code edits.
-4. Added collapse-sensitive controller path:
-   - shape reward now uses min+mean blend to punish worst-code collapse,
-   - CA tracks shape-div slopes for adaptive `w_shape`,
-   - MI guard prevents MI-only prototype shortcuts when shape minima collapse.
-4. Updated experiment tooling:
-   - `scripts/compare_metrics_tsv.py` now reports `r_shape_div_mean`.
-
-### H.4 Route 2 success criteria
-
-- `real_fake_loss` occupancy in `[0.4, 0.6]` remains near/above current baseline.
-- `mi_avg` does not improve solely via visual prototype collapse.
-- `r_shape_div_avg` rises with clear within-code structural variability in saved panels.
-- Domain KS winner distribution should show less single-mode lock-in over long runs.
+- Maintain `ABLATION_TRIAL_LOG.txt` after every code/config change.
+- For each trial, record:
+  - exact command/config
+  - metric window summary (`1k-12k`)
+  - checkpoint image notes (especially 11k panel)
+  - interpretation + next step
+- Keep `PLAN.md` synchronized when tasks are completed or pivoted.

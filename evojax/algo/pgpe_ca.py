@@ -254,6 +254,13 @@ class PGPE(NEAlgorithm):
         ca_blend_rfl_lo: float = -1.0,
         ca_blend_rfl_hi: float = -1.0,
         shape_div_weight: float = 0.12,
+        sat_penalty_weight: float = 0.12,
+        sat_target: float = 0.10,
+        sat_penalty_start_iter: int = 1500,
+        sat_penalty_ramp_iters: int = 1500,
+        adv_sat_trigger: float = 0.20,
+        adv_sat_cap_min: float = 0.35,
+        adv_sat_strength: float = 0.85,
         logger: logging.Logger = None,
     ):
         """Initialization function.
@@ -279,6 +286,13 @@ class PGPE(NEAlgorithm):
             ca_blend_rfl_lo - Optional lower bound of real_fake_loss gate.
             ca_blend_rfl_hi - Optional upper bound of real_fake_loss gate.
             shape_div_weight - Weight for conditional shape diversity reward.
+            sat_penalty_weight - Max weight for output saturation penalty.
+            sat_target - Allowed saturation fraction before penalty activates.
+            sat_penalty_start_iter - Iteration to start saturation penalty ramp.
+            sat_penalty_ramp_iters - Ramp length for saturation penalty weight.
+            adv_sat_trigger - Mean sat_excess level where adv governor starts.
+            adv_sat_cap_min - Minimum cap for rank-normalized adv term.
+            adv_sat_strength - Overall strength of saturation-aware adv governor.
         """
 
         if logger is None:
@@ -301,6 +315,13 @@ class PGPE(NEAlgorithm):
         self._ca_blend_rfl_lo = float(ca_blend_rfl_lo)
         self._ca_blend_rfl_hi = float(ca_blend_rfl_hi)
         self._shape_div_weight = float(max(shape_div_weight, 0.0))
+        self._sat_penalty_weight = float(max(sat_penalty_weight, 0.0))
+        self._sat_target = float(np.clip(sat_target, 0.0, 1.0))
+        self._sat_penalty_start_iter = int(max(sat_penalty_start_iter, 0))
+        self._sat_penalty_ramp_iters = int(max(sat_penalty_ramp_iters, 1))
+        self._adv_sat_trigger = float(np.clip(adv_sat_trigger, 0.0, 1.0))
+        self._adv_sat_cap_min = float(np.clip(adv_sat_cap_min, 0.05, 1.0))
+        self._adv_sat_strength = float(np.clip(adv_sat_strength, 0.0, 1.0))
         self._runtime_real_fake_loss = np.nan
         self._debug_last = {}
         self._ks_winner_counts = np.zeros((4,), dtype=np.int64)
@@ -410,7 +431,24 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], r_shape_div: Union[np.ndarray, jnp.ndarray], r_shape_div_min: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], safety_ratios: Union[np.ndarray, jnp.ndarray], spreads: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(
+        self,
+        fitness_adv: Union[np.ndarray, jnp.ndarray],
+        fitness_mi: Union[np.ndarray, jnp.ndarray],
+        disc_logits: Union[np.ndarray, jnp.ndarray],
+        pop_var: Union[np.ndarray, jnp.ndarray],
+        avg_per_code: Union[np.ndarray, jnp.ndarray],
+        r_cons: Union[np.ndarray, jnp.ndarray],
+        r_sense: Union[np.ndarray, jnp.ndarray],
+        r_intra: Union[np.ndarray, jnp.ndarray],
+        r_shape_div: Union[np.ndarray, jnp.ndarray],
+        r_shape_div_min: Union[np.ndarray, jnp.ndarray],
+        normative_penalty: Union[np.ndarray, jnp.ndarray],
+        safety_ratios: Union[np.ndarray, jnp.ndarray],
+        spreads: Union[np.ndarray, jnp.ndarray],
+        sat_frac: Optional[Union[np.ndarray, jnp.ndarray]] = None,
+        adv: bool = False,
+    ) -> None:
 
        
         #if avg_r_anchor < 0.0009:
@@ -525,6 +563,32 @@ class PGPE(NEAlgorithm):
         self.belief_space = update_topographic_ks(
             self.belief_space, avg_per_code, topo_momentum
         )
+
+        # Saturation summary is used in two places:
+        # 1) direct sat penalty term, and
+        # 2) saturation-aware governor that tempers adversarial pressure.
+        if sat_frac is None:
+            sat_frac = jnp.zeros_like(pop_var)
+        sat_frac = jnp.asarray(sat_frac, dtype=jnp.float32).reshape(-1)
+        sat_excess = jnp.maximum(0.0, sat_frac - self._sat_target)
+        sat_pen = jnp.clip(sat_excess / jnp.maximum(1.0 - self._sat_target, 1e-6), 0.0, 1.0)
+        sat_progress = jnp.clip(
+            (self._t - self._sat_penalty_start_iter) / float(self._sat_penalty_ramp_iters),
+            0.0,
+            1.0,
+        )
+        w_sat_t = self._sat_penalty_weight * sat_progress
+        sat_excess_mean = jnp.mean(sat_excess)
+        sat_pressure = jnp.clip(
+            (sat_excess_mean - self._adv_sat_trigger)
+            / jnp.maximum(1.0 - self._adv_sat_trigger, 1e-6),
+            0.0,
+            1.0,
+        )
+        adv_sat_govern = jnp.clip(sat_pressure * sat_progress * self._adv_sat_strength, 0.0, 1.0)
+        adv_rank_cap = 1.0 - adv_sat_govern * (1.0 - self._adv_sat_cap_min)
+        adv_rank_cap = jnp.clip(adv_rank_cap, self._adv_sat_cap_min, 1.0)
+        adv_rank_shaped = jnp.clip(rank_normalize(fitness_adv), -adv_rank_cap, adv_rank_cap)
        
 
         #    fitness_scores = fitness_adv.flatten() * w_adversarial + pop_var * w_diversity + fitness_mi.flatten() * w_mi + fitness_con.flatten()*w_con + r_cons*w_r_cons + r_sense*w_r_sense
@@ -798,7 +862,8 @@ class PGPE(NEAlgorithm):
 
         # 1. If fitness_adv is dropping (D winning), boost w_adv, reduce diversity pressure
         #    adv_avg_short < 0 means avg adversarial fitness is declining
-        adv_distress = jnp.clip(-adv_avg_short * 50.0, 0.0, 0.2)
+        adv_distress_raw = jnp.clip(-adv_avg_short * 50.0, 0.0, 0.2)
+        adv_distress = adv_distress_raw * (1.0 - adv_sat_govern)
         w_adv = w_adv_base + adv_distress
         w_div = w_div_base - adv_distress * 0.5  # ease off diversity when D is crushing
 
@@ -863,7 +928,7 @@ class PGPE(NEAlgorithm):
 
         # 3. Calculate Fitness (all rank_normalize for scale parity)
         fitness_scores = (
-            (rank_normalize(fitness_adv) * w_adv)          # Quality (capped, can't dominate)
+            (adv_rank_shaped * w_adv)                      # Quality (saturation-aware cap)
             + (rank_normalize(fitness_mi) * w_mi)          # MI signal
             + (rank_normalize(r_sense) * w_sense)          # Feature-space code separation
             + (rank_normalize(pop_var) * w_div)            # Pixel-space code diversity
@@ -871,6 +936,7 @@ class PGPE(NEAlgorithm):
             + (rank_normalize(shape_score) * w_shape)      # Conditional shape variation (min+mean)
             - (rank_normalize(cons_shortfall) * w_cons_floor) # Penalize centroid drift below floor
             - (rank_normalize(normative_penalty) * w_norm) # Safety/spread limits
+            - (sat_pen * w_sat_t)                           # Penalize excessive output saturation
         )
         #w_mi = jnp.clip((self._t / 10000) * 10.0, 0.1, 0.6)
         
@@ -1071,12 +1137,21 @@ class PGPE(NEAlgorithm):
             "w_sense": w_sense,
             "w_intra": w_intra,
             "w_shape": w_shape,
+            "w_sat": w_sat_t,
             "w_cons_floor": w_cons_floor,
             "w_norm": w_norm,
             "mi_guard": mi_guard,
+            "adv_distress_raw": adv_distress_raw,
+            "adv_distress": adv_distress,
+            "adv_sat_govern": adv_sat_govern,
+            "adv_rank_cap": adv_rank_cap,
+            "sat_pressure": sat_pressure,
             "ca_blend": ca_blend,
             "ca_has_data": jnp.float32(has_ca_data),
             "ca_rfl_gate": rfl_gate,
+            "sat_target": jnp.array(self._sat_target, dtype=jnp.float32),
+            "sat_frac_avg": jnp.mean(sat_frac),
+            "sat_excess_avg": jnp.mean(sat_excess),
             "shape_div_avg": jnp.mean(r_shape_div),
             "shape_div_min_avg": jnp.mean(r_shape_div_min),
             "shape_div_score_avg": jnp.mean(shape_score),

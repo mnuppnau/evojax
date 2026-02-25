@@ -107,7 +107,7 @@ def compute_real_class_means(
     mus = []
 
     for Xc in real_by_class:
-        if Xc.ndim == 3:  # [Nc,28,28]
+        if Xc.ndim >= 3:
             Xc = Xc.reshape((Xc.shape[0], -1))
         Xc = Xc.astype(jnp.float32)
         mus.append(mean_embedding(rff_params, Xc))
@@ -265,21 +265,31 @@ def evaluate_fake_batch(
         "num_images": fake_images.shape[0],
     }
 
-def build_real_by_class_mnist(
+def build_real_by_class_medmnist(
+    dataset_name: str,
     root="./data",
     train=True,
     download=True,
     n_classes=11,
+    image_channels=1,
 ):
     """
     Returns:
         real_by_class: list of n_classes JAX arrays
                        real_by_class[c].shape == (Nc, 28, 28)
     """
-    from medmnist import OrganSMNIST
+    from medmnist import OrganSMNIST, BloodMNIST
+
+    name = dataset_name.lower()
+    if name in ("organsmnist", "organ", "organmnist"):
+        dataset_cls = OrganSMNIST
+    elif name in ("bloodmnist", "blood"):
+        dataset_cls = BloodMNIST
+    else:
+        raise ValueError(f"Unsupported dataset_name='{dataset_name}'")
 
     split = 'train' if train else 'test'
-    dataset = OrganSMNIST(split=split, download=download, root=root)
+    dataset = dataset_cls(split=split, download=download, root=root)
 
     # Buckets for each class
     buckets = [[] for _ in range(n_classes)]
@@ -287,7 +297,20 @@ def build_real_by_class_mnist(
     for i in range(len(dataset)):
         img, label = dataset[i]
         # img: PIL Image 28x28, label: numpy array shape (1,)
-        img_np = np.array(img, dtype=np.float32) / 255.0  # -> [28,28]
+        img_np = np.array(img, dtype=np.float32) / 255.0
+        if (
+            image_channels == 1
+            and img_np.ndim == 3
+            and img_np.shape[-1] == 3
+        ):
+            # BloodMNIST is stained microscopy where RGB channels are highly
+            # correlated. Collapsing to luminance removes an easy color
+            # shortcut and focuses optimization on morphology.
+            img_np = np.sum(
+                img_np * np.array([0.2989, 0.5870, 0.1141], dtype=np.float32),
+                axis=-1,
+                keepdims=True,
+            )
         lbl = int(label.item() if hasattr(label, 'item') else label[0])
         if lbl < n_classes:
             buckets[lbl].append(img_np)
@@ -392,6 +415,10 @@ class Latent_Points(VectorizedTask):
                  dataset_size: int = 800,  # Similar to MNIST
                  latent_dim: int = 63,
                  n_classes: int = 11,
+                 dataset_name: str = "organsmnist",
+                 image_size: int = 28,
+                 image_channels: int = 1,
+                 data_root: str = "./data",
                  test: bool = False):
         self.max_steps = 1
         self.obs_shape = (latent_dim + n_classes,)
@@ -407,13 +434,26 @@ class Latent_Points(VectorizedTask):
         self.batch_size = batch_size
         self.latent_dim = latent_dim
         self.n_classes = n_classes
+        self.dataset_name = dataset_name
+        self.image_size = image_size
+        self.image_channels = image_channels
 
         self.noise_dim = latent_dim
 
         key = jax.random.PRNGKey(0)
-        self.rff_params = rff_init(key, d_in=28*28, D_total=2048)
+        self.rff_params = rff_init(
+            key,
+            d_in=self.image_size * self.image_size * self.image_channels,
+            D_total=2048
+        )
 
-        real_by_class = build_real_by_class_mnist(train=True)
+        real_by_class = build_real_by_class_medmnist(
+            dataset_name=self.dataset_name,
+            train=True,
+            root=data_root,
+            n_classes=self.n_classes,
+            image_channels=self.image_channels,
+        )
         # Precompute once
         self.mu_classes = compute_real_class_means(self.rff_params, real_by_class)
         
@@ -429,7 +469,10 @@ class Latent_Points(VectorizedTask):
                 n_ctrl = (self.batch_size // self.n_classes) * self.n_classes  # 5*11=55 for batch=64
                 codes60 = jnp.zeros((n_ctrl,), dtype=jnp.int32)
                 # Instance Noise for Discriminator stability
-                noise = jax.random.normal(con_key, (self.batch_size, 28, 28, 1)) * 0.1
+                noise = jax.random.normal(
+                    con_key,
+                    (self.batch_size, self.image_size, self.image_size, self.image_channels)
+                ) * 0.1
             else:
                 # --- Controlled Experiment (Latent Vector Design) ---
                 # Generate base vectors, repeat n_classes times -> enough to fill batch
@@ -456,7 +499,10 @@ class Latent_Points(VectorizedTask):
                 batch_latent_concat = jnp.concatenate([z_base, batch_cat_one_hot], axis=-1)
 
                 # Instance Noise for Discriminator stability
-                noise = jax.random.normal(cat_key, (self.batch_size, 28, 28, 1)) * 0.1
+                noise = jax.random.normal(
+                    cat_key,
+                    (self.batch_size, self.image_size, self.image_size, self.image_channels)
+                ) * 0.1
 
             return State(
                 obs=batch_latent_concat,

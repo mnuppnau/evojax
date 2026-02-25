@@ -35,7 +35,7 @@ def initialize_belief_space(
         initialize_situational_ks(param_size),  # [2] situational KS
         initialize_history_ks(param_size, num_iterations),  # [3] historical KS
         initialize_topographic_ks(features, key, num_codes),  # [4] topographic KS
-        initialize_normative_ks(param_size, population_size),  # [5] normative KS
+        initialize_normative_ks(param_size, population_size, num_codes),  # [5] normative KS
         initialize_metric_history(),         # [6] metric history (slopes)
     )
     return belief_space

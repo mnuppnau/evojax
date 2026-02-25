@@ -189,6 +189,7 @@ class ParameterAdapter:
 
 class Generator(nn.Module):
     features: int = 64
+    out_channels: int = 1
     training: bool = True
     
     @nn.compact
@@ -198,10 +199,12 @@ class Generator(nn.Module):
         x = nn.Dense(7 * 7 * 8)(z) # 74 -> 392 outputs = 29k params. Very manageable.
         x = x.reshape((x.shape[0], 7, 7, 8))
         
-        # Now use a Conv to expand depth (standard HyperNet texture generation)
-        x = nn.Conv(self.features, kernel_size=(3,3), padding='SAME')(x)
+        # Use reflection padding to remove zero-pad edge artifacts that can become
+        # discriminator shortcuts (dark border lines).
+        x = jnp.pad(x, ((0, 0), (1, 1), (1, 1), (0, 0)), mode='reflect')
+        x = nn.Conv(self.features, kernel_size=(3, 3), padding='VALID')(x)
         x = nn.GroupNorm(num_groups=32)(x)
-        x = jnp.tanh(x)
+        x = nn.leaky_relu(x, negative_slope=0.2)
         
         # ... Rest of the Resize-Conv network ...
         # 2. UPSAMPLE BLOCK 1 (7x7 -> 14x14)
@@ -210,40 +213,44 @@ class Generator(nn.Module):
         
         # Convolve: Process the upsampled features
         # We maintain 'features' depth (64) to keep capacity high
+        x = jnp.pad(x, ((0, 0), (2, 2), (2, 2), (0, 0)), mode='reflect')
         x = nn.Conv(
             self.features,
             kernel_size=(5, 5),  # 5x5 kernel helps smooth the nearest-neighbor edges
             strides=(1, 1),
-            padding='SAME',
+            padding='VALID',
             kernel_init=normal_init(0.02)
         )(x)
         x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
-        x = jnp.tanh(x)
+        x = nn.leaky_relu(x, negative_slope=0.2)
 
         # 3. UPSAMPLE BLOCK 2 (14x14 -> 28x28)
         x = jax.image.resize(x, shape=(x.shape[0], 28, 28, x.shape[3]), method='nearest')
         
         # Convolve
+        x = jnp.pad(x, ((0, 0), (2, 2), (2, 2), (0, 0)), mode='reflect')
         x = nn.Conv(
             self.features // 2,  # Reduce depth to 32
             kernel_size=(5, 5),
             strides=(1, 1),
-            padding='SAME',
+            padding='VALID',
             kernel_init=normal_init(0.02)
         )(x)
         x = nn.GroupNorm(num_groups=16, epsilon=1e-5)(x) # Adjusted groups for smaller depth
-        x = jnp.tanh(x)
+        x = nn.leaky_relu(x, negative_slope=0.2)
 
         # 4. OUTPUT BLOCK (28x28 -> 28x28)
-        # Collapse to 1 channel (Grayscale)
+        # Collapse to output channel count (1 for grayscale, 3 for RGB)
+        x = jnp.pad(x, ((0, 0), (2, 2), (2, 2), (0, 0)), mode='reflect')
         x = nn.Conv(
-            1,
+            self.out_channels,
             kernel_size=(5, 5),
             strides=(1, 1),
-            padding='SAME',
+            padding='VALID',
             kernel_init=normal_init(0.02)
         )(x)
-        x = jnp.tanh(x)
+        # Softer output tanh keeps bounded range while avoiding immediate hard saturation.
+        x = jnp.tanh(x / 2.0)
         
         return x
 
@@ -251,8 +258,8 @@ class Generator(nn.Module):
 
 class Discriminator(nn.Module):
     """Discriminator with attached Q-network (SpectralNorm, no BatchNorm)."""
+    q_cat: int
     features: int = 64
-    q_cat: int = 11
     train: bool = False
     q_cont: int = 2  # set to 0 if you only want categorical codes
 
@@ -648,24 +655,51 @@ class QNetwork(nn.Module):
 class GenPolicy(PolicyNetwork):
     """A convolutional neural network for the MNIST classification task."""
 
-    def __init__(self, logger: logging.Logger = None):
+    def __init__(
+            self,
+            n_classes: int = 11,
+            noise_dim: int = 63,
+            image_size: int = 28,
+            image_channels: int = 1,
+            disc_features: int = 64,
+            logger: logging.Logger = None):
         if logger is None:
             self._logger = create_logger('ConvNetPolicy')
         else:
             self._logger = logger
 
-        self.model_gen = Generator(training=False)
-       
-        self.model_disc = Discriminator(train=False)
+        self.n_classes = int(n_classes)
+        self.noise_dim = int(noise_dim)
+        self.image_size = int(image_size)
+        self.image_channels = int(image_channels)
+        self.disc_features = int(disc_features)
 
-        self.model_q = Discriminator()
+        self.model_gen = Generator(
+            training=False,
+            out_channels=self.image_channels,
+        )
+       
+        self.model_disc = Discriminator(
+            train=False,
+            q_cat=self.n_classes,
+            features=self.disc_features,
+        )
+
+        self.model_q = Discriminator(q_cat=self.n_classes, features=self.disc_features)
         
         key = random.PRNGKey(122)
 
         key, key_gen, key_disc, key_bin = random.split(key, 4)
 
-        variables_gen = self.model_gen.init(key_gen, jnp.ones([64,74], jnp.float32))
-        variables_disc = self.model_disc.init(key_disc, jnp.ones([1,28,28,1], jnp.float32))
+        latent_width = self.noise_dim + self.n_classes
+        variables_gen = self.model_gen.init(
+            key_gen,
+            jnp.ones([64, latent_width], jnp.float32)
+        )
+        variables_disc = self.model_disc.init(
+            key_disc,
+            jnp.ones([1, self.image_size, self.image_size, self.image_channels], jnp.float32)
+        )
         
         variables_q = self.model_q.init(key_bin, jnp.ones([64,5,5,128], jnp.float32))
         
@@ -676,7 +710,7 @@ class GenPolicy(PolicyNetwork):
         self.init_params_hypernet = self.adapter.init_hypernet(random.PRNGKey(11))
 
         #jax.debug.print('batch stats gen shape : {}', self.init_batch_stats_gen.shape)
-        self.latent_dim = 64
+        self.latent_dim = self.noise_dim
   
         self.num_params, format_params_gen_fn = get_params_format_fn(self.init_params_gen)
         
@@ -719,8 +753,14 @@ class GenPolicy(PolicyNetwork):
             params_g = self.adapter.generate_params(params_hn)
        
             (fake_data) = self.model_gen.apply({'params': params_g}, latent_input) 
+
+            # Saturation proxy used for PGPE regularization:
+            # fraction of generated pixels near output bounds.
+            sat_frac = jnp.mean((jnp.abs(fake_data) > 0.85).astype(jnp.float32))
            
-            fake_data_with_noise = fake_data + noise
+            # D-input noise is scheduled externally (trainer/sim_mgr) and
+            # arrives here pre-scaled for the current iteration.
+            fake_data_with_noise = fake_data + jnp.asarray(noise, dtype=fake_data.dtype)
           
             
             (preds, q, q_flat) = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data_with_noise, mutable=False)
@@ -731,13 +771,15 @@ class GenPolicy(PolicyNetwork):
             # Brightness-normalized: subtract per-image mean so the generator
             # cannot cheat by encoding codes as bright vs dark. Forces
             # structural/textural diversity instead.
-            n_classes = 11
+            n_classes = self.n_classes
             n_ctrl = (fake_data.shape[0] // n_classes) * n_classes  # 55 for batch=64
-            grouped = fake_data[:n_ctrl].reshape(-1, n_classes, 28, 28, 1)
+            grouped = fake_data[:n_ctrl].reshape(
+                -1, n_classes, self.image_size, self.image_size, self.image_channels
+            )
             grouped_centered = grouped - grouped.mean(axis=(2, 3), keepdims=True)
             code_pixel_div = jnp.mean(jnp.var(grouped_centered, axis=1))
 
-            return preds, q, code_pixel_div, q_flat
+            return preds, q, code_pixel_div, sat_frac, q_flat
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -764,9 +806,11 @@ class GenPolicy(PolicyNetwork):
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        preds, disc_logits, mean_var_fake, q_flat = self._forward_fn_gen(params_hn, params_disc, batch_stats_disc, t_states.obs, t_states.noise)
+        preds, disc_logits, mean_var_fake, sat_frac, q_flat = self._forward_fn_gen(
+            params_hn, params_disc, batch_stats_disc, t_states.obs, t_states.noise
+        )
         
-        return preds, disc_logits, mean_var_fake, q_flat, p_states
+        return preds, disc_logits, mean_var_fake, sat_frac, q_flat, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
@@ -778,9 +822,12 @@ class DiscPolicy(PolicyNetwork):
         else:
             self._logger = logger
 
-        self.model_disc = Discriminator()
+        self.model_disc = Discriminator(
+            q_cat=getattr(gen_policy, 'n_classes', 11),
+            features=getattr(gen_policy, 'disc_features', 64),
+        )
         
-        self.model_q = QNetwork()
+        self.model_q = QNetwork(q_cat=getattr(gen_policy, 'n_classes', 11))
 
         self.model_gen = gen_policy.model_gen
 
@@ -788,7 +835,12 @@ class DiscPolicy(PolicyNetwork):
 
         key, key_gen, key_disc, key_q = random.split(key, 4)
 
-        image_shape = (64, 28, 28, 1)
+        image_shape = (
+            64,
+            getattr(gen_policy, 'image_size', 28),
+            getattr(gen_policy, 'image_size', 28),
+            getattr(gen_policy, 'image_channels', 1),
+        )
         q_shape = [1,5,5,128]
 
         variables_disc = self.model_disc.init(key_disc, jnp.ones(image_shape, jnp.float32))

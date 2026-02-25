@@ -221,6 +221,7 @@ class SimManager(object):
 
         self._t = 0
         self._i = 1.0
+        self._disc_noise_scale = 1.0
         
         self.obs_normalizer = obs_normalizer
         if self.obs_normalizer is None:
@@ -244,7 +245,7 @@ class SimManager(object):
 
         def step_once_gen(carry, input_data, task):
             (task_state, policy_state, params_gen, params_disc, obs_params, t,
-             accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads, valid_mask) = carry
+             accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sat_frac, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads, valid_mask) = carry
             if task.multi_agent_training:
                 num_tasks, num_agents = task_state.obs.shape[:2]
                 task_state = task_state.replace(
@@ -252,8 +253,9 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            actions, disc_logits, mean_var_fake, q_flat, policy_state = policy_net.get_actions(
-                task_state, params_gen, params_disc, policy_state)
+            task_state_for_policy = task_state.replace(noise=task_state.noise * t)
+            actions, disc_logits, mean_var_fake, sat_frac, q_flat, policy_state = policy_net.get_actions(
+                task_state_for_policy, params_gen, params_disc, policy_state)
 
             if task.multi_agent_training:
                 task_state = task_state.replace(
@@ -275,33 +277,38 @@ class SimManager(object):
             valid_mask = valid_mask * (1 - done.ravel())
 
             return ((task_state, policy_state, params_gen, params_disc, obs_params, t,
-                     accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_pen, safety_ratios, spreads, valid_mask),
+                     accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sat_frac, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_pen, safety_ratios, spreads, valid_mask),
                     (org_obs, valid_mask))
 
         def rollout_gen(task_states, policy_states, params_gen, params_disc, obs_params, t,
                     step_once_gen_fn, max_steps):
-            accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
-            accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
-            disc_logits = jnp.zeros((256,64,11))
+            n_members = params_gen.shape[0]
+            batch_size = task_states.obs.shape[1]
+            n_codes = task_states.cat_codes.shape[-1]
+            feature_dim = max(task_states.hist_centroids.shape[-1] // n_codes, 1)
+            accumulated_rewards_adv = jnp.zeros(n_members)
+            accumulated_rewards_mi = jnp.zeros(n_members)
+            disc_logits = jnp.zeros((n_members, batch_size, n_codes))
             mean_var_fake = jnp.zeros(self._pop_size//2) #//2
-            sum_per_cat_code = jnp.zeros((self._pop_size//2,11, 256))
-            count_per_cat_code = jnp.zeros((self._pop_size//2,11))
+            sat_frac = jnp.zeros(self._pop_size//2)
+            sum_per_cat_code = jnp.zeros((self._pop_size//2, n_codes, feature_dim))
+            count_per_cat_code = jnp.zeros((self._pop_size//2, n_codes))
             r_cons = jnp.zeros(self._pop_size//2)
             r_sense = jnp.zeros(self._pop_size//2)
             r_intra = jnp.zeros(self._pop_size//2)
             r_shape_div = jnp.zeros(self._pop_size//2)
             r_shape_div_min = jnp.zeros(self._pop_size//2)
             normative_penalty = jnp.zeros(self._pop_size//2)
-            safety_ratios = jnp.zeros((self._pop_size//2, 11,11))
-            spreads = jnp.zeros((self._pop_size//2, 11,1))
+            safety_ratios = jnp.zeros((self._pop_size//2, n_codes, n_codes))
+            spreads = jnp.zeros((self._pop_size//2, n_codes, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params, t,
-              accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads, valid_masks),
+              accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sat_frac, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads, valid_masks),
              (obs_set, obs_mask)) = jax.lax.scan(
                 step_once_gen_fn,
                 (task_states, policy_states, params_gen, params_disc, obs_params, t,
-                 accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads, valid_masks), (), max_steps)
-            return accumulated_rewards_adv, accumulated_rewards_mi, obs_set, obs_mask, task_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads
+                 accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sat_frac, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads, valid_masks), (), max_steps)
+            return accumulated_rewards_adv, accumulated_rewards_mi, obs_set, obs_mask, task_states, disc_logits, mean_var_fake, sat_frac, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads
 
         def step_once_valid(carry, input_data, task):
             (task_state, policy_state, params_gen, params_disc, obs_params,
@@ -342,7 +349,10 @@ class SimManager(object):
                     step_once_gen_fn, max_steps):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
-            fake_imgs = jnp.zeros((256,64,28, 28, 1))
+            fake_imgs = jnp.zeros(
+                (params_gen.shape[0],)
+                + tuple(task_states.noise.shape[1:])
+            )
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params,
               accumulated_rewards_adv, accumulated_rewards_mi, fake_imgs, valid_masks),
@@ -398,6 +408,10 @@ class SimManager(object):
         if self._num_device > 1:
             self._valid_rollout_fn = jax.jit(jax.pmap(
                 self._valid_rollout_fn, in_axes=(0, 0, 0, 0, None)))
+
+    def set_disc_noise_scale(self, scale: float) -> None:
+        """Set training-time multiplier for discriminator input noise."""
+        self._disc_noise_scale = float(max(scale, 0.0))
 
     def eval_params(self,
                     params_gen: jnp.ndarray,
@@ -493,8 +507,40 @@ class SimManager(object):
         history_centroids, history_velocitys = topographic_ks
         pop_avg_spread, pop_min_safety = normative_ks
 
-        history_centroids = jnp.ravel(history_centroids)
-        history_velocitys = jnp.ravel(history_velocitys)
+        def _flatten_and_broadcast_topo(arr):
+            arr = jnp.asarray(arr)
+            if arr.ndim == 0:
+                flat = arr.reshape((1, 1))
+            elif arr.ndim == 1:
+                # Treat 1D topo tensors as a single vector (not per-pop scalars),
+                # even when length accidentally equals pop_size.
+                flat = arr.reshape((1, -1))
+            elif arr.shape[0] == self._pop_size:
+                flat = arr.reshape((self._pop_size, -1))
+            else:
+                flat = arr.reshape((1, -1))
+
+            if flat.shape[0] != self._pop_size:
+                flat = jnp.repeat(flat, self._pop_size, axis=0)
+            return flat
+
+        def _broadcast_first_dim(arr):
+            arr = jnp.asarray(arr)
+            if arr.ndim == 0:
+                arr = arr.reshape((1, 1))
+            elif arr.ndim == 1:
+                arr = arr.reshape((1, -1))
+            if arr.shape[0] != self._pop_size:
+                if arr.shape[0] == 1:
+                    arr = jnp.repeat(arr, self._pop_size, axis=0)
+                else:
+                    arr = jnp.repeat(arr[None, ...], self._pop_size, axis=0)
+            return arr
+
+        history_centroids = _flatten_and_broadcast_topo(history_centroids)
+        history_velocitys = _flatten_and_broadcast_topo(history_velocitys)
+        pop_avg_spread = _broadcast_first_dim(pop_avg_spread)
+        pop_min_safety = _broadcast_first_dim(pop_min_safety)
 
         """Rollout using jax.lax.scan."""
         policy_reset_func = self._policy_reset_fn
@@ -512,12 +558,6 @@ class SimManager(object):
         if params_disc is not None and params_disc.shape[0] != self._pop_size:
             params_disc = jnp.repeat(params_disc[None, :], self._pop_size, axis=0)
 
-        if history_centroids.shape[0] != self._pop_size:
-            history_centroids = jnp.repeat(history_centroids[None, :], self._pop_size, axis=0)
-            history_velocitys = jnp.repeat(history_velocitys[None, :], self._pop_size, axis=0)
-            pop_avg_spread = jnp.repeat(pop_avg_spread[None, :], self._pop_size, axis=0)
-            pop_min_safety = jnp.repeat(pop_min_safety[None, :], self._pop_size, axis=0)
-        
         self.batch_stats_disc = batch_stats_disc
 
         if test: 
@@ -574,8 +614,8 @@ class SimManager(object):
             scores_adv, scores_mi, all_obs, masks, final_states, fake_imgs = rollout_func(
                 task_state, policy_state, params_gen, params_disc, self.obs_params)
         else:
-            scores_adv, scores_mi, all_obs, masks, final_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads = rollout_func(
-            task_state, policy_state, params_gen, params_disc, self.obs_params, self._i)
+            scores_adv, scores_mi, all_obs, masks, final_states, disc_logits, mean_var_fake, sat_frac, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads = rollout_func(
+            task_state, policy_state, params_gen, params_disc, self.obs_params, self._disc_noise_scale)
 
         if self._num_device > 1:
             all_obs = reshape_data_from_pmap(all_obs)
@@ -609,6 +649,8 @@ class SimManager(object):
                     scores_mi.ravel().reshape((n_repeats, -1)), axis=0)
                 mean_var_fake = jnp.mean(
                     mean_var_fake.ravel().reshape((n_repeats, -1)), axis=0)
+                sat_frac = jnp.mean(
+                    sat_frac.ravel().reshape((n_repeats, -1)), axis=0)
                 r_cons = jnp.mean(
                     r_cons.ravel().reshape((n_repeats, -1)), axis=0)
                 r_sense = jnp.mean(
@@ -638,6 +680,8 @@ class SimManager(object):
                 scores_mi.ravel().reshape((-1, n_repeats)), axis=-1)
             mean_var_fake = jnp.mean(
                 mean_var_fake.ravel().reshape((-1, n_repeats)), axis=-1)
+            sat_frac = jnp.mean(
+                sat_frac.ravel().reshape((-1, n_repeats)), axis=-1)
             r_cons = jnp.mean(
                 r_cons.ravel().reshape((-1, n_repeats)), axis=-1)
             r_sense = jnp.mean(
@@ -692,4 +736,4 @@ class SimManager(object):
             scores4 = None
             avg_per_code = None
         #self._key = new_key
-        return scores1, scores2, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads
+        return scores1, scores2, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, sat_frac, avg_per_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads

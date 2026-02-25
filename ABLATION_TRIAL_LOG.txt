@@ -1,204 +1,467 @@
-OrganSMNIST Hyper-InfoGAN + Cultural Algorithms
+BloodMNIST Hyper-InfoGAN + Cultural Algorithms
 Ablation Trial Log
-Last updated: 2026-02-23
+Last updated: 2026-02-25
 
 Purpose
-- Track every training/code adjustment as a reproducible ablation record for the short paper.
-- Tie each trial to configuration, rationale, metrics, and image observations (especially iteration 11k panels).
-- Keep this file updated after each code adjustment (same cadence as PLAN.md updates).
+- Record every experimental adjustment for the BloodMNIST pivot.
+- Tie each trial to command/config, metrics, and image checkpoints (especially 11k).
+- Keep this file synchronized with PLAN.md after each code change.
 
-Codebase Snapshot
-- Framework: EvoJAX-derived HyperNetwork + PGPE + InfoGAN-style objective + CA belief space/KS guidance.
-- Current working branch: claude/evolve-infogan-hypernetworks-s3r6d-stable-67132f2.
-- Current dataset: OrganSMNIST (11 classes, 28x28 grayscale).
-- Current primary run command pattern:
-  python examples/train_organsmnist.py --gpu-id='0,1' --checkpoint-interval=5000
+Scope
+- Training objective remains unsupervised (no labels in optimization).
+- Labels may be used only for external evaluation/analysis.
 
-Evaluation Protocol (for comparability)
-- Primary scalar window: iterations 1000-12000 (unless otherwise noted).
-- Core metrics: adv_max, mi_avg, real_fake_loss band occupancy, r_sense, r_intra.
-- Route 2 metric: r_shape_div_avg (feature-space conditional shape diversity proxy).
-- Image checkpoint focus: iteration-11000.npy plus nearby checkpoints (8k, 9k, 10k, 12k).
+Common Evaluation Window
+- Primary scalar window: iterations 1000-12000.
+- Core metrics:
+  - adv_max, mi_avg
+  - real_fake_loss occupancy in [0.4, 0.6]
+  - r_shape_div_avg, r_shape_div_min_avg
+  - r_sense_avg, r_intra_avg
+- Image checkpoints: 5k, 8k, 11k (minimum), optionally 12k+.
 
---------------------------------------------------------------------------------
-Trial T00 - Stable branch baseline reference (pre-Phase-2 A/B)
---------------------------------------------------------------------------------
-Run ID / Source
-- Branch/commit lineage: stable-67132f2 line (before Route 2 metric integration).
-- Reference logs: historical branch logs and notes (not a single frozen run folder).
+----------------------------------------------------------------------
+Trial B00 - Branch bring-up (code migration to BloodMNIST)
+----------------------------------------------------------------------
+Status
+- Completed (code adaptation only; baseline run pending).
 
-Configuration
-- Discriminator threshold gate: real_fake_loss > 0.3.
-- CA blend configured conservatively and phased in (varied across runs).
+Key code changes
+- Added BloodMNIST training entrypoint:
+  - examples/train_bloodmnist.py
+- Added configurable RGB/n_classes/noise dimensions:
+  - evojax/policy/convnet.py
+  - evojax/trainer.py
+  - evojax/task/latent.py
+- Generalized normative KS code dimension:
+  - evojax/algo/cultural/knowledge_sources.py
+  - evojax/algo/cultural/belief_space.py
+- Generalized rollout buffers to dynamic class count:
+  - evojax/sim_mgr.py
+- Preserved T05 collapse-sensitive controller:
+  - shape_score (min+mean), adaptive w_shape, MI guard.
 
-Rationale
-- Establish a practical baseline with healthier D/G balance and better contrast/diversity than unstable mainline.
+Expected baseline command
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0 \
+  --ca-blend-start-iter=4500 \
+  --ca-blend-ramp-iters=3000 \
+  --ca-blend-rfl-lo=0.43 \
+  --ca-blend-rfl-hi=0.56 \
+  --shape-div-weight=0.12
 
-Observed behavior
-- More stable adversarial dynamics than unstable branch.
-- Still partial disentanglement; repeated/near-repeated shapes remained a recurrent issue.
+Notes
+- This trial establishes infrastructure; no quantitative training summary yet.
 
---------------------------------------------------------------------------------
-Trial T01 - Control (No CA blend)
---------------------------------------------------------------------------------
-Run ID / Source
-- Folder: runs/phase2_ab/control_seed42
-- Log files: runs/phase2_ab/control_seed42/metrics.tsv, runs/phase2_ab/control_seed42/ks_weights.tsv
+----------------------------------------------------------------------
+Trial B01 - BloodMNIST control (CA off)
+----------------------------------------------------------------------
+Status
+- In progress (run reached 11.5k iterations; early outcome is stable D dominance).
 
-Configuration
-- CA blend disabled: ca_blend_coeff = 0.0
-- Other training knobs kept matched to A/B setup.
+Command
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0 \
+  --ca-blend-start-iter=4500 \
+  --ca-blend-ramp-iters=3000 \
+  --ca-blend-rfl-lo=0.43 \
+  --ca-blend-rfl-hi=0.56 \
+  --shape-div-weight=0.12
 
-Rationale
-- Baseline for measuring net effect of CA blend schedule changes.
+Observed metrics (iter 100-11500)
+- real_fake_loss mean=0.2927, min=0.2752, max=0.5444.
+- real_fake_loss first drops below 0.30 at 600 iterations.
+- real_fake_loss occupancy:
+  - <0.40: 98.3%
+  - <0.35: 97.4%
+  - <0.30: 89.6%
+- adv_max never exceeded -0.6 in this window.
 
-Window summary (iter 1000-12000)
-- adv_max mean: -1.2594
-- mi_avg mean: -0.5101
-- r_sense mean: 0.0589
-- r_intra mean: 0.8259
-- real_fake_loss mean: 0.3799
-- real_fake_loss in [0.4, 0.6]: 36.4%
+Interim interpretation
+- This baseline is not expected to recover to the target D/G regime (real_fake_loss ~0.4-0.6).
+- Current D control is too aggressive for BloodMNIST with present defaults.
 
-Image notes (11k)
-- Higher local detail/contrast in some runs, but lower within-code variation in shape structure.
+Next delta before CA-on trials
+- Expose/tune D-control knobs for BloodMNIST:
+  - D update gate threshold (currently hardcoded at 0.30).
+  - Early D-step frequency window (currently 1/3 until 1.5k).
+  - Discriminator learning rate (currently 1e-4).
 
-Interpretation
-- CA-off can preserve detail but D/G balance is weaker (rfl too often below 0.4).
+----------------------------------------------------------------------
+Trial B01b - BloodMNIST control (CA off) with D-control retune
+----------------------------------------------------------------------
+Status
+- Ready to run (code knobs implemented).
 
---------------------------------------------------------------------------------
-Trial T02 - CA blend = 0.03
---------------------------------------------------------------------------------
-Run ID / Source
-- Folder: runs/phase2_ab/treatment_seed42
-- Log files: runs/phase2_ab/treatment_seed42/metrics.tsv, runs/phase2_ab/treatment_seed42/ks_weights.tsv
+Code updates
+- `evojax/trainer.py`
+  - Added configurable D control:
+    - `disc_lr` (default `1e-4`)
+    - `disc_update_gate` (default `0.30`)
+    - `disc_warmup_freq` (default `3`)
+    - `disc_warmup_iters` (default `1500`)
+  - Replaced hardcoded values in D optimizer and D-step schedule/gate.
+- `examples/train_bloodmnist.py`
+  - Added CLI flags for the four D-control knobs.
+  - BloodMNIST defaults now set to first retune:
+    - `--disc-lr=7e-5`
+    - `--disc-update-gate=0.40`
+    - `--disc-warmup-freq=5`
+    - `--disc-warmup-iters=3000`
 
-Configuration
-- CA blend schedule active (with delayed/ramped setup from Phase 2).
-- Effective blend over window reflected by mean ca_blend ~0.011.
+Run command (B01b)
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0
 
-Rationale
-- Test whether moderate CA blend improves D/G balance without killing image quality.
+Evaluation target
+- Recover real_fake_loss occupancy toward [0.40, 0.60] in 1k-12k window.
+- Keep adv_max from persistent collapse.
 
-Window summary (iter 1000-12000)
-- adv_max mean: -1.1868 (better than control)
-- mi_avg mean: -0.6229 (worse than control)
-- r_sense mean: 0.0610
-- r_intra mean: 0.8556
-- real_fake_loss mean: 0.4039
-- real_fake_loss in [0.4, 0.6]: 56.4%
+----------------------------------------------------------------------
+Trial B01c - BloodMNIST control (CA off) with grayscale pivot (Option A)
+----------------------------------------------------------------------
+Status
+- Ready to run (code updated).
 
-Image notes (11k)
-- Better D/G health vs control, but MI-side behavior suggested stronger prototype pressure in several codes.
+Motivation
+- BloodMNIST channels are highly correlated in real data, but generated outputs
+  were using RGB as independent degrees of freedom (color shortcut).
+- Convert BloodMNIST to luminance so optimization pressure targets morphology.
 
-Interpretation
-- CA blend improved discriminator health but MI tradeoff remained unresolved.
+Code updates
+- `examples/train_bloodmnist.py`
+  - Switched BloodMNIST run configuration from `image_channels=3` to `1`.
+- `evojax/trainer.py`
+  - Added RGB->grayscale conversion when `image_channels=1` and data is RGB.
+- `evojax/task/latent.py`
+  - Added `image_channels` argument to `build_real_by_class_medmnist(...)`.
+  - Added RGB->grayscale conversion in real-class sampling path when requested.
+  - `Latent_Points` now passes `image_channels` through.
 
---------------------------------------------------------------------------------
-Trial T03 - CA blend = 0.015
---------------------------------------------------------------------------------
-Run ID / Source
-- Folder: runs/phase2_ab/treatment_adj_seed42
-- Log files: runs/phase2_ab/treatment_adj_seed42/metrics.tsv, runs/phase2_ab/treatment_adj_seed42/ks_weights.tsv
+Run command (B01c)
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0
 
-Configuration
-- CA blend coefficient reduced from 0.03 to 0.015.
-- Effective blend over window reflected by mean ca_blend ~0.0079.
+Evaluation target
+- Better morphology structure at 8k/11k without RGB artifact shortcuts.
+- Check whether D/G balance improves relative to B01b.
 
-Rationale
-- Keep rfl benefit while reducing MI/disentanglement interference.
+----------------------------------------------------------------------
+Trial B01d - BloodMNIST control (CA off) with anti-saturation Generator activations
+----------------------------------------------------------------------
+Status
+- Ready to run (code updated).
 
-Window summary (iter 1000-12000)
-- adv_max mean: -1.1288 (best among T01-T03)
-- mi_avg mean: -0.7198 (worst among T01-T03)
-- r_sense mean: 0.0573
-- r_intra mean: 0.8417
-- real_fake_loss mean: 0.4358
-- real_fake_loss in [0.4, 0.6]: 70.0%
+Motivation
+- D/G tuning alone did not recover the expected Generator transition.
+- Suspected failure mode: early activation saturation in Generator causing low
+  phenotype sensitivity for PGPE perturbations.
 
-Image notes (11k)
-- More complex contrast, but repeated shapes within codes persisted.
+Code updates
+- `evojax/policy/convnet.py` Generator:
+  - Replaced intermediate `tanh` activations with `leaky_relu(0.2)`.
+  - Kept final bounded output but softened to `tanh(x / 2.0)`.
+- `evojax/trainer.py` training-time Generator copy:
+  - Matched the same activation changes for D-step consistency.
 
-Interpretation
-- Better adversarial balance did not translate into stronger within-code structural diversity.
+Run command (B01d)
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0
 
---------------------------------------------------------------------------------
-Trial T04 - Route 2: r_shape_div integration
---------------------------------------------------------------------------------
-Run ID / Source
-- Current active run on updated code.
-- Live logs: log/organsmnist/metrics.tsv, log/organsmnist/ks_weights.tsv
-- Current image checkpoints: iteration-1000.npy ... iteration-11000.npy
+Evaluation target
+- Higher PGPE response in `adv_max` (more frequent recovery toward `>-0.6`).
+- Better structural detail without immediate binary/flat saturation artifacts.
 
-Code changes (Route 2 pivot)
-- Added r_shape_div in latent task as conditional diversity proxy:
-  Var[f_D(G(z,c)) | c] in discriminator feature space.
-- Routed r_shape_div through sim_mgr -> trainer -> solver tell().
-- Added fitness term: rank_normalize(r_shape_div) * w_shape.
-- Extended Domain KS archive with r_shape_div and 4-axis Pareto:
-  [|adv|, |mi|, -shape_div, |entropy|].
-- Domain KS stagnation path now selects highest r_shape_div archive member.
-- Added CLI knob: --shape-div-weight (default 0.12).
+----------------------------------------------------------------------
+Trial B01e - BloodMNIST control (CA off) with explicit saturation penalty
+----------------------------------------------------------------------
+Status
+- In progress (run observed through ~24k).
 
-Configuration used
-- Same command family as previous run, with Route 2 code now active:
-  python examples/train_organsmnist.py --gpu-id='0,1' --checkpoint-interval=5000 \
-    --ca-blend-coeff=0.015 --ca-blend-start-iter=4500 --ca-blend-ramp-iters=3000 \
-    --ca-blend-rfl-lo=0.43 --ca-blend-rfl-hi=0.56 --shape-div-weight=0.12
+Motivation
+- B01d improved early image quality but diverged around 3.5k-5k with rising
+  adversarial variance and visible image degradation.
+- PGPE needs an explicit penalty against saturated/binary shortcut phenotypes.
 
-Current observations (iter 8000-10500 snapshot)
-- adv_max mean: -0.8397
-- mi_avg mean: -0.6474
-- r_sense mean: 0.0619
-- r_intra mean: 0.9144
-- r_shape_div mean: 0.1370
-- real_fake_loss mean: 0.5022
+Code updates
+- `evojax/policy/convnet.py`
+  - Added per-member `sat_frac = mean(|fake_pixels| > 0.85)` in `forward_fn_gen`.
+  - Routed `sat_frac` through `get_actions(...)`.
+- `evojax/sim_mgr.py`
+  - Propagated `sat_frac` through rollout/eval pipeline and returned it to trainer.
+- `evojax/trainer.py`
+  - Passed `sat_frac` into `solver_hn.tell(...)`.
+  - Added `sat_frac_avg` and `sat_excess_avg` to `metrics.tsv` logging.
+  - Added saturation summary logging per interval.
+- `evojax/algo/pgpe_ca.py`
+  - Added saturation-penalty knobs:
+    - `sat_penalty_weight`, `sat_target`,
+      `sat_penalty_start_iter`, `sat_penalty_ramp_iters`.
+  - Added fitness term:
+    - `sat_excess = relu(sat_frac - sat_target)`
+    - `sat_pen = clip(sat_excess / (1 - sat_target), 0, 1)`
+    - `fitness -= sat_pen * w_sat_t` with linear ramp.
+  - Exposed diagnostics: `w_sat`, `sat_target`, `sat_frac_avg`, `sat_excess_avg`.
+- `examples/train_bloodmnist.py`
+  - Added CLI flags for saturation penalty knobs and passed them to `PGPE_CA`.
 
-Image notes (through ~11k)
-- D/G balance remains healthy, but repeated shapes within each code are still the dominant visual failure mode.
-- Some codes show minor variation, but not enough for strong within-code disentanglement.
+Initial defaults
+- `sat_penalty_weight=0.12`
+- `sat_target=0.10`
+- `sat_penalty_start_iter=1500`
+- `sat_penalty_ramp_iters=1500`
 
-Interpretation
-- Route 2 plumbing is correct and stable.
-- Mean-only r_shape_div appears insufficient to penalize per-code collapse.
+Run command (B01e)
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0
 
---------------------------------------------------------------------------------
-Trial T05 - Collapse-sensitive Route 2 refinement (implemented)
---------------------------------------------------------------------------------
-Run ID / Source
-- Code update only (next run pending on this patch set).
-- Modified files:
-  evojax/task/latent.py
-  evojax/sim_mgr.py
-  evojax/trainer.py
-  evojax/algo/pgpe_ca.py
-  evojax/algo/cultural/knowledge_sources.py
-  scripts/compare_metrics_tsv.py
+Evaluation target
+- Reduce post-3k saturation drift while preserving early B01d image quality.
+- Keep `sat_excess_avg` near 0 while maintaining/improving `adv_max`.
 
-Code changes
-- Added `shape_div_min` (worst-code conditional diversity) end-to-end.
-- Kept `shape_div_mean` and changed shape reward to collapse-sensitive blend:
-  `shape_score = 0.7 * shape_div_min + 0.3 * shape_div_mean`.
-- Added shape-div history buffer + slopes in CA (`shape_short`, `shape_med`).
-- Made `w_shape` CA-adaptive with strict clamp `[0.02, 0.20]`.
-- Added MI guard:
-  when `shape_div_min` falls below target, reduce `w_mi` and nudge `w_shape`.
-- Extended logs:
-  - `metrics.tsv`: now includes `r_shape_div_min_avg`.
-  - `ks_weights.tsv`: now includes `shape_short`, `shape_med`,
-    `shape_div_min_avg`, `shape_div_score_avg`, and `mi_guard`.
+Observed snapshot (~24k)
+- D/G balance is improved versus earlier collapse runs but still D-leaning.
+- `sat_frac_avg` remains high (~0.55-0.70), so current `sat_penalty_weight=0.12`
+  is insufficient for strong anti-saturation pressure.
+- Persistent edge-line artifact remains visible in generated images.
 
-Rationale
-- Mean-only conditional diversity allowed partial code collapse to hide in averages.
-- This patch promotes worst-code recovery and prevents MI-only prototype shortcuts.
+----------------------------------------------------------------------
+Trial B01f - Reflection-padding Generator + stronger saturation penalty
+----------------------------------------------------------------------
+Status
+- Ready to run (code updated).
 
-Validation command for T05
-- python examples/train_organsmnist.py --gpu-id='0,1' --checkpoint-interval=5000 \
-  --ca-blend-coeff=0.015 --ca-blend-start-iter=4500 --ca-blend-ramp-iters=3000 \
-  --ca-blend-rfl-lo=0.43 --ca-blend-rfl-hi=0.56 --shape-div-weight=0.12
+Motivation
+- Remove border artifacts likely caused by zero-padding shortcuts.
+- Increase anti-saturation selection pressure from B01e level.
 
-Success criteria for T05
-- Maintain healthy `real_fake_loss` occupancy.
-- Improve `r_shape_div_min_avg` without degrading adversarial stability.
-- Increase within-code structural variety in 11k panels.
-- Avoid MI improvement that coincides with repeated per-code prototypes.
+Code updates
+- `evojax/policy/convnet.py`
+  - Replaced Generator conv `padding='SAME'` with explicit reflection padding
+    followed by `padding='VALID'` convs (all conv blocks).
+- `evojax/trainer.py`
+  - Matched the same reflection-padding Generator changes in training-time copy.
+
+Suggested run command (B01f)
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0 \
+  --sat-penalty-weight=0.25
+
+Evaluation target
+- Remove persistent black edge-line artifacts.
+- Lower `sat_frac_avg` / `sat_excess_avg` while preserving B01e stability.
+
+----------------------------------------------------------------------
+Trial B01g - Saturation-aware adversarial governor (dynamic adv cap)
+----------------------------------------------------------------------
+Status
+- Ready to run (code updated).
+
+Motivation
+- B01f still diverged around ~6k with `sat_frac_avg` drifting toward ~0.9+.
+- `w_sat` was already high, but adversarial pressure could still dominate ranking.
+- Need to reduce adversarial domination specifically when saturation is elevated.
+
+Code updates
+- `evojax/algo/pgpe_ca.py`
+  - Added saturation-aware adversarial governor knobs:
+    - `adv_sat_trigger` (default `0.20`)
+    - `adv_sat_cap_min` (default `0.35`)
+    - `adv_sat_strength` (default `0.85`)
+  - Added dynamic adversarial rank cap:
+    - `adv_rank_shaped = clip(rank_normalize(fitness_adv), -cap, +cap)`
+    - `cap` shrinks as mean `sat_excess` rises after sat ramp starts.
+  - Added distress suppression:
+    - `adv_distress` is scaled by `(1 - adv_sat_govern)` during high saturation.
+  - Reused existing sat ramp (`sat_penalty_start_iter`, `sat_penalty_ramp_iters`)
+    so governor activates smoothly.
+- `examples/train_bloodmnist.py`
+  - Added CLI flags for the three governor knobs and wired them into `PGPE_CA`.
+
+Suggested run command (B01g)
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0 \
+  --sat-penalty-weight=0.25 \
+  --adv-sat-trigger=0.20 \
+  --adv-sat-cap-min=0.35 \
+  --adv-sat-strength=0.85
+
+Evaluation target
+- Reduce incidence/duration of saturation cascades after 4k-8k.
+- Keep `real_fake_loss` from prolonged sub-0.4 collapse while preserving image detail.
+
+----------------------------------------------------------------------
+Trial B01h - Discriminator regulation (soft rollback on prolonged low rfl)
+----------------------------------------------------------------------
+Status
+- Ready to run (code updated).
+
+Motivation
+- B01g still diverged around ~3.4k despite improved early behavior.
+- Repeated pattern across B01 variants: once D becomes persistently too strong,
+  fitness-side shaping alone cannot restore balance.
+
+Code updates
+- `evojax/trainer.py`
+  - Added optional D regulation controller:
+    - monitor `real_fake_loss` at log intervals
+    - if `real_fake_loss < threshold` for K consecutive logs:
+      - blend D params/batch-stats toward anchor D state
+      - reset D optimizer state
+  - Added trainer knobs:
+    - `disc_reg_enable`
+    - `disc_reg_rfl_threshold`
+    - `disc_reg_consecutive_logs`
+    - `disc_reg_blend`
+    - `disc_reg_start_iter`
+    - `disc_reg_cooldown_iters`
+- `examples/train_bloodmnist.py`
+  - Added CLI flags for all D regulation knobs.
+  - Added startup logging for regulation configuration.
+
+Suggested run command (B01h)
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0 \
+  --sat-penalty-weight=0.25 \
+  --adv-sat-trigger=0.20 \
+  --adv-sat-cap-min=0.35 \
+  --adv-sat-strength=0.85 \
+  --disc-reg-enable \
+  --disc-reg-rfl-threshold=0.35 \
+  --disc-reg-consecutive-logs=4 \
+  --disc-reg-blend=0.30 \
+  --disc-reg-start-iter=2000 \
+  --disc-reg-cooldown-iters=1000
+
+Evaluation target
+- Prevent long stuck-low-`real_fake_loss` phases after ~3k.
+- Reduce frequency of irreversible collapse while preserving early image progress.
+
+----------------------------------------------------------------------
+Trial B01i - Reduced discriminator capacity (Option 2)
+----------------------------------------------------------------------
+Status
+- Ready to run (code updated).
+
+Motivation
+- B01h still showed the same failure mode: D remains too strong for too long.
+- Move from dynamic D control to structural speed-gap reduction.
+
+Code updates
+- `examples/train_bloodmnist.py`
+  - Added `--disc-features` (default `32`) for BloodMNIST.
+  - Passes reduced D width into `GenPolicy`, `Trainer`, and belief-space init.
+- `evojax/policy/convnet.py`
+  - `GenPolicy` now takes `disc_features` and builds discriminator with that width.
+  - `DiscPolicy` mirrors `gen_policy.disc_features` for consistency.
+- `evojax/trainer.py`
+  - `Trainer` now accepts `disc_features` and uses policy width by default.
+  - D init and D train-step discriminator now instantiate with that width.
+  - Replaced fixed centroid width (`256`) with `disc_features * 4`.
+- `evojax/sim_mgr.py`
+  - Replaced fixed feature width (`256`) with dynamic width from task-state
+    topographic centroid tensor.
+
+Suggested run command (B01i)
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0 \
+  --disc-features=32 \
+  --sat-penalty-weight=0.25 \
+  --adv-sat-trigger=0.20 \
+  --adv-sat-cap-min=0.35 \
+  --adv-sat-strength=0.85
+
+Evaluation target
+- Improve D/G balance durability after 3k-6k compared with B01g/B01h.
+- Preserve morphological detail while reducing collapse frequency.
+
+----------------------------------------------------------------------
+Trial B01j - Decaying D-input noise schedule + `disc_features=16` support
+----------------------------------------------------------------------
+Status
+- Ready to run (code updated).
+
+Motivation
+- Recent runs looked strong until ~3k, then degraded; this aligns with
+  saturation/governor full-ramp timing and rising D shortcut pressure.
+- Add stronger early D-input regularization that decays slowly.
+
+Code updates
+- `evojax/trainer.py`
+  - Added decaying noise schedule knobs:
+    - `disc_input_noise_start`
+    - `disc_input_noise_end`
+    - `disc_input_noise_decay_iters`
+  - Applied schedule to D-step real/fake input noise.
+  - Logged `disc_input_noise_std` to `metrics.tsv`.
+  - Syncs rollout/eval D-input noise scale each iteration via `SimManager`.
+- `evojax/sim_mgr.py`
+  - Added `set_disc_noise_scale(...)`.
+  - Applies scale to task noise before `policy_net.get_actions(...)` so
+  convnet discriminator path sees the same scheduled noise as trainer D-step.
+  - Fixed topographic centroid broadcast bug when `n_codes * feature_dim == pop_size`
+    (e.g., `8 * 64 == 512` at `disc_features=16`):
+    flatten+repeat logic now always treats topographic tensors as a single
+    centroid vector per population member, avoiding scalar per-member centroids.
+- `evojax/policy/convnet.py`
+  - D-input noise path now explicitly consumes externally scheduled noise
+    (`fake_data + asarray(noise)`), keeping dtype stable.
+- `examples/train_bloodmnist.py`
+  - Added CLI flags for decaying D-input noise schedule.
+  - Added noise schedule values to startup logging.
+
+Suggested run command (B01j)
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0 \
+  --disc-features=16 \
+  --disc-lr=3e-5 \
+  --disc-warmup-freq=1 \
+  --disc-warmup-iters=5000 \
+  --disc-input-noise-start=0.24 \
+  --disc-input-noise-end=0.10 \
+  --disc-input-noise-decay-iters=40000 \
+  --sat-penalty-weight=0.25 \
+  --adv-sat-trigger=0.20 \
+  --adv-sat-cap-min=0.35 \
+  --adv-sat-strength=0.85
+
+Evaluation target
+- Delay or avoid the 3k-4k collapse onset while preserving early image quality.
+- Keep `real_fake_loss` occupancy healthier without forcing D inactivity.
+
+----------------------------------------------------------------------
+Next queued trials
+----------------------------------------------------------------------
+B02: BloodMNIST CA blend 0.03
+- Goal: measure D/G stabilization and MI/diversity tradeoff.
+
+B03: BloodMNIST CA blend 0.015
+- Goal: compare gentler blend to B02.
+
+B04: BloodMNIST T05 controller
+- Goal: test collapse-sensitive shape objective + MI guard effect.
+
+B05: T05 shape weight sweep
+- Goal: assess sensitivity of shape_div_weight (0.08, 0.12, 0.16).

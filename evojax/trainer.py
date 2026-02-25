@@ -40,7 +40,7 @@ from evojax.util import save_checkpoint, load_checkpoint
 from jax.nn.initializers import normal as normal_init
 from jax.nn.initializers import he_normal
 from flax import linen as nn
-from medmnist import OrganSMNIST
+from medmnist import OrganSMNIST, BloodMNIST
 from optax.assignment import hungarian_algorithm
 # import Tuple
 from typing import Tuple
@@ -79,6 +79,7 @@ from typing import Tuple
 
 class Generator(nn.Module):
     features: int = 64
+    out_channels: int = 1
     training: bool = True
 
     @nn.compact
@@ -88,10 +89,12 @@ class Generator(nn.Module):
         x = nn.Dense(7 * 7 * 8)(z) # 74 -> 392 outputs = 29k params. Very manageable.
         x = x.reshape((x.shape[0], 7, 7, 8))
         
-        # Now use a Conv to expand depth (standard HyperNet texture generation)
-        x = nn.Conv(self.features, kernel_size=(3,3), padding='SAME')(x)
+        # Use reflection padding to remove zero-pad edge artifacts that can become
+        # discriminator shortcuts (dark border lines).
+        x = jnp.pad(x, ((0, 0), (1, 1), (1, 1), (0, 0)), mode='reflect')
+        x = nn.Conv(self.features, kernel_size=(3,3), padding='VALID')(x)
         x = nn.GroupNorm(num_groups=32)(x)
-        x = jnp.tanh(x)
+        x = nn.leaky_relu(x, negative_slope=0.2)
         
         # ... Rest of the Resize-Conv network ...
         # 2. UPSAMPLE BLOCK 1 (7x7 -> 14x14)
@@ -100,47 +103,51 @@ class Generator(nn.Module):
         
         # Convolve: Process the upsampled features
         # We maintain 'features' depth (64) to keep capacity high
+        x = jnp.pad(x, ((0, 0), (2, 2), (2, 2), (0, 0)), mode='reflect')
         x = nn.Conv(
             self.features,
             kernel_size=(5, 5),  # 5x5 kernel helps smooth the nearest-neighbor edges
             strides=(1, 1),
-            padding='SAME',
+            padding='VALID',
             kernel_init=normal_init(0.02)
         )(x)
         x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
-        x = jnp.tanh(x)
+        x = nn.leaky_relu(x, negative_slope=0.2)
 
         # 3. UPSAMPLE BLOCK 2 (14x14 -> 28x28)
         x = jax.image.resize(x, shape=(x.shape[0], 28, 28, x.shape[3]), method='nearest')
         
         # Convolve
+        x = jnp.pad(x, ((0, 0), (2, 2), (2, 2), (0, 0)), mode='reflect')
         x = nn.Conv(
             self.features // 2,  # Reduce depth to 32
             kernel_size=(5, 5),
             strides=(1, 1),
-            padding='SAME',
+            padding='VALID',
             kernel_init=normal_init(0.02)
         )(x)
         x = nn.GroupNorm(num_groups=16, epsilon=1e-5)(x) # Adjusted groups for smaller depth
-        x = jnp.tanh(x)
+        x = nn.leaky_relu(x, negative_slope=0.2)
 
         # 4. OUTPUT BLOCK (28x28 -> 28x28)
-        # Collapse to 1 channel (Grayscale)
+        # Collapse to output channel count (1 grayscale / 3 RGB)
+        x = jnp.pad(x, ((0, 0), (2, 2), (2, 2), (0, 0)), mode='reflect')
         x = nn.Conv(
-            1,
+            self.out_channels,
             kernel_size=(5, 5),
             strides=(1, 1),
-            padding='SAME',
+            padding='VALID',
             kernel_init=normal_init(0.02)
         )(x)
-        x = jnp.tanh(x)
+        # Softer output tanh keeps bounded range while avoiding immediate hard saturation.
+        x = jnp.tanh(x / 2.0)
         
         return x
 
 class Discriminator(nn.Module):
     """Discriminator with attached Q-network (SpectralNorm, no BatchNorm)."""
+    q_cat: int
     features: int = 64
-    q_cat: int = 11
     q_cont: int = 0  # continuous codes removed
 
     @nn.compact
@@ -715,8 +722,8 @@ def reorder_real_centroids(
 ) -> jnp.ndarray:                  # (10, 256) reordered
     return real_centroids[col_indices]
 
-@partial(jax.jit, static_argnames=['solver'])
-def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, solver):
+@partial(jax.jit, static_argnames=['solver', 'disc_features'])
+def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, solver, disc_features: int = 64):
        
         noise, shift_x, shift_y = noise_shift_tup
         params_d, batch_stats_d, opt_disc = state
@@ -764,6 +771,8 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, sol
             return -jnp.mean(nn.log_softmax(logits, axis=1)[jnp.arange(batch_size), labels])
         
         def loss_discriminator(params_d, vars_d_batch_stats):
+                  n_codes = fake_cat_input.shape[-1]
+                  disc_model = Discriminator(q_cat=n_codes, features=disc_features)
                 
                   #(fake_imgs, vars_g) = Generator().apply(
                   #    {'params': params_g, 'batch_stats': batch_stats_g},
@@ -797,12 +806,12 @@ def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, sol
                   #fake_images_with_noise_perturbed = jnp.roll(fake_images_with_noise, shift=(shift_x, shift_y), axis=(1,2))
                   #real_images_with_noise_perturbed = jnp.roll(real_images_with_noise, shift=(shift_x, shift_y), axis=(1,2))
                   
-                  (fake_preds, q_fake, _), vars_d = Discriminator().apply(
+                  (fake_preds, q_fake, _), vars_d = disc_model.apply(
                       {'params': params_d, 'batch_stats': vars_d_batch_stats},
                       fake_images_with_noise, mutable=['batch_stats']
                   )
                   
-                  (real_preds, _, _), vars_d = Discriminator().apply(
+                  (real_preds, _, _), vars_d = disc_model.apply(
                       {'params': params_d, 'batch_stats': vars_d['batch_stats']},
                       real_images_with_noise, mutable=['batch_stats']
                   )
@@ -902,15 +911,15 @@ def recalibrate_bn_stats(gen_module, params, batch_stats, key,
     (batch_stats_new, key_new) = lax.fori_loop(0, steps, body, (batch_stats, key))
     return batch_stats_new, key_new
 
-def sample_latent(key, shape_noise, shape_cat):
+def sample_latent(key, shape_noise, shape_cat, n_disc=11):
   noise_key, cat_key = jax.random.split(key, 2)
 
   # Sample irreducible noise
   noise = jax.random.normal(noise_key, shape_noise)
 
   # Sample categorical latent code
-  code_cat = jax.random.randint(cat_key, shape_cat, 0, 11)
-  code_cat = jax.nn.one_hot(code_cat, 11)
+  code_cat = jax.random.randint(cat_key, shape_cat, 0, n_disc)
+  code_cat = jax.nn.one_hot(code_cat, n_disc)
 
   latent = jnp.concatenate([noise, code_cat], axis=-1)
 
@@ -949,6 +958,26 @@ class Trainer(object):
                  normalize_obs: bool = False,
                  model_dir: str = None,
                  batch_size: int = 32,
+                 latent_dim: int = 63,
+                 n_classes: int = 11,
+                 dataset_name: str = "organsmnist",
+                 image_size: int = 28,
+                 image_channels: int = 1,
+                 data_root: str = "./data",
+                 disc_features: int = 64,
+                 disc_lr: float = 1e-4,
+                 disc_update_gate: float = 0.3,
+                 disc_warmup_freq: int = 3,
+                 disc_warmup_iters: int = 1500,
+                 disc_input_noise_start: float = 0.20,
+                 disc_input_noise_end: float = 0.08,
+                 disc_input_noise_decay_iters: int = 30000,
+                 disc_reg_enable: bool = False,
+                 disc_reg_rfl_threshold: float = 0.35,
+                 disc_reg_consecutive_logs: int = 4,
+                 disc_reg_blend: float = 0.30,
+                 disc_reg_start_iter: int = 2000,
+                 disc_reg_cooldown_iters: int = 1000,
                  log_dir: str = None,
                  checkpoint_dir: str = None,
                  checkpoint_interval: int = 0,
@@ -996,8 +1025,26 @@ class Trainer(object):
         self.fake_imgs = None
         self.cat_codes = None
 
-        self.latent_dim = 63
-        self.n_classes = 11
+        self.latent_dim = int(getattr(policy_gen, 'noise_dim', latent_dim))
+        self.n_classes = int(getattr(policy_gen, 'n_classes', n_classes))
+        self.dataset_name = str(dataset_name).lower()
+        self.image_size = int(getattr(policy_gen, 'image_size', image_size))
+        self.image_channels = int(getattr(policy_gen, 'image_channels', image_channels))
+        self.disc_features = int(getattr(policy_gen, 'disc_features', disc_features))
+        self.data_root = data_root
+        self.disc_lr = float(disc_lr)
+        self.disc_update_gate = float(disc_update_gate)
+        self.disc_warmup_freq = max(1, int(disc_warmup_freq))
+        self.disc_warmup_iters = max(0, int(disc_warmup_iters))
+        self.disc_input_noise_start = float(max(disc_input_noise_start, 0.0))
+        self.disc_input_noise_end = float(max(disc_input_noise_end, 0.0))
+        self.disc_input_noise_decay_iters = max(1, int(disc_input_noise_decay_iters))
+        self.disc_reg_enable = bool(disc_reg_enable)
+        self.disc_reg_rfl_threshold = float(disc_reg_rfl_threshold)
+        self.disc_reg_consecutive_logs = max(1, int(disc_reg_consecutive_logs))
+        self.disc_reg_blend = float(np.clip(disc_reg_blend, 0.0, 1.0))
+        self.disc_reg_start_iter = max(0, int(disc_reg_start_iter))
+        self.disc_reg_cooldown_iters = max(0, int(disc_reg_cooldown_iters))
 
         self.decay_factor = 0.9
 
@@ -1020,16 +1067,18 @@ class Trainer(object):
             'iter',
             'adv_max', 'adv_avg', 'adv_min', 'adv_std',
             'mi_max', 'mi_avg', 'mi_min', 'mi_std',
-            'r_cons_avg', 'r_sense_avg', 'r_intra_avg', 'r_shape_div_avg', 'r_shape_div_min_avg',
+            'r_cons_avg', 'r_sense_avg', 'r_intra_avg', 'sat_frac_avg', 'sat_excess_avg', 'r_shape_div_avg', 'r_shape_div_min_avg',
             'norm_pen_avg', 'safety_avg', 'spread_avg',
             'real_fake_loss',
+            'disc_input_noise_std',
             'ca_blend', 'ca_rfl_gate', 'ca_has_data', 'ks_winner',
         ]
         self._ks_tsv_header = [
             'iter',
             'adv_short', 'mi_short', 'adv_med', 'mi_med', 'ent_long',
             'sense_short', 'intra_short', 'adv_avg_short', 'sense_med', 'shape_short', 'shape_med', 'shape_div_avg', 'shape_div_min_avg', 'shape_div_score_avg',
-            'w_adv', 'w_mi', 'w_div', 'w_sense', 'w_intra', 'w_shape', 'mi_guard', 'w_cons_floor', 'w_norm',
+            'w_adv', 'w_mi', 'w_div', 'w_sense', 'w_intra', 'w_shape', 'w_sat', 'mi_guard', 'w_cons_floor', 'w_norm',
+            'adv_distress_raw', 'adv_distress', 'adv_sat_govern', 'adv_rank_cap', 'sat_pressure',
             'ks_dom_score', 'ks_sit_score', 'ks_hist_score', 'ks_topo_score',
             'ks_dom_weight', 'ks_sit_weight', 'ks_hist_weight', 'ks_topo_weight',
             'ks_winner',
@@ -1063,10 +1112,42 @@ class Trainer(object):
 
         self._key, subkey = jax.random.split(self._key)
         
-        dataset = OrganSMNIST(split='train', download=True, root='./data')
+        dataset_lookup = {
+            'organ': OrganSMNIST,
+            'organmnist': OrganSMNIST,
+            'organsmnist': OrganSMNIST,
+            'blood': BloodMNIST,
+            'bloodmnist': BloodMNIST,
+        }
+        if self.dataset_name not in dataset_lookup:
+            raise ValueError(
+                f"Unsupported dataset_name='{dataset_name}'. "
+                f"Expected one of: {sorted(dataset_lookup.keys())}"
+            )
+        dataset_cls = dataset_lookup[self.dataset_name]
+        dataset = dataset_cls(split='train', download=True, root=self.data_root)
         data_raw = np.array(dataset.imgs, dtype=np.float32)
-        if data_raw.ndim == 3:  # (N, 28, 28) -> (N, 28, 28, 1)
+        if data_raw.ndim == 3:
             data_raw = np.expand_dims(data_raw, axis=-1)
+        if (
+            self.image_channels == 1
+            and data_raw.ndim == 4
+            and data_raw.shape[-1] == 3
+        ):
+            # Convert RGB medical stains to luminance so generator/discriminator
+            # optimize morphology rather than independent channel artifacts.
+            rgb_weights = np.array([0.2989, 0.5870, 0.1141], dtype=np.float32)
+            data_raw = np.sum(data_raw * rgb_weights[None, None, None, :], axis=-1, keepdims=True)
+        if data_raw.shape[1] != self.image_size:
+            raise ValueError(
+                f"Configured image_size={self.image_size}, "
+                f"but dataset returned {data_raw.shape[1]}."
+            )
+        if data_raw.shape[-1] != self.image_channels:
+            raise ValueError(
+                f"Configured image_channels={self.image_channels}, "
+                f"but dataset returned {data_raw.shape[-1]}."
+            )
         self.data = data_raw / 127.5 - 1.0
 
         self._key, subkey = jax.random.split(self._key)
@@ -1074,10 +1155,20 @@ class Trainer(object):
         self.labels = dataset.labels.flatten()
 
         # initialize the discriminator
-        variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
+        variables_disc = Discriminator(
+            q_cat=self.n_classes,
+            features=self.disc_features,
+        ).init(
+            subkey,
+            jnp.ones((self.batch_size, self.image_size, self.image_size, self.image_channels), dtype=jnp.float32)
+        )
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
-        self.solver_disc = optax.adam(learning_rate=0.0001, b1=0.5, b2=0.999)
+        self.solver_disc = optax.adam(
+            learning_rate=self.disc_lr,
+            b1=0.5,
+            b2=0.999,
+        )
 
     def _init_structured_logs(self, resume_mode: bool) -> None:
         if self._log_dir is None:
@@ -1135,6 +1226,17 @@ class Trainer(object):
         with open(path, 'a', encoding='utf-8') as fp:
             fp.write('\t'.join(self._format_tsv_value(v) for v in row_values) + '\n')
 
+    def _disc_input_noise_std(self, iteration: int) -> float:
+        progress = np.clip(
+            float(iteration) / float(self.disc_input_noise_decay_iters),
+            0.0,
+            1.0,
+        )
+        return float(
+            self.disc_input_noise_start
+            + (self.disc_input_noise_end - self.disc_input_noise_start) * progress
+        )
+
     def _write_structured_rows(
             self,
             iteration: int,
@@ -1143,12 +1245,14 @@ class Trainer(object):
             r_cons: np.ndarray,
             r_sense: np.ndarray,
             r_intra: np.ndarray,
+            sat_frac: np.ndarray,
             r_shape_div: np.ndarray,
             r_shape_div_min: np.ndarray,
             norm_pen: np.ndarray,
             safety_ratios: np.ndarray,
             spreads: np.ndarray,
-            real_fake_loss: float) -> None:
+            real_fake_loss: float,
+            disc_input_noise_std: float) -> None:
         if self._metrics_tsv_path is None or self._ks_tsv_path is None:
             return
 
@@ -1172,12 +1276,15 @@ class Trainer(object):
             self._nan_stat(r_cons, 'nanmean'),
             self._nan_stat(r_sense, 'nanmean'),
             self._nan_stat(r_intra, 'nanmean'),
+            self._nan_stat(sat_frac, 'nanmean'),
+            self._to_scalar(diagnostics.get('sat_excess_avg')),
             self._nan_stat(r_shape_div, 'nanmean'),
             self._nan_stat(r_shape_div_min, 'nanmean'),
             self._nan_stat(norm_pen, 'nanmean'),
             self._nan_stat(safety_ratios, 'nanmean'),
             self._nan_stat(spreads, 'nanmean'),
             float(real_fake_loss),
+            float(disc_input_noise_std),
             self._to_scalar(diagnostics.get('ca_blend')),
             self._to_scalar(diagnostics.get('ca_rfl_gate')),
             self._to_scalar(diagnostics.get('ca_has_data')),
@@ -1220,9 +1327,15 @@ class Trainer(object):
             self._to_scalar(diagnostics.get('w_sense')),
             self._to_scalar(diagnostics.get('w_intra')),
             self._to_scalar(diagnostics.get('w_shape')),
+            self._to_scalar(diagnostics.get('w_sat')),
             self._to_scalar(diagnostics.get('mi_guard')),
             self._to_scalar(diagnostics.get('w_cons_floor')),
             self._to_scalar(diagnostics.get('w_norm')),
+            self._to_scalar(diagnostics.get('adv_distress_raw')),
+            self._to_scalar(diagnostics.get('adv_distress')),
+            self._to_scalar(diagnostics.get('adv_sat_govern')),
+            self._to_scalar(diagnostics.get('adv_rank_cap')),
+            self._to_scalar(diagnostics.get('sat_pressure')),
             self._to_scalar(diagnostics.get('ks_dom_score')),
             self._to_scalar(diagnostics.get('ks_sit_score')),
             self._to_scalar(diagnostics.get('ks_hist_score')),
@@ -1302,24 +1415,35 @@ class Trainer(object):
             self._key, noise_key = jax.random.split(self._key, 2)
 
             fixed_batch_latent = jax.random.normal(noise_key, (self.batch_size, self.latent_dim))
-            fixed_c = jnp.tile(jnp.arange(self.n_classes), 7)
+            fixed_reps = (self.batch_size + self.n_classes - 1) // self.n_classes
+            fixed_c = jnp.tile(jnp.arange(self.n_classes), fixed_reps)
             fixed_c = fixed_c[:self.batch_size]
 
             fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, self.n_classes)], axis=-1)
 
-            self.ordered_centroids = jnp.zeros((self.n_classes, 256))
+            self.ordered_centroids = jnp.zeros((self.n_classes, self.disc_features * 4))
 
             real_fake_loss = 0.0  # Default for logging when D is not trained
+            disc_anchor_params = params_disc
+            disc_anchor_batch_stats = self.batch_stats_disc
+            low_rfl_log_streak = 0
+            last_disc_reg_iter = -10**9
 
             for i in range(start_iter, self._max_iter):
 
                 shape_noise = (self.mini_batch_size, self.latent_dim)
                 shape_cat = (self.mini_batch_size,)
+                disc_noise_std = self._disc_input_noise_std(i)
+
+                # Keep D-input noise in the rollout path synchronized with
+                # the trainer-side D update noise schedule.
+                if hasattr(self.sim_mgr_gen, 'set_disc_noise_scale'):
+                    # Latent task emits base noise with std=0.1.
+                    self.sim_mgr_gen.set_disc_noise_scale(disc_noise_std / 0.1)
                 
                 # D-step frequency: reduce D updates early so G can establish
-                # diversity before D crushes it. Every 3rd iter for first 1.5k,
-                # then every iteration after.
-                d_freq = 3 if i < 1500 else 1
+                # diversity before D over-dominates.
+                d_freq = self.disc_warmup_freq if i < self.disc_warmup_iters else 1
                 if i % d_freq == 0:
                     for mini_batch in range(num_mini_batches):
                         # Sample batch of data.
@@ -1330,9 +1454,14 @@ class Trainer(object):
                         data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
                         #data = np.expand_dims(data / 255.0, axis=-1)
 
-                        latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
+                        latent, cat_codes = sample_latent(
+                            subkey_latent, shape_noise, shape_cat, n_disc=self.n_classes
+                        )
 
-                        noise = jax.random.normal(subkey_noise, (self.mini_batch_size, 28, 28, 1)) * 0.1
+                        noise = jax.random.normal(
+                            subkey_noise,
+                            (self.mini_batch_size, self.image_size, self.image_size, self.image_channels)
+                        ) * disc_noise_std
 
                         shift_x = jax.random.randint(subkey_shift_x, shape=(), minval=-1, maxval=2)
                         shift_y = jax.random.randint(subkey_shift_y, shape=(), minval=-1, maxval=2)
@@ -1344,10 +1473,14 @@ class Trainer(object):
 
                         params_g = self.adapter.generate_params(best_params_hn_formatted)
 
-                        (fake_images) = Generator(training=False).apply({'params': params_g},latent)
+                        (fake_images) = Generator(
+                            training=False,
+                            out_channels=self.image_channels,
+                        ).apply({'params': params_g}, latent)
 
-                        # reshape fake_images to (64, 28, 28, 1) from [1,1,1,64, 28, 28, 1]
-                        fake_images = fake_images.reshape((self.mini_batch_size, 28, 28, 1))
+                        fake_images = fake_images.reshape(
+                            (self.mini_batch_size, self.image_size, self.image_size, self.image_channels)
+                        )
 
                         state = (params_disc, self.batch_stats_disc, opt_disc)
 
@@ -1358,9 +1491,10 @@ class Trainer(object):
                             fake_images,
                             cat_codes,
                             solver_disc,
+                            self.disc_features,
                         )
 #jax.debug.print('loss: {} ', loss)
-                        if real_fake_loss > 0.3:
+                        if real_fake_loss > self.disc_update_gate:
                             params_disc, self.batch_stats_disc, opt_disc = state
 
                 leaves_params, _ = jax.tree_flatten(params_disc) 
@@ -1381,7 +1515,7 @@ class Trainer(object):
                 #jax.debug.print('topographic_ks shape: {} ', topographic_ks.shape)
                 #avg_per_code = topographic_ks[0]
                 
-                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, norm_pen, safety_ratios, spreads = self.sim_mgr_gen.eval_params(
+                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, _, mean_var_fake, sat_frac, avg_per_code_current, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, norm_pen, safety_ratios, spreads = self.sim_mgr_gen.eval_params(
                 params_gen=params_hn, params_disc=flat_params_disc, batch_stats_disc=flat_batch_stats_disc, topographic_ks=topographic_ks, normative_ks=normative_ks, generator=True, test=False
                 )
 
@@ -1389,7 +1523,23 @@ class Trainer(object):
                 if isinstance(self.solver_hn, QualityDiversityMethod):
                     self.solver_hn.observe_bd(bds_gen)
                 
-                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, r_shape_div=r_shape_div, r_shape_div_min=r_shape_div_min, normative_penalty=norm_pen, safety_ratios=safety_ratios, spreads=spreads, adv=False)
+                self.solver_hn.tell(
+                    fitness_adv=scores_gen_adv,
+                    fitness_mi=scores_gen_mi,
+                    disc_logits=disc_logits,
+                    pop_var=mean_var_fake,
+                    sat_frac=sat_frac,
+                    avg_per_code=avg_per_code_current,
+                    r_cons=r_cons,
+                    r_sense=r_sense,
+                    r_intra=r_intra,
+                    r_shape_div=r_shape_div,
+                    r_shape_div_min=r_shape_div_min,
+                    normative_penalty=norm_pen,
+                    safety_ratios=safety_ratios,
+                    spreads=spreads,
+                    adv=False,
+                )
 
                 
                 self.avg_mi_loss = jnp.mean(scores_gen_mi)
@@ -1445,6 +1595,13 @@ class Trainer(object):
                             i, r_shape_div.size, r_shape_div.max(), r_shape_div.mean(),
                             r_shape_div.min(), r_shape_div.std()))
 
+                    sat_frac = np.array(sat_frac)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, sat_frac.size, sat_frac.max(), sat_frac.mean(),
+                            sat_frac.min(), sat_frac.std()))
+
                     r_shape_div_min = np.array(r_shape_div_min)
                     self._logger.info(
                         'Iter={0}, size={1}, max={2:.4f}, '
@@ -1476,6 +1633,44 @@ class Trainer(object):
                     self._logger.info(
                         'Iter={0}, real_fake_loss={1:.4f}'.format(
                             i, real_fake_loss))
+                    self._logger.info(
+                        'Iter={0}, disc_input_noise_std={1:.4f}'.format(
+                            i, disc_noise_std))
+
+                    if self.disc_reg_enable:
+                        if float(real_fake_loss) < self.disc_reg_rfl_threshold:
+                            low_rfl_log_streak += 1
+                        else:
+                            low_rfl_log_streak = 0
+
+                        can_apply_disc_reg = (
+                            i >= self.disc_reg_start_iter
+                            and low_rfl_log_streak >= self.disc_reg_consecutive_logs
+                            and (i - last_disc_reg_iter) >= self.disc_reg_cooldown_iters
+                        )
+                        if can_apply_disc_reg:
+                            alpha = self.disc_reg_blend
+                            params_disc = jax.tree_util.tree_map(
+                                lambda cur, anchor: (1.0 - alpha) * cur + alpha * anchor,
+                                params_disc,
+                                disc_anchor_params,
+                            )
+                            self.batch_stats_disc = jax.tree_util.tree_map(
+                                lambda cur, anchor: (1.0 - alpha) * cur + alpha * anchor,
+                                self.batch_stats_disc,
+                                disc_anchor_batch_stats,
+                            )
+                            opt_disc = solver_disc.init(params_disc)
+                            last_disc_reg_iter = i
+                            low_rfl_log_streak = 0
+                            self._logger.warning(
+                                'Applied D regulation at iter=%d '
+                                '(rfl=%.4f, threshold=%.4f, blend=%.2f).',
+                                i,
+                                float(real_fake_loss),
+                                self.disc_reg_rfl_threshold,
+                                alpha,
+                            )
 
                     self._write_structured_rows(
                         iteration=i,
@@ -1484,12 +1679,14 @@ class Trainer(object):
                         r_cons=r_cons,
                         r_sense=r_sense,
                         r_intra=r_intra,
+                        sat_frac=sat_frac,
                         r_shape_div=r_shape_div,
                         r_shape_div_min=r_shape_div_min,
                         norm_pen=norm_pen,
                         safety_ratios=safety_ratios,
                         spreads=spreads,
                         real_fake_loss=float(real_fake_loss),
+                        disc_input_noise_std=float(disc_noise_std),
                     )
                     
                     #with open('/home/gh0st/Downloads/pgpe_main.csv', 'a') as file:
@@ -1504,7 +1701,10 @@ class Trainer(object):
 
                     params_g = self.adapter.generate_params(best_params_hn_formatted)
 
-                    (fake_imgs) = Generator(training=False).apply({'params': params_g},fixed_latent)
+                    (fake_imgs) = Generator(
+                        training=False,
+                        out_channels=self.image_channels,
+                    ).apply({'params': params_g}, fixed_latent)
                     
                     filename = f"iteration-{i}.npy"
                     np.save(filename, fake_imgs[:, :, :, :])
