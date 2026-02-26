@@ -270,17 +270,17 @@ def build_real_by_class_mnist(
     root="./data",
     train=True,
     download=True,
-    n_classes=10,
+    n_classes=8,
 ):
     """
     Returns:
         real_by_class: list of n_classes JAX arrays
                        real_by_class[c].shape == (Nc, 28, 28)
     """
-    from medmnist import OrganSMNIST
+    from medmnist import BloodMNIST
 
     split = 'train' if train else 'test'
-    dataset = OrganSMNIST(split=split, download=download, root=root)
+    dataset = BloodMNIST(split=split, download=download, root=root)
 
     # Buckets for each class
     buckets = [[] for _ in range(n_classes)]
@@ -288,10 +288,26 @@ def build_real_by_class_mnist(
     for i in range(len(dataset)):
         img, label = dataset[i]
         # img: PIL Image 28x28, label: numpy array shape (1,)
-        img_np = np.array(img, dtype=np.float32) / 255.0  # -> [28,28]
+        img_np = np.array(img, dtype=np.float32) / 255.0
+        if img_np.ndim == 3 and img_np.shape[-1] == 3:
+            # Convert RGB microscopy image to grayscale for 1-channel generator/discriminator.
+            img_np = (
+                0.2989 * img_np[..., 0]
+                + 0.5870 * img_np[..., 1]
+                + 0.1140 * img_np[..., 2]
+            )
         lbl = int(label.item() if hasattr(label, 'item') else label[0])
         if lbl < n_classes:
             buckets[lbl].append(img_np)
+
+    # Guard against requesting more codes than dataset classes.
+    non_empty = [b for b in buckets if len(b) > 0]
+    if len(non_empty) == 0:
+        raise ValueError('No images found while building BloodMNIST class buckets.')
+    for idx, bucket in enumerate(buckets):
+        if len(bucket) == 0:
+            exemplar = non_empty[idx % len(non_empty)][0]
+            buckets[idx].append(exemplar)
 
     # Stack and convert to JAX arrays
     real_by_class = [
@@ -392,7 +408,7 @@ class Latent_Points(VectorizedTask):
                  batch_size: int = 1024,
                  dataset_size: int = 800,  # Similar to MNIST
                  latent_dim: int = 62,
-                 n_classes: int = 10,
+                 n_classes: int = 8,
                  n_cont: int = 2,
                  feature_dim: int = 256,
                  test: bool = False):

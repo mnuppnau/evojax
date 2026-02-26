@@ -40,7 +40,7 @@ from evojax.util import save_checkpoint, load_checkpoint
 from jax.nn.initializers import normal as normal_init
 from jax.nn.initializers import he_normal
 from flax import linen as nn
-from medmnist import OrganSMNIST
+from medmnist import BloodMNIST
 from optax.assignment import hungarian_algorithm
 # import Tuple
 from typing import Tuple
@@ -1037,9 +1037,17 @@ class Trainer(object):
 
         self._key, subkey = jax.random.split(self._key)
         
-        dataset = OrganSMNIST(split='train', download=True, root='./data')
+        dataset = BloodMNIST(split='train', download=True, root='./data')
         data_raw = np.array(dataset.imgs, dtype=np.float32)
-        if data_raw.ndim == 3:  # (N, 28, 28) -> (N, 28, 28, 1)
+        if data_raw.ndim == 4 and data_raw.shape[-1] == 3:
+            # BloodMNIST is RGB; convert to grayscale to match the 1-channel model.
+            data_raw = (
+                0.2989 * data_raw[..., 0]
+                + 0.5870 * data_raw[..., 1]
+                + 0.1140 * data_raw[..., 2]
+            )
+            data_raw = np.expand_dims(data_raw, axis=-1)
+        elif data_raw.ndim == 3:  # (N, 28, 28) -> (N, 28, 28, 1)
             data_raw = np.expand_dims(data_raw, axis=-1)
         self.data = data_raw / 127.5 - 1.0
 
@@ -1279,7 +1287,8 @@ class Trainer(object):
             self._key, noise_key = jax.random.split(self._key, 2)
 
             fixed_batch_latent = jax.random.normal(noise_key, (self.batch_size, self.latent_dim))
-            fixed_c = jnp.tile(jnp.arange(self.n_classes), 7)
+            reps = (self.batch_size + self.n_classes - 1) // self.n_classes
+            fixed_c = jnp.tile(jnp.arange(self.n_classes), reps)
             fixed_c = fixed_c[:self.batch_size]
             fixed_parts = [
                 fixed_batch_latent,

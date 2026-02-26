@@ -771,8 +771,8 @@ class PGPE(NEAlgorithm):
         # --- CA-driven adaptive weight modulation ---
         # Base weights (user-tuned sweet spot from the stable 0-195k regime)
         w_adv_base = 0.53
-        w_mi_base = 0.3
-        w_sense_base = 0.1
+        w_mi_base = 0.4
+        w_sense_base = 0.2
         w_div_base = 0.48
         w_norm_base = 0.04
 

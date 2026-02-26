@@ -76,15 +76,15 @@ class MNIST(VectorizedTask):
 
         self.max_steps = 1
         self.obs_shape = tuple([28, 28, 1])
-        self.act_shape = tuple([11, ])
+        self.act_shape = tuple([8, ])
 
         self.batch_size = batch_size
         self.batch_stats_gen = batch_stats_gen 
         self.batch_stats_disc = batch_stats_disc
         self.batch_stats_q = batch_stats_q
         
-        self.latent_dim = 63
-        self.n_classes = 11
+        self.latent_dim = 62
+        self.n_classes = 8
         self.n_con = 2
 
         self.noise_dim = self.latent_dim - self.n_con
@@ -93,17 +93,24 @@ class MNIST(VectorizedTask):
         # Delayed importing of torchvision
 
         try:
-            from medmnist import OrganSMNIST
+            from medmnist import BloodMNIST
         except ModuleNotFoundError:
             print('You need to install medmnist for this task.')
             print('  pip install medmnist')
             sys.exit(1)
 
         split = 'test' if test else 'train'
-        dataset = OrganSMNIST(split=split, download=True, root='./data')
+        dataset = BloodMNIST(split=split, download=True, root='./data')
 
         data = np.array(dataset.imgs, dtype=np.float32) / 255.0
-        if data.ndim == 3:  # (N, 28, 28) -> (N, 28, 28, 1)
+        if data.ndim == 4 and data.shape[-1] == 3:
+            data = (
+                0.2989 * data[..., 0]
+                + 0.5870 * data[..., 1]
+                + 0.1140 * data[..., 2]
+            )
+            data = np.expand_dims(data, axis=-1)
+        elif data.ndim == 3:  # (N, 28, 28) -> (N, 28, 28, 1)
             data = np.expand_dims(data, axis=-1)
         labels = dataset.labels.flatten()
 
