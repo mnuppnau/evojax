@@ -218,6 +218,8 @@ class SimManager(object):
         self._pop_size = pop_size
         self._n_evaluations = max(n_evaluations, jax.local_device_count())
         self._ma_training = train_vec_task.multi_agent_training
+        self._n_codes = int(getattr(train_vec_task, 'n_classes', 11))
+        self._task_batch_size = int(getattr(train_vec_task, 'batch_size', 64))
 
         self._t = 0
         self._i = 1.0
@@ -252,7 +254,7 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            actions, disc_logits, mean_var_fake, q_flat, policy_state = policy_net.get_actions(
+            actions, disc_logits, mean_var_fake, q_flat, q_cont_mu, q_cont_logsigma, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
 
             if task.multi_agent_training:
@@ -261,7 +263,8 @@ class SimManager(object):
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, loss_mi, loss_g, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_pen, safety_ratios, spreads, done = task.step(task_state, actions, disc_logits, q_flat)
+            task_state, loss_mi, loss_g, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_pen, safety_ratios, spreads, done = task.step(
+                task_state, actions, disc_logits, q_flat, q_cont_mu, q_cont_logsigma)
 
             reward_adv =  loss_g
             reward_mi = loss_mi
@@ -282,18 +285,18 @@ class SimManager(object):
                     step_once_gen_fn, max_steps):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
-            disc_logits = jnp.zeros((256,64,11))
+            disc_logits = jnp.zeros((self._pop_size // 2, self._task_batch_size, self._n_codes))
             mean_var_fake = jnp.zeros(self._pop_size//2) #//2
-            sum_per_cat_code = jnp.zeros((self._pop_size//2,11, 256))
-            count_per_cat_code = jnp.zeros((self._pop_size//2,11))
+            sum_per_cat_code = jnp.zeros((self._pop_size//2, self._n_codes, 256))
+            count_per_cat_code = jnp.zeros((self._pop_size//2, self._n_codes))
             r_cons = jnp.zeros(self._pop_size//2)
             r_sense = jnp.zeros(self._pop_size//2)
             r_intra = jnp.zeros(self._pop_size//2)
             r_shape_div = jnp.zeros(self._pop_size//2)
             r_shape_div_min = jnp.zeros(self._pop_size//2)
             normative_penalty = jnp.zeros(self._pop_size//2)
-            safety_ratios = jnp.zeros((self._pop_size//2, 11,11))
-            spreads = jnp.zeros((self._pop_size//2, 11,1))
+            safety_ratios = jnp.zeros((self._pop_size//2, self._n_codes, self._n_codes))
+            spreads = jnp.zeros((self._pop_size//2, self._n_codes, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params, t,
               accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads, valid_masks),
@@ -313,8 +316,9 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            fake_imgs, actions, disc_logits, policy_state = policy_net.get_actions(
+            actions, disc_logits, _, q_flat, q_cont_mu, q_cont_logsigma, policy_state = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
+            fake_imgs = actions
 
             if task.multi_agent_training:
                 task_state = task_state.replace(
@@ -322,7 +326,10 @@ class SimManager(object):
                         (num_tasks, num_agents, *task_state.obs.shape[1:])))
                 actions = actions.reshape(
                     (num_tasks, num_agents, *actions.shape[1:]))
-            task_state, loss_mi, loss_g, done = task.step(task_state, actions, disc_logits)
+            task_step_out = task.step(
+                task_state, actions, disc_logits, q_flat, q_cont_mu, q_cont_logsigma)
+            task_state, loss_mi, loss_g = task_step_out[:3]
+            done = task_step_out[-1]
             reward_adv = -loss_g
             reward_mi = loss_mi
 

@@ -140,8 +140,8 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     """Discriminator with attached Q-network (SpectralNorm, no BatchNorm)."""
     features: int = 64
-    q_cat: int = 11
-    q_cont: int = 0  # continuous codes removed
+    q_cat: int = 10
+    q_cont: int = 2
 
     @nn.compact
     def __call__(self, x):
@@ -210,8 +210,19 @@ class Discriminator(nn.Module):
             self.q_cat,
             kernel_init=normal_init(0.02),
         ))(q_flat, update_stats=train)
+        q_cont_mu = jnp.zeros((q_flat.shape[0], 0), dtype=q_flat.dtype)
+        q_cont_logsigma = jnp.zeros((q_flat.shape[0], 0), dtype=q_flat.dtype)
+        if self.q_cont > 0:
+            q_cont_mu = SN(nn.Dense(
+                self.q_cont,
+                kernel_init=normal_init(0.02),
+            ))(q_flat, update_stats=train)
+            q_cont_logsigma = SN(nn.Dense(
+                self.q_cont,
+                kernel_init=normal_init(0.02),
+            ))(q_flat, update_stats=train)
 
-        return d_logits, q_cat_logits, q_feat_avg
+        return d_logits, q_cat_logits, q_cont_mu, q_cont_logsigma, q_feat_avg
 
 # --- 1. The HyperNetwork (Now with Geometric Input) ---
 class HyperNetwork(nn.Module):
@@ -601,7 +612,7 @@ def compute_real_centroids(real_features: jnp.ndarray) -> jnp.ndarray:
 
 
 @partial(jax.jit, static_argnums=(1,))
-def compute_fake_centroids(fake_features: jnp.ndarray, n_codes: int = 11) -> jnp.ndarray:
+def compute_fake_centroids(fake_features: jnp.ndarray, n_codes: int = 10) -> jnp.ndarray:
     """
     Compute centroids from interleaved fake features.
 
@@ -689,7 +700,7 @@ def assign_fake_to_real(
             fake_code[row_indices[i]] -> real_cluster[col_indices[i]]
     """
     real_centroids = compute_real_centroids(real_features)
-    fake_centroids = compute_fake_centroids(fake_features, n_codes=11)
+    fake_centroids = compute_fake_centroids(fake_features, n_codes=10)
     cost_matrix = compute_cost_matrix(real_centroids, fake_centroids)
     row_idx, col_idx = optimal_assignment(cost_matrix)
     return row_idx, col_idx, cost_matrix
@@ -715,127 +726,83 @@ def reorder_real_centroids(
 ) -> jnp.ndarray:                  # (10, 256) reordered
     return real_centroids[col_indices]
 
-@partial(jax.jit, static_argnames=['solver'])
-def train_step_disc(state, data, noise_shift_tup, fake_imgs, fake_cat_input, solver):
-       
-        noise, shift_x, shift_y = noise_shift_tup
+
+def continuous_loss(c_true, mu, logsigma):
+    """Gaussian NLL for InfoGAN continuous codes."""
+    logsigma = jnp.clip(logsigma, -2.0, 2.0)
+    nll = logsigma + 0.5 * ((c_true - mu) / jnp.exp(logsigma)) ** 2
+    return jnp.mean(nll)
+
+@partial(jax.jit, static_argnames=['solver', 'n_codes', 'n_cont'])
+def train_step_disc(
+        state,
+        data,
+        noise_shift_tup,
+        fake_imgs,
+        fake_cat_input,
+        fake_cont_input,
+        solver,
+        n_codes: int = 10,
+        n_cont: int = 2):
+
+        noise, _, _ = noise_shift_tup
         params_d, batch_stats_d, opt_disc = state
-        #def bce_logits(logit, label):
-        #          """
-        #          Implements the BCE with logits loss, as described:
-        #          https://github.com/pytorch/pytorch/issues/751
-        #          """
-        #          neg_abs = -jnp.abs(logit)
-        #          batch_bce = jnp.maximum(logit, 0) - logit * label + jnp.log(1 + jnp.exp(neg_abs))
-        #          return jnp.mean(batch_bce)
 
         def loss_mutual_information(code_cat, q_cat):
-                  return -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
-           
-        def loss_mutual_information_ce(code_cat, q_cat_logits):
-            # code_cat is one-hot, q_cat_logits are raw outputs
-            return jnp.mean(optax.softmax_cross_entropy(logits=q_cat_logits, labels=code_cat))
+            return -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
 
-        #def continuous_loss(x, mu, var):
-        #    # Simple MSE for mean prediction
-        #    mse = jnp.mean((x - mu) ** 2)
-        #    
-        #    # Regularize variance to stay near 1.0
-        #    var_reg = jnp.mean((var - 1.0) ** 2) * 0.1
-        #    
-        #    return mse + var_reg
-
-        def cpc_mi_loss(code_cat, q_cat, negative_samples=10):
-            """Better signal for PGPE by using contrastive learning"""
-            batch_size = code_cat.shape[0]
-            
-            # Positive pairs (matching code and q)
-            pos_scores = jnp.sum(code_cat * q_cat, axis=-1)
-            
-            # Generate negative samples by shuffling
-            neg_indices = jax.random.permutation(jax.random.PRNGKey(0), batch_size)
-            neg_q = q_cat[neg_indices]
-            neg_scores = jnp.sum(code_cat[:, None, :] * neg_q[None, :, :], axis=-1)
-            
-            # InfoNCE loss
-            logits = jnp.concatenate([pos_scores[:, None], neg_scores], axis=1)
-            labels = jnp.zeros(batch_size, dtype=jnp.int32)
-            
-            return -jnp.mean(nn.log_softmax(logits, axis=1)[jnp.arange(batch_size), labels])
-        
         def loss_discriminator(params_d, vars_d_batch_stats):
-                
-                  #(fake_imgs, vars_g) = Generator().apply(
-                  #    {'params': params_g, 'batch_stats': batch_stats_g},
-                  #    latent, mutable=['batch_stats']
-                  #)
-                  
+            fake_images_with_noise = fake_imgs + noise
+            real_images_with_noise = data + noise
 
-                  #X = jnp.concatenate([fake_imgs, data], axis=0)
-                  #idx = jax.random.permutation(jax.random.PRNGKey(0), X.shape[0])
+            (fake_preds, q_fake_cat, q_fake_mu, q_fake_logsigma, _), vars_d = Discriminator(
+                q_cat=n_codes,
+                q_cont=n_cont,
+            ).apply(
+                {'params': params_d, 'batch_stats': vars_d_batch_stats},
+                fake_images_with_noise,
+                mutable=['batch_stats'],
+            )
 
-                  #X = X[idx]
+            (real_preds, _, _, _, _), vars_d = Discriminator(
+                q_cat=n_codes,
+                q_cont=n_cont,
+            ).apply(
+                {'params': params_d, 'batch_stats': vars_d['batch_stats']},
+                real_images_with_noise,
+                mutable=['batch_stats'],
+            )
 
-                  #Bf = fake_imgs.shape[0]
+            q_cat = nn.log_softmax(q_fake_cat, axis=-1)
+            loss_mi_cat = loss_mutual_information(fake_cat_input, q_cat)
+            if n_cont > 0:
+                q_fake_mu = jnp.nan_to_num(q_fake_mu, nan=0.0, posinf=0.0, neginf=0.0)
+                q_fake_logsigma = jnp.nan_to_num(q_fake_logsigma, nan=0.0, posinf=0.0, neginf=0.0)
+                loss_mi_cont = continuous_loss(fake_cont_input, q_fake_mu, q_fake_logsigma)
+            else:
+                loss_mi_cont = 0.0
+            loss_mi = loss_mi_cat + loss_mi_cont
 
+            # use 0.9 as the label for real images instead of 1.0
+            real_loss = optax.sigmoid_binary_cross_entropy(
+                real_preds, jnp.ones_like(real_preds) * 0.9)
+            # use 0.05 as the label for fake images instead of 0.0
+            fake_loss = optax.sigmoid_binary_cross_entropy(
+                fake_preds, jnp.zeros_like(fake_preds) + 0.05)
 
-                  #(preds, q, mu, var), vars_d = Discriminator().apply(
-                  #    {'params': params_d, 'batch_stats': vars_d_batch_stats},
-                  #    X, mutable=['batch_stats']
-                  #  )
+            real_loss = jnp.mean(real_loss)
+            fake_loss = jnp.mean(fake_loss)
 
-                  #fake_preds = preds[:Bf]
-                  #real_preds = preds[Bf:]
+            real_fake_loss = (real_loss + fake_loss) / 2.0
+            loss = real_fake_loss + loss_mi * 0.2
 
-                  #q_fake = q[:Bf]
-                  #mu_fake = mu[:Bf]
-                  #var_fake = jnp.exp(var[:Bf])
-                  
-                  fake_images_with_noise = fake_imgs + noise
-                  real_images_with_noise = data + noise
-
-                  #fake_images_with_noise_perturbed = jnp.roll(fake_images_with_noise, shift=(shift_x, shift_y), axis=(1,2))
-                  #real_images_with_noise_perturbed = jnp.roll(real_images_with_noise, shift=(shift_x, shift_y), axis=(1,2))
-                  
-                  (fake_preds, q_fake, _), vars_d = Discriminator().apply(
-                      {'params': params_d, 'batch_stats': vars_d_batch_stats},
-                      fake_images_with_noise, mutable=['batch_stats']
-                  )
-                  
-                  (real_preds, _, _), vars_d = Discriminator().apply(
-                      {'params': params_d, 'batch_stats': vars_d['batch_stats']},
-                      real_images_with_noise, mutable=['batch_stats']
-                  )
-                
-                  # use q_logits and labels to calculate q accuracy
-                  #q_preds = q_logits.argmax(axis=-1)
-                  #q_acc = jnp.mean(q_preds == labels)
-                  logit_penalty = 1e-2 * jnp.mean(fake_preds ** 2)
-                  # Calculate Mutual Information loss
-                  q_cat = nn.log_softmax(q_fake, axis=-1)
-                  loss_mi = loss_mutual_information(fake_cat_input, q_cat)
-
-                  # use 0.9 as the label for real images instead of 1.0
-                  real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones_like(real_preds)*0.9)
-                  # use 0.1 as the label for fake images instead of 0.0
-                  fake_loss = optax.sigmoid_binary_cross_entropy(fake_preds, jnp.zeros_like(fake_preds)+0.05)
-
-                  real_loss = jnp.mean(real_loss)
-                  fake_loss = jnp.mean(fake_loss)
-
-                  real_fake_loss = (real_loss + fake_loss) / 2.0
-                  loss = real_fake_loss + loss_mi*0.2
-                
-                  return loss, (real_fake_loss, vars_d)
+            return loss, (real_fake_loss, vars_d)
 
         grad_fn_disc = jax.value_and_grad(loss_discriminator, has_aux=True)
         (loss, (real_fake_loss, vars_d)), grads = grad_fn_disc(params_d, batch_stats_d)
-        
-        # apply gradients
+
         updates, new_opt_state = solver.update(grads, opt_disc, params_d)
         params_d = optax.apply_updates(params_d, updates)
-        #batch_stats_g = vars_g['batch_stats']
-        # update batch stats
         batch_stats_d = vars_d['batch_stats']
         return (params_d, batch_stats_d, new_opt_state), loss, real_fake_loss
 
@@ -881,7 +848,7 @@ def build_recal_latents(key, batch_size, z_dim, n_disc):
 # --- BN standing-stats pass ---
 def recalibrate_bn_stats(gen_module, params, batch_stats, key,
                          steps=12, batch_size=64,
-                         z_dim=63, n_disc=11):
+                         z_dim=62, n_disc=10):
     """
     gen_module: e.g., Generator(training=True) or Generator(use_running_average=False)
     params: generator params pytree
@@ -902,19 +869,25 @@ def recalibrate_bn_stats(gen_module, params, batch_stats, key,
     (batch_stats_new, key_new) = lax.fori_loop(0, steps, body, (batch_stats, key))
     return batch_stats_new, key_new
 
-def sample_latent(key, shape_noise, shape_cat):
-  noise_key, cat_key = jax.random.split(key, 2)
+def sample_latent(key, shape_noise, shape_cat, n_disc: int = 10, n_cont: int = 2):
+  noise_key, cat_key, cont_key = jax.random.split(key, 3)
 
   # Sample irreducible noise
   noise = jax.random.normal(noise_key, shape_noise)
 
   # Sample categorical latent code
-  code_cat = jax.random.randint(cat_key, shape_cat, 0, 11)
-  code_cat = jax.nn.one_hot(code_cat, 11)
+  code_cat = jax.random.randint(cat_key, shape_cat, 0, n_disc)
+  code_cat = jax.nn.one_hot(code_cat, n_disc)
 
-  latent = jnp.concatenate([noise, code_cat], axis=-1)
+  if n_cont > 0:
+      code_cont = jax.random.uniform(
+          cont_key, (shape_noise[0], n_cont), minval=-1.0, maxval=1.0)
+      latent = jnp.concatenate([noise, code_cat, code_cont], axis=-1)
+  else:
+      code_cont = jnp.zeros((shape_noise[0], 0), dtype=noise.dtype)
+      latent = jnp.concatenate([noise, code_cat], axis=-1)
 
-  return latent, code_cat
+  return latent, code_cat, code_cont
 
 def sample_batch(key: jnp.ndarray,
                  data: jnp.ndarray,
@@ -996,8 +969,9 @@ class Trainer(object):
         self.fake_imgs = None
         self.cat_codes = None
 
-        self.latent_dim = 63
-        self.n_classes = 11
+        self.latent_dim = int(getattr(train_task_gen, 'latent_dim', 62))
+        self.n_classes = int(getattr(train_task_gen, 'n_classes', 10))
+        self.n_cont = int(getattr(train_task_gen, 'n_cont', 2))
 
         self.decay_factor = 0.9
 
@@ -1074,7 +1048,10 @@ class Trainer(object):
         self.labels = dataset.labels.flatten()
 
         # initialize the discriminator
-        variables_disc = Discriminator().init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
+        variables_disc = Discriminator(
+            q_cat=self.n_classes,
+            q_cont=self.n_cont,
+        ).init(subkey, jnp.ones((self.batch_size, 28, 28, 1), dtype=jnp.float32))
         self.params_disc, self.batch_stats_disc = variables_disc['params'], variables_disc['batch_stats']
 
         self.solver_disc = optax.adam(learning_rate=0.0001, b1=0.5, b2=0.999)
@@ -1304,8 +1281,16 @@ class Trainer(object):
             fixed_batch_latent = jax.random.normal(noise_key, (self.batch_size, self.latent_dim))
             fixed_c = jnp.tile(jnp.arange(self.n_classes), 7)
             fixed_c = fixed_c[:self.batch_size]
-
-            fixed_latent = jnp.concatenate([fixed_batch_latent, jax.nn.one_hot(fixed_c, self.n_classes)], axis=-1)
+            fixed_parts = [
+                fixed_batch_latent,
+                jax.nn.one_hot(fixed_c, self.n_classes),
+            ]
+            if self.n_cont > 0:
+                self._key, fixed_cont_key = jax.random.split(self._key)
+                fixed_cont = jax.random.uniform(
+                    fixed_cont_key, (self.batch_size, self.n_cont), minval=-1.0, maxval=1.0)
+                fixed_parts.append(fixed_cont)
+            fixed_latent = jnp.concatenate(fixed_parts, axis=-1)
 
             self.ordered_centroids = jnp.zeros((self.n_classes, 256))
 
@@ -1330,7 +1315,13 @@ class Trainer(object):
                         data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
                         #data = np.expand_dims(data / 255.0, axis=-1)
 
-                        latent, cat_codes = sample_latent(subkey_latent, shape_noise, shape_cat)
+                        latent, cat_codes, cont_codes = sample_latent(
+                            subkey_latent,
+                            shape_noise,
+                            shape_cat,
+                            n_disc=self.n_classes,
+                            n_cont=self.n_cont,
+                        )
 
                         noise = jax.random.normal(subkey_noise, (self.mini_batch_size, 28, 28, 1)) * 0.1
 
@@ -1357,7 +1348,10 @@ class Trainer(object):
                             (noise,shift_x, shift_y),
                             fake_images,
                             cat_codes,
+                            cont_codes,
                             solver_disc,
+                            self.n_classes,
+                            self.n_cont,
                         )
 #jax.debug.print('loss: {} ', loss)
                         if real_fake_loss > 0.3:

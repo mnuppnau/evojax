@@ -252,7 +252,7 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     """Discriminator with attached Q-network (SpectralNorm, no BatchNorm)."""
     features: int = 64
-    q_cat: int = 11
+    q_cat: int = 10
     train: bool = False
     q_cont: int = 2  # set to 0 if you only want categorical codes
 
@@ -324,7 +324,19 @@ class Discriminator(nn.Module):
             kernel_init=normal_init(0.02),
         ))(q_flat, update_stats=train)
 
-        return d_logits, q_cat_logits, q_feat_avg
+        q_cont_mu = jnp.zeros((q_flat.shape[0], 0), dtype=q_flat.dtype)
+        q_cont_logsigma = jnp.zeros((q_flat.shape[0], 0), dtype=q_flat.dtype)
+        if self.q_cont > 0:
+            q_cont_mu = SN(nn.Dense(
+                self.q_cont,
+                kernel_init=normal_init(0.02),
+            ))(q_flat, update_stats=train)
+            q_cont_logsigma = SN(nn.Dense(
+                self.q_cont,
+                kernel_init=normal_init(0.02),
+            ))(q_flat, update_stats=train)
+
+        return d_logits, q_cat_logits, q_cont_mu, q_cont_logsigma, q_feat_avg
 
 
 #class Generator(nn.Module):
@@ -619,7 +631,7 @@ class QNetwork(nn.Module):
     features: int = 64
     training: bool = True
 
-    q_cat: int = 11
+    q_cat: int = 10
 
     @nn.compact
     def __call__(self, x):
@@ -648,23 +660,41 @@ class QNetwork(nn.Module):
 class GenPolicy(PolicyNetwork):
     """A convolutional neural network for the MNIST classification task."""
 
-    def __init__(self, logger: logging.Logger = None):
+    def __init__(
+            self,
+            logger: logging.Logger = None,
+            noise_dim: int = 62,
+            n_discrete_codes: int = 10,
+            n_continuous_codes: int = 2):
         if logger is None:
             self._logger = create_logger('ConvNetPolicy')
         else:
             self._logger = logger
 
+        self.noise_dim = int(noise_dim)
+        self.n_classes = int(n_discrete_codes)
+        self.n_cont = int(n_continuous_codes)
+        self.total_latent_dim = self.noise_dim + self.n_classes + self.n_cont
+
         self.model_gen = Generator(training=False)
        
-        self.model_disc = Discriminator(train=False)
+        self.model_disc = Discriminator(
+            train=False,
+            q_cat=self.n_classes,
+            q_cont=self.n_cont,
+        )
 
-        self.model_q = Discriminator()
+        self.model_q = Discriminator(
+            q_cat=self.n_classes,
+            q_cont=self.n_cont,
+        )
         
         key = random.PRNGKey(122)
 
         key, key_gen, key_disc, key_bin = random.split(key, 4)
 
-        variables_gen = self.model_gen.init(key_gen, jnp.ones([64,74], jnp.float32))
+        variables_gen = self.model_gen.init(
+            key_gen, jnp.ones([64, self.total_latent_dim], jnp.float32))
         variables_disc = self.model_disc.init(key_disc, jnp.ones([1,28,28,1], jnp.float32))
         
         variables_q = self.model_q.init(key_bin, jnp.ones([64,5,5,128], jnp.float32))
@@ -676,7 +706,7 @@ class GenPolicy(PolicyNetwork):
         self.init_params_hypernet = self.adapter.init_hypernet(random.PRNGKey(11))
 
         #jax.debug.print('batch stats gen shape : {}', self.init_batch_stats_gen.shape)
-        self.latent_dim = 64
+        self.latent_dim = self.total_latent_dim
   
         self.num_params, format_params_gen_fn = get_params_format_fn(self.init_params_gen)
         
@@ -723,7 +753,11 @@ class GenPolicy(PolicyNetwork):
             fake_data_with_noise = fake_data + noise
           
             
-            (preds, q, q_flat) = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, fake_data_with_noise, mutable=False)
+            (preds, q_cat, q_cont_mu, q_cont_logsigma, q_flat) = self.model_disc.apply(
+                {'params': params_d, 'batch_stats': vars_d_batch_stats},
+                fake_data_with_noise,
+                mutable=False,
+            )
 
             # Code pixel diversity: variance across codes sharing the same z.
             # Latent design: groups of n_classes consecutive samples share same z,
@@ -731,13 +765,13 @@ class GenPolicy(PolicyNetwork):
             # Brightness-normalized: subtract per-image mean so the generator
             # cannot cheat by encoding codes as bright vs dark. Forces
             # structural/textural diversity instead.
-            n_classes = 11
+            n_classes = self.n_classes
             n_ctrl = (fake_data.shape[0] // n_classes) * n_classes  # 55 for batch=64
             grouped = fake_data[:n_ctrl].reshape(-1, n_classes, 28, 28, 1)
             grouped_centered = grouped - grouped.mean(axis=(2, 3), keepdims=True)
             code_pixel_div = jnp.mean(jnp.var(grouped_centered, axis=1))
 
-            return preds, q, code_pixel_div, q_flat
+            return preds, q_cat, code_pixel_div, q_flat, q_cont_mu, q_cont_logsigma
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -752,7 +786,7 @@ class GenPolicy(PolicyNetwork):
                     params_hn: jnp.ndarray,
                     params_disc: jnp.ndarray,
                     #params_q: jnp.ndarray,
-                    p_states: PolicyState) -> Tuple[jnp.ndarray, PolicyState]:
+                    p_states: PolicyState):
         
         params_hn = self._format_params_hn_fn(params_hn)
         params_disc = self._format_params_disc_fn(params_disc)
@@ -764,9 +798,10 @@ class GenPolicy(PolicyNetwork):
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        preds, disc_logits, mean_var_fake, q_flat = self._forward_fn_gen(params_hn, params_disc, batch_stats_disc, t_states.obs, t_states.noise)
+        preds, disc_logits, mean_var_fake, q_flat, q_cont_mu, q_cont_logsigma = self._forward_fn_gen(
+            params_hn, params_disc, batch_stats_disc, t_states.obs, t_states.noise)
         
-        return preds, disc_logits, mean_var_fake, q_flat, p_states
+        return preds, disc_logits, mean_var_fake, q_flat, q_cont_mu, q_cont_logsigma, p_states
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):
@@ -841,9 +876,17 @@ class DiscPolicy(PolicyNetwork):
             
             (fake_data), vars_g = self.model_gen.apply({'params': params_g, 'batch_stats': vars_g_batch_stats}, latent_input, mutable=['batch_stats'])
 
-            (real_preds,_), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d_batch_stats}, real_data, mutable=['batch_stats'])
+            (real_preds, _, _, _, _), vars_d = self.model_disc.apply(
+                {'params': params_d, 'batch_stats': vars_d_batch_stats},
+                real_data,
+                mutable=['batch_stats'],
+            )
             
-            (fake_preds,q), vars_d = self.model_disc.apply({'params': params_d, 'batch_stats': vars_d['batch_stats']}, fake_data, mutable=['batch_stats'])
+            (fake_preds, _, _, _, q), vars_d = self.model_disc.apply(
+                {'params': params_d, 'batch_stats': vars_d['batch_stats']},
+                fake_data,
+                mutable=['batch_stats'],
+            )
 
             (disc_logits), vars_q = self.model_q.apply({'params': params_q, 'batch_stats': vars_q_batch_stats}, q, mutable=['batch_stats'])
 

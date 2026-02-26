@@ -108,10 +108,10 @@ def initialize_topographic_ks(
         )
 
 
-def initialize_normative_ks(param_size: int, pop_size: int = 64):
+def initialize_normative_ks(param_size: int, pop_size: int = 64, num_codes: int = 11):
     return (
-        jnp.ones((pop_size,11,1)),  # pop_avg_spread
-        jnp.ones((pop_size,11,11)),  # pop_min_safety
+        jnp.ones((pop_size, num_codes, 1)),  # pop_avg_spread
+        jnp.ones((pop_size, num_codes, num_codes)),  # pop_min_safety
 
     )
 

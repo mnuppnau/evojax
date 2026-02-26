@@ -14,8 +14,8 @@
 
 """Train an InfoGAN agent for OrganSMNIST (MedMNIST) classification.
 
-OrganSMNIST: 28x28 grayscale images, 11 organ classes.
-Latent vector: 63 (noise) + 11 (discrete codes) = 74.
+OrganSMNIST: 28x28 grayscale images.
+Latent vector (default): 62 (noise) + 10 (discrete) + 2 (continuous) = 74.
 
 Example command to run this script: `python train_organsmnist.py --gpu-id=0`
 """
@@ -55,13 +55,13 @@ def parse_args():
     parser.add_argument(
         '--seed', type=int, default=42, help='Random seed for training.')
     parser.add_argument(
-        '--center-lr-gen', type=float, default=0.0038, help='Center learning rate.')
+        '--center-lr-gen', type=float, default=0.0048, help='Center learning rate.')
     parser.add_argument(
-        '--std-lr-gen', type=float, default=0.05, help='Std learning rate.')
+        '--std-lr-gen', type=float, default=0.06, help='Std learning rate.')
     parser.add_argument(
         '--init-std-gen', type=float, default=0.03, help='Initial std.')
     parser.add_argument(
-        '--ca-blend-coeff', type=float, default=0.05,
+        '--ca-blend-coeff', type=float, default=0.03,
         help='CA gradient blend coefficient (set 0.0 to disable CA blend).')
     parser.add_argument(
         '--ca-blend-start-iter', type=int, default=3000,
@@ -78,6 +78,15 @@ def parse_args():
     parser.add_argument(
         '--shape-div-weight', type=float, default=0.12,
         help='Weight for conditional feature-space shape diversity reward.')
+    parser.add_argument(
+        '--noise-dim', type=int, default=62,
+        help='Noise dimensions in latent vector.')
+    parser.add_argument(
+        '--n-discrete-codes', type=int, default=10,
+        help='Number of discrete latent codes.')
+    parser.add_argument(
+        '--n-continuous-codes', type=int, default=2,
+        help='Number of continuous latent codes.')
     parser.add_argument(
         '--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument(
@@ -112,8 +121,21 @@ def main(config):
         config.ca_blend_rfl_hi,
         config.shape_div_weight,
     )
+    logger.info(
+        'Latent config: noise=%d discrete=%d continuous=%d total=%d',
+        config.noise_dim,
+        config.n_discrete_codes,
+        config.n_continuous_codes,
+        config.noise_dim + config.n_discrete_codes + config.n_continuous_codes,
+    )
 
-    policy_gen = GenPolicy(logger=logger)
+    policy_gen = GenPolicy(
+        logger=logger,
+        noise_dim=config.noise_dim,
+        n_discrete_codes=config.n_discrete_codes,
+        n_continuous_codes=config.n_continuous_codes,
+    )
+    feature_dim = int(policy_gen.model_disc.features * 4)
 
     init_params_gen = policy_gen.init_params_gen
     flat_params_gen = policy_gen.flat_params_gen
@@ -125,10 +147,30 @@ def main(config):
     test_task_mnist = MNIST(batch_size=config.batch_size, test=True)
 
     belief_space_key = random.PRNGKey(config.seed+12)
-    belief_space = initialize_belief_space(population_size=config.pop_size, param_size=policy_gen.num_params_hypernet, key=belief_space_key)
+    belief_space = initialize_belief_space(
+        population_size=config.pop_size,
+        param_size=policy_gen.num_params_hypernet,
+        key=belief_space_key,
+        features=feature_dim,
+        num_codes=config.n_discrete_codes,
+    )
 
-    train_task_latent = Latent_Points(batch_size=config.batch_size, test=False)
-    test_task_latent = Latent_Points(batch_size=config.batch_size, test=True)
+    train_task_latent = Latent_Points(
+        batch_size=config.batch_size,
+        latent_dim=config.noise_dim,
+        n_classes=config.n_discrete_codes,
+        n_cont=config.n_continuous_codes,
+        feature_dim=feature_dim,
+        test=False,
+    )
+    test_task_latent = Latent_Points(
+        batch_size=config.batch_size,
+        latent_dim=config.noise_dim,
+        n_classes=config.n_discrete_codes,
+        n_cont=config.n_continuous_codes,
+        feature_dim=feature_dim,
+        test=True,
+    )
 
     solver_hn = PGPE_CA(
         pop_size=config.pop_size,
