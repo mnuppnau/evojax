@@ -78,30 +78,38 @@ def load_model(state, path):
     restored_state = checkpointer.restore(path, item=state)
     return restored_state
 
-# --- 1. The HyperNetwork (Now with Geometric Input) ---
+# --- 1. The HyperNetwork (Learned Chunk Embeddings) ---
+# Chunk IDs are mapped through a learned embedding table instead of sparse
+# one-hot vectors.  This compresses the 200-dim chunk one-hot into a 16-dim
+# learned space, reducing HN input dimensionality and giving PGPE a smoother
+# search manifold.  Chunks that should produce similar weights can learn
+# nearby embeddings, providing implicit weight-sharing without hard-coding it.
 class HyperNetwork(nn.Module):
     chunk_size: int = 256
-    
+    n_chunks: int = 200
+    chunk_embed_dim: int = 16
+
     @nn.compact
-    def __call__(self, inputs):
+    def __call__(self, chunk_ids, context):
         """
-        Input:  (Batch, Input_Dim) 
-                Input_Dim = Layer_OneHot + Chunk_OneHot + 2 (Depth, Scale)
-        Output: (Batch, Chunk_Size)
+        Input:  chunk_ids (N,) int  — chunk indices for learned embedding
+                context   (N, C)    — layer one-hot + depth + scale
+        Output: (N, chunk_size)     — generated weight chunks
         """
-        # We start with a slightly wider first layer to handle the mixed inputs
-        x = nn.Dense(48)(inputs) 
-        x = nn.gelu(x)
-        
+        chunk_emb = nn.Embed(self.n_chunks, self.chunk_embed_dim)(chunk_ids)
+        x = jnp.concatenate([chunk_emb, context], axis=-1)
+
         x = nn.Dense(48)(x)
         x = nn.gelu(x)
-        
-        # Initialize output with higher variance as discussed to ensure signal strength
+
+        x = nn.Dense(48)(x)
+        x = nn.gelu(x)
+
         weights = nn.Dense(
-            self.chunk_size, 
-            kernel_init=jax.nn.initializers.normal(stddev=0.025) 
+            self.chunk_size,
+            kernel_init=jax.nn.initializers.normal(stddev=0.025)
         )(x)
-        
+
         return weights
 
 # --- 2. The Adapter (The "Context" Builder) ---
@@ -152,29 +160,33 @@ class ParameterAdapter:
         self.split_indices = np.cumsum(self.param_sizes)[:-1]
 
         # --- D. Input Dimensions ---
-        # Derive embedding sizes from the actual generator parameter layout.
-        # This avoids silent truncation when capacity changes increase chunks.
         self.N_LAYERS = int(layer_ids_np.max()) + 1
         self.N_CHUNKS = int(chunk_ids_np.max()) + 1
-        # +2 comes from the new Depth and Scale features
-        self.INPUT_DIM = self.N_LAYERS + self.N_CHUNKS + 2 
+        self.CHUNK_EMBED_DIM = 16
+        # Context = layer one-hot + depth + scale (chunk ID is embedded inside HN)
+        self.CONTEXT_DIM = self.N_LAYERS + 2
 
-        # --- PRE-CALCULATE EMBEDDINGS ONCE ---
-        l_oh = jax.nn.one_hot(self.layer_ids, self.N_LAYERS)      
-        c_oh = jax.nn.one_hot(self.chunk_ids, self.N_CHUNKS)     
+        # --- PRE-CALCULATE STATIC CONTEXT (no chunk encoding) ---
+        l_oh = jax.nn.one_hot(self.layer_ids, self.N_LAYERS)
         d_feat = self.depths[:, None]
         s_feat = self.scales[:, None]
 
-        self.static_embeddings = jnp.concatenate([l_oh, c_oh, d_feat, s_feat], axis=-1)
+        self.static_context = jnp.concatenate([l_oh, d_feat, s_feat], axis=-1)
+
+    def _make_hn(self):
+        return HyperNetwork(
+            self.chunk_size, self.N_CHUNKS, self.CHUNK_EMBED_DIM)
 
     def init_hypernet(self, rng):
-        dummy_input = jnp.zeros((self.total_chunks, self.INPUT_DIM))
-        return HyperNetwork(self.chunk_size).init(rng, dummy_input)
+        dummy_chunk_ids = jnp.zeros((self.total_chunks,), dtype=jnp.int32)
+        dummy_context = jnp.zeros((self.total_chunks, self.CONTEXT_DIM))
+        return self._make_hn().init(rng, dummy_chunk_ids, dummy_context)
 
     def generate_params(self, hypernet_params):
 
         # 4. Run HyperNet
-        flat_chunks = HyperNetwork(self.chunk_size).apply(hypernet_params, self.static_embeddings)
+        flat_chunks = self._make_hn().apply(
+            hypernet_params, self.chunk_ids, self.static_context)
         
         # 5. Reconstruct
         raw_stream = flat_chunks.reshape(-1)
@@ -193,13 +205,26 @@ class Generator(nn.Module):
     
     @nn.compact
     def __call__(self, z):
+        def _reflect_conv(x, features, kernel_size, kernel_init=None):
+            """Convolution with reflection padding to remove edge darkening bias."""
+            pad_h = kernel_size[0] // 2
+            pad_w = kernel_size[1] // 2
+            x = jnp.pad(
+                x,
+                ((0, 0), (pad_h, pad_h), (pad_w, pad_w), (0, 0)),
+                mode='reflect',
+            )
+            conv_kwargs = dict(features=features, kernel_size=kernel_size, strides=(1, 1), padding='VALID')
+            if kernel_init is not None:
+                conv_kwargs['kernel_init'] = kernel_init
+            return nn.Conv(**conv_kwargs)(x)
                 
         # BETTER: Project z -> 7*7*8 (small depth) -> Conv to 64
         x = nn.Dense(7 * 7 * 8)(z) # 74 -> 392 outputs = 29k params. Very manageable.
         x = x.reshape((x.shape[0], 7, 7, 8))
         
         # Now use a Conv to expand depth (standard HyperNet texture generation)
-        x = nn.Conv(self.features, kernel_size=(3,3), padding='SAME')(x)
+        x = _reflect_conv(x, self.features, kernel_size=(3, 3))
         x = nn.GroupNorm(num_groups=32)(x)
         x = jnp.tanh(x)
         
@@ -210,13 +235,12 @@ class Generator(nn.Module):
         
         # Convolve: Process the upsampled features
         # We maintain 'features' depth (64) to keep capacity high
-        x = nn.Conv(
+        x = _reflect_conv(
+            x,
             self.features,
-            kernel_size=(5, 5),  # 5x5 kernel helps smooth the nearest-neighbor edges
-            strides=(1, 1),
-            padding='SAME',
-            kernel_init=normal_init(0.02)
-        )(x)
+            kernel_size=(5, 5),
+            kernel_init=normal_init(0.02),
+        )
         x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
         x = jnp.tanh(x)
 
@@ -224,25 +248,23 @@ class Generator(nn.Module):
         x = jax.image.resize(x, shape=(x.shape[0], 28, 28, x.shape[3]), method='nearest')
         
         # Convolve
-        x = nn.Conv(
+        x = _reflect_conv(
+            x,
             self.features // 2,  # Reduce depth to 32
             kernel_size=(5, 5),
-            strides=(1, 1),
-            padding='SAME',
-            kernel_init=normal_init(0.02)
-        )(x)
+            kernel_init=normal_init(0.02),
+        )
         x = nn.GroupNorm(num_groups=16, epsilon=1e-5)(x) # Adjusted groups for smaller depth
         x = jnp.tanh(x)
 
         # 4. OUTPUT BLOCK (28x28 -> 28x28)
         # Collapse to 1 channel (Grayscale)
-        x = nn.Conv(
+        x = _reflect_conv(
+            x,
             1,
             kernel_size=(5, 5),
-            strides=(1, 1),
-            padding='SAME',
-            kernel_init=normal_init(0.02)
-        )(x)
+            kernel_init=normal_init(0.02),
+        )
         x = jnp.tanh(x)
         
         return x

@@ -771,8 +771,36 @@ class PGPE(NEAlgorithm):
         # --- CA-driven adaptive weight modulation ---
         # Base weights (user-tuned sweet spot from the stable 0-195k regime)
         w_adv_base = 0.53
-        w_mi_base = 0.4
-        w_sense_base = 0.2
+        # Health gates for MI/sense pressure:
+        # - D health from real_fake_loss window
+        # - Shape health from worst-code conditional shape diversity
+        # When either degrades, pause/soften MI+separation escalation.
+        rfl = jnp.array(self._runtime_real_fake_loss, dtype=jnp.float32)
+        rfl_finite = jnp.isfinite(rfl)
+        d_lo = jnp.float32(0.38)
+        d_hi = jnp.float32(0.58)
+        d_shoulder = jnp.float32(0.05)
+        d_gate_lo = jnp.clip((rfl - (d_lo - d_shoulder)) / d_shoulder, 0.0, 1.0)
+        d_gate_hi = jnp.clip(((d_hi + d_shoulder) - rfl) / d_shoulder, 0.0, 1.0)
+        d_health = jnp.where(rfl_finite, jnp.minimum(d_gate_lo, d_gate_hi), 1.0)
+
+        shape_min_pop = jnp.mean(r_shape_div_min)
+        shape_lo = jnp.float32(0.08)
+        shape_hi = jnp.float32(0.13)
+        shape_health = jnp.clip((shape_min_pop - shape_lo) / (shape_hi - shape_lo + 1e-8), 0.0, 1.0)
+
+        # Combined health factor for MI/sense pressure.
+        objective_health = d_health * shape_health
+        ramp_gate = 0.25 + 0.75 * objective_health
+
+        w_mi_base = 0.30
+        # Ramp w_mi_base from 0.30 to 0.50 over 50k iterations (starts at 10k),
+        # but only when D/shape health are adequate.
+        w_mi_base = w_mi_base + jnp.clip((self._t - 10000) / 50000 * 0.20, 0.00, 0.20) * ramp_gate
+        w_sense_base = 0.10
+        # Ramp w_sense_base from 0.10 to 0.30 over 50k iterations (starts at 10k),
+        # but only when D/shape health are adequate.
+        w_sense_base = w_sense_base + jnp.clip((self._t - 10000) / 50000 * 0.20, 0.00, 0.20) * ramp_gate
         w_div_base = 0.48
         w_norm_base = 0.04
 
@@ -806,7 +834,7 @@ class PGPE(NEAlgorithm):
         #    This is intentionally conservative: we only add up to +0.20.
         mi_distress_short = jnp.clip(-mi_short * 30.0, 0.0, 0.15)
         mi_distress_med = jnp.clip(-mi_med * 20.0, 0.0, 0.10)
-        mi_distress = jnp.clip(mi_distress_short + mi_distress_med, 0.0, 0.20)
+        mi_distress = jnp.clip(mi_distress_short + mi_distress_med, 0.0, 0.20) * objective_health
         w_mi = w_mi_base + mi_distress
         # When MI is in distress, ease off pixel diversity slightly so pressure
         # shifts toward informative code alignment instead of texture variance.
@@ -818,8 +846,8 @@ class PGPE(NEAlgorithm):
         # If separation stays weak, give a modest sense boost.
         sense_target = 0.03
         sense_mean = jnp.mean(r_sense)
-        sense_deficit = jnp.clip((sense_target - sense_mean) * 2.5, 0.0, 0.08)
-        sense_decline = jnp.clip(-sense_med * 25.0, 0.0, 0.05)
+        sense_deficit = jnp.clip((sense_target - sense_mean) * 2.5, 0.0, 0.08) * objective_health
+        sense_decline = jnp.clip(-sense_med * 25.0, 0.0, 0.05) * objective_health
         w_sense = w_sense_base - sense_overshoot + sense_deficit + sense_decline
 
         # 4. If r_intra is dropping (within-code variation collapsing), boost w_intra
@@ -840,18 +868,27 @@ class PGPE(NEAlgorithm):
         cons_shortfall = jnp.maximum(0.0, cons_floor - r_cons)  # per-member penalty
         w_cons_floor = 0.1
 
+        if self._t < 10000:
+            w_mi_clip_max = 0.35
+            w_sense_clip_max = 0.1
+        else:
+            w_mi_clip_max = 0.55
+            w_sense_clip_max = 0.30
+
         # Ensure no weight goes negative
         w_adv = jnp.maximum(w_adv, 0.1)
         w_div = jnp.maximum(w_div, 0.1)
-        w_mi = jnp.clip(w_mi, 0.05, 0.35)
-        w_sense = jnp.clip(w_sense, 0.02, 0.25)
+        # Extra damping under poor D/shape health to avoid shortcut collapse.
+        w_mi = w_mi - (1.0 - objective_health) * 0.12
+        w_sense = w_sense - (1.0 - objective_health) * 0.06
+        w_mi = jnp.clip(w_mi, 0.05, w_mi_clip_max)
+        w_sense = jnp.clip(w_sense, 0.02, w_sense_clip_max)
 
         # MI guard: when worst-code shape diversity collapses, reduce MI
         # pressure so optimization cannot improve MI by prototype collapse.
-        shape_min_pop = jnp.mean(r_shape_div_min)
         shape_min_target = 0.10
         mi_guard = jnp.clip((shape_min_target - shape_min_pop) * 3.0, 0.0, 0.12)
-        w_mi = jnp.clip(w_mi - mi_guard, 0.05, 0.35)
+        w_mi = jnp.clip(w_mi - mi_guard, 0.05, w_mi_clip_max)
         w_shape = jnp.clip(w_shape + (mi_guard * 0.5), 0.02, 0.20)
 
         # Normative: keep low
@@ -866,11 +903,11 @@ class PGPE(NEAlgorithm):
             (rank_normalize(fitness_adv) * w_adv)          # Quality (capped, can't dominate)
             + (rank_normalize(fitness_mi) * w_mi)          # MI signal
             + (rank_normalize(r_sense) * w_sense)          # Feature-space code separation
-            + (rank_normalize(pop_var) * w_div)            # Pixel-space code diversity
+            #+ (rank_normalize(pop_var) * w_div)            # Pixel-space code diversity
             + (rank_normalize(r_intra) * w_intra)          # Within-code variation (use z-noise)
-            + (rank_normalize(shape_score) * w_shape)      # Conditional shape variation (min+mean)
-            - (rank_normalize(cons_shortfall) * w_cons_floor) # Penalize centroid drift below floor
-            - (rank_normalize(normative_penalty) * w_norm) # Safety/spread limits
+            #+ (rank_normalize(shape_score) * w_shape)      # Conditional shape variation (min+mean)
+            #- (rank_normalize(cons_shortfall) * w_cons_floor) # Penalize centroid drift below floor
+            #- (rank_normalize(normative_penalty) * w_norm) # Safety/spread limits
         )
         #w_mi = jnp.clip((self._t / 10000) * 10.0, 0.1, 0.6)
         
@@ -1074,6 +1111,9 @@ class PGPE(NEAlgorithm):
             "w_cons_floor": w_cons_floor,
             "w_norm": w_norm,
             "mi_guard": mi_guard,
+            "d_health": d_health,
+            "shape_health": shape_health,
+            "objective_health": objective_health,
             "ca_blend": ca_blend,
             "ca_has_data": jnp.float32(has_ca_data),
             "ca_rfl_gate": rfl_gate,

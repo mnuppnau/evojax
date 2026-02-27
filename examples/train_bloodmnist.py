@@ -57,11 +57,11 @@ def parse_args():
     parser.add_argument(
         '--center-lr-gen', type=float, default=0.0048, help='Center learning rate.')
     parser.add_argument(
-        '--std-lr-gen', type=float, default=0.069, help='Std learning rate.')
+        '--std-lr-gen', type=float, default=0.06, help='Std learning rate.')
     parser.add_argument(
-        '--init-std-gen', type=float, default=0.039, help='Initial std.')
+        '--init-std-gen', type=float, default=0.03, help='Initial std.')
     parser.add_argument(
-        '--ca-blend-coeff', type=float, default=0.05,
+        '--ca-blend-coeff', type=float, default=0.03,
         help='CA gradient blend coefficient (set 0.0 to disable CA blend).')
     parser.add_argument(
         '--ca-blend-start-iter', type=int, default=3000,

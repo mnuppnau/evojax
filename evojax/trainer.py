@@ -83,13 +83,26 @@ class Generator(nn.Module):
 
     @nn.compact
     def __call__(self, z):
+        def _reflect_conv(x, features, kernel_size, kernel_init=None):
+            """Convolution with reflection padding to remove edge darkening bias."""
+            pad_h = kernel_size[0] // 2
+            pad_w = kernel_size[1] // 2
+            x = jnp.pad(
+                x,
+                ((0, 0), (pad_h, pad_h), (pad_w, pad_w), (0, 0)),
+                mode='reflect',
+            )
+            conv_kwargs = dict(features=features, kernel_size=kernel_size, strides=(1, 1), padding='VALID')
+            if kernel_init is not None:
+                conv_kwargs['kernel_init'] = kernel_init
+            return nn.Conv(**conv_kwargs)(x)
         
         # BETTER: Project z -> 7*7*8 (small depth) -> Conv to 64
         x = nn.Dense(7 * 7 * 8)(z) # 74 -> 392 outputs = 29k params. Very manageable.
         x = x.reshape((x.shape[0], 7, 7, 8))
         
         # Now use a Conv to expand depth (standard HyperNet texture generation)
-        x = nn.Conv(self.features, kernel_size=(3,3), padding='SAME')(x)
+        x = _reflect_conv(x, self.features, kernel_size=(3, 3))
         x = nn.GroupNorm(num_groups=32)(x)
         x = jnp.tanh(x)
         
@@ -100,13 +113,12 @@ class Generator(nn.Module):
         
         # Convolve: Process the upsampled features
         # We maintain 'features' depth (64) to keep capacity high
-        x = nn.Conv(
+        x = _reflect_conv(
+            x,
             self.features,
-            kernel_size=(5, 5),  # 5x5 kernel helps smooth the nearest-neighbor edges
-            strides=(1, 1),
-            padding='SAME',
-            kernel_init=normal_init(0.02)
-        )(x)
+            kernel_size=(5, 5),
+            kernel_init=normal_init(0.02),
+        )
         x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
         x = jnp.tanh(x)
 
@@ -114,25 +126,23 @@ class Generator(nn.Module):
         x = jax.image.resize(x, shape=(x.shape[0], 28, 28, x.shape[3]), method='nearest')
         
         # Convolve
-        x = nn.Conv(
+        x = _reflect_conv(
+            x,
             self.features // 2,  # Reduce depth to 32
             kernel_size=(5, 5),
-            strides=(1, 1),
-            padding='SAME',
-            kernel_init=normal_init(0.02)
-        )(x)
+            kernel_init=normal_init(0.02),
+        )
         x = nn.GroupNorm(num_groups=16, epsilon=1e-5)(x) # Adjusted groups for smaller depth
         x = jnp.tanh(x)
 
         # 4. OUTPUT BLOCK (28x28 -> 28x28)
         # Collapse to 1 channel (Grayscale)
-        x = nn.Conv(
+        x = _reflect_conv(
+            x,
             1,
             kernel_size=(5, 5),
-            strides=(1, 1),
-            padding='SAME',
-            kernel_init=normal_init(0.02)
-        )(x)
+            kernel_init=normal_init(0.02),
+        )
         x = jnp.tanh(x)
         
         return x
@@ -224,30 +234,33 @@ class Discriminator(nn.Module):
 
         return d_logits, q_cat_logits, q_cont_mu, q_cont_logsigma, q_feat_avg
 
-# --- 1. The HyperNetwork (Now with Geometric Input) ---
+# --- 1. The HyperNetwork (Learned Chunk Embeddings) ---
 class HyperNetwork(nn.Module):
     chunk_size: int = 256
-    
+    n_chunks: int = 200
+    chunk_embed_dim: int = 16
+
     @nn.compact
-    def __call__(self, inputs):
+    def __call__(self, chunk_ids, context):
         """
-        Input:  (Batch, Input_Dim) 
-                Input_Dim = Layer_OneHot + Chunk_OneHot + 2 (Depth, Scale)
-        Output: (Batch, Chunk_Size)
+        Input:  chunk_ids (N,) int  — chunk indices for learned embedding
+                context   (N, C)    — layer one-hot + depth + scale
+        Output: (N, chunk_size)     — generated weight chunks
         """
-        # We start with a slightly wider first layer to handle the mixed inputs
-        x = nn.Dense(48)(inputs) 
-        x = nn.gelu(x)
-        
+        chunk_emb = nn.Embed(self.n_chunks, self.chunk_embed_dim)(chunk_ids)
+        x = jnp.concatenate([chunk_emb, context], axis=-1)
+
         x = nn.Dense(48)(x)
         x = nn.gelu(x)
-        
-        # Initialize output with higher variance as discussed to ensure signal strength
+
+        x = nn.Dense(48)(x)
+        x = nn.gelu(x)
+
         weights = nn.Dense(
-            self.chunk_size, 
-            kernel_init=jax.nn.initializers.normal(stddev=0.025) 
+            self.chunk_size,
+            kernel_init=jax.nn.initializers.normal(stddev=0.025)
         )(x)
-        
+
         return weights
 
 # --- 2. The Adapter (The "Context" Builder) ---
@@ -264,62 +277,56 @@ class ParameterAdapter:
         # --- B. Assign Layer IDs and Chunk IDs ---
         layer_ids_list = []
         chunk_ids_list = []
-        
+
         for layer_idx, size in enumerate(self.param_sizes):
             n_chunks = (size + chunk_size - 1) // chunk_size
             layer_ids_list.append(np.full(n_chunks, layer_idx))
             chunk_ids_list.append(np.arange(n_chunks))
 
-        self.layer_ids = jnp.array(np.concatenate(layer_ids_list))
-        self.chunk_ids = jnp.array(np.concatenate(chunk_ids_list))
+        layer_ids_np = np.concatenate(layer_ids_list).astype(np.int32)
+        chunk_ids_np = np.concatenate(chunk_ids_list).astype(np.int32)
+
+        self.layer_ids = jnp.array(layer_ids_np)
+        self.chunk_ids = jnp.array(chunk_ids_np)
         self.total_chunks = len(self.layer_ids)
-        
-        # --- C. Define Geometric Context (The New Part) ---
-        # We manually map each layer index to a "Depth" (0-1) and "Scale" (0-1)
-        # Assuming the Generator order: [Dense(Start), GroupNorm, Conv(7x7), GN, Conv(14x14), GN, Conv(28x28)]
-        # You can adjust these based on your exact parameter list order.
-        # This is a heuristic: Start=0.0, End=1.0. 
+
+        # --- C. Geometric Context ---
         total_layers = len(self.param_sizes)
         self.depth_map = np.linspace(0.0, 1.0, total_layers)
-        
-        # For Scale, we map based on expected resolution.
-        # We create an array matching 'param_sizes' length.
-        # 0.25 = 7x7, 0.5 = 14x14, 1.0 = 28x28
-        # (Simplified: Just using increasing scale for deeper layers)
         self.scale_map = np.linspace(0.25, 1.0, total_layers)
 
-        # Convert to JAX arrays for the GPU
-        self.depths = jnp.array(self.depth_map)[self.layer_ids] 
+        self.depths = jnp.array(self.depth_map)[self.layer_ids]
         self.scales = jnp.array(self.scale_map)[self.layer_ids]
 
         self.split_indices = np.cumsum(self.param_sizes)[:-1]
 
         # --- D. Input Dimensions ---
-        self.N_LAYERS = 20   
-        self.N_CHUNKS = 100  
-        # +2 comes from the new Depth and Scale features
-        self.INPUT_DIM = self.N_LAYERS + self.N_CHUNKS + 2 
+        self.N_LAYERS = int(layer_ids_np.max()) + 1
+        self.N_CHUNKS = int(chunk_ids_np.max()) + 1
+        self.CHUNK_EMBED_DIM = 16
+        self.CONTEXT_DIM = self.N_LAYERS + 2
+
+        # --- PRE-CALCULATE STATIC CONTEXT (no chunk encoding) ---
+        l_oh = jax.nn.one_hot(self.layer_ids, self.N_LAYERS)
+        d_feat = self.depths[:, None]
+        s_feat = self.scales[:, None]
+
+        self.static_context = jnp.concatenate([l_oh, d_feat, s_feat], axis=-1)
+
+    def _make_hn(self):
+        return HyperNetwork(
+            self.chunk_size, self.N_CHUNKS, self.CHUNK_EMBED_DIM)
 
     def init_hypernet(self, rng):
-        dummy_input = jnp.zeros((self.total_chunks, self.INPUT_DIM))
-        return HyperNetwork(self.chunk_size).init(rng, dummy_input)
+        dummy_chunk_ids = jnp.zeros((self.total_chunks,), dtype=jnp.int32)
+        dummy_context = jnp.zeros((self.total_chunks, self.CONTEXT_DIM))
+        return self._make_hn().init(rng, dummy_chunk_ids, dummy_context)
 
     def generate_params(self, hypernet_params):
-        # 1. One-Hot Encodings (Identity)
-        l_oh = jax.nn.one_hot(self.layer_ids, self.N_LAYERS)      
-        c_oh = jax.nn.one_hot(self.chunk_ids, self.N_CHUNKS)     
-        
-        # 2. Geometric Features (Context)
-        # Reshape (N,) -> (N, 1) to concatenate
-        d_feat = self.depths[:, None]
-        s_feat = self.scales[:, None] * 5.0  # Scale up for better range 
-        
-        # 3. Concatenate Everything
-        # "I am Chunk 5 of Layer 2. My depth is 0.2 and my scale is 0.5"
-        embeddings = jnp.concatenate([l_oh, c_oh, d_feat, s_feat], axis=-1)
 
         # 4. Run HyperNet
-        flat_chunks = HyperNetwork(self.chunk_size).apply(hypernet_params, embeddings)
+        flat_chunks = self._make_hn().apply(
+            hypernet_params, self.chunk_ids, self.static_context)
         
         # 5. Reconstruct
         raw_stream = flat_chunks.reshape(-1)
@@ -781,7 +788,7 @@ def train_step_disc(
                 loss_mi_cont = continuous_loss(fake_cont_input, q_fake_mu, q_fake_logsigma)
             else:
                 loss_mi_cont = 0.0
-            loss_mi = loss_mi_cat + loss_mi_cont
+            #loss_mi = loss_mi_cat + loss_mi_cont
 
             # use 0.9 as the label for real images instead of 1.0
             real_loss = optax.sigmoid_binary_cross_entropy(
@@ -794,7 +801,7 @@ def train_step_disc(
             fake_loss = jnp.mean(fake_loss)
 
             real_fake_loss = (real_loss + fake_loss) / 2.0
-            loss = real_fake_loss + loss_mi * 0.2
+            loss = real_fake_loss + loss_mi_cat * 0.8 + loss_mi_cont * 0.1
 
             return loss, (real_fake_loss, vars_d)
 
@@ -997,13 +1004,16 @@ class Trainer(object):
             'r_cons_avg', 'r_sense_avg', 'r_intra_avg', 'r_shape_div_avg', 'r_shape_div_min_avg',
             'norm_pen_avg', 'safety_avg', 'spread_avg',
             'real_fake_loss',
-            'ca_blend', 'ca_rfl_gate', 'ca_has_data', 'ks_winner',
+            'ca_blend', 'ca_rfl_gate', 'ca_has_data',
+            'd_health', 'shape_health', 'objective_health',
+            'ks_winner',
         ]
         self._ks_tsv_header = [
             'iter',
             'adv_short', 'mi_short', 'adv_med', 'mi_med', 'ent_long',
             'sense_short', 'intra_short', 'adv_avg_short', 'sense_med', 'shape_short', 'shape_med', 'shape_div_avg', 'shape_div_min_avg', 'shape_div_score_avg',
             'w_adv', 'w_mi', 'w_div', 'w_sense', 'w_intra', 'w_shape', 'mi_guard', 'w_cons_floor', 'w_norm',
+            'd_health', 'shape_health', 'objective_health',
             'ks_dom_score', 'ks_sit_score', 'ks_hist_score', 'ks_topo_score',
             'ks_dom_weight', 'ks_sit_weight', 'ks_hist_weight', 'ks_topo_weight',
             'ks_winner',
@@ -1166,6 +1176,9 @@ class Trainer(object):
             self._to_scalar(diagnostics.get('ca_blend')),
             self._to_scalar(diagnostics.get('ca_rfl_gate')),
             self._to_scalar(diagnostics.get('ca_has_data')),
+            self._to_scalar(diagnostics.get('d_health')),
+            self._to_scalar(diagnostics.get('shape_health')),
+            self._to_scalar(diagnostics.get('objective_health')),
             self._to_scalar(diagnostics.get('ks_winner')),
         ]
         self._append_tsv_row(self._metrics_tsv_path, metrics_row)
@@ -1208,6 +1221,9 @@ class Trainer(object):
             self._to_scalar(diagnostics.get('mi_guard')),
             self._to_scalar(diagnostics.get('w_cons_floor')),
             self._to_scalar(diagnostics.get('w_norm')),
+            self._to_scalar(diagnostics.get('d_health')),
+            self._to_scalar(diagnostics.get('shape_health')),
+            self._to_scalar(diagnostics.get('objective_health')),
             self._to_scalar(diagnostics.get('ks_dom_score')),
             self._to_scalar(diagnostics.get('ks_sit_score')),
             self._to_scalar(diagnostics.get('ks_hist_score')),
