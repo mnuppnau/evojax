@@ -255,6 +255,7 @@ class PGPE(NEAlgorithm):
         ca_blend_rfl_hi: float = -1.0,
         shape_div_weight: float = 0.12,
         static_fitness_weights: bool = False,
+        static_mi_sense_ramp: bool = False,
         static_w_adv: Optional[float] = None,
         static_w_mi: Optional[float] = None,
         static_w_div: Optional[float] = None,
@@ -287,6 +288,8 @@ class PGPE(NEAlgorithm):
             shape_div_weight - Weight for conditional shape diversity reward.
             static_fitness_weights - Disable slope/health-driven adaptive
                                      weighting and use fixed fitness weights.
+            static_mi_sense_ramp - When static_fitness_weights=True, optionally
+                                   keep the legacy time-ramp on MI/sense bases.
             static_w_* - Optional static fitness weights used when
                          static_fitness_weights=True.
         """
@@ -312,6 +315,7 @@ class PGPE(NEAlgorithm):
         self._ca_blend_rfl_hi = float(ca_blend_rfl_hi)
         self._shape_div_weight = float(max(shape_div_weight, 0.0))
         self._static_fitness_weights = bool(static_fitness_weights)
+        self._static_mi_sense_ramp = bool(static_mi_sense_ramp)
         self._static_w_adv = None if static_w_adv is None else float(static_w_adv)
         self._static_w_mi = None if static_w_mi is None else float(static_w_mi)
         self._static_w_div = None if static_w_div is None else float(static_w_div)
@@ -814,8 +818,9 @@ class PGPE(NEAlgorithm):
 
         w_mi_base = jnp.float32(self._static_w_mi if self._static_w_mi is not None else 0.30)
         w_sense_base = jnp.float32(self._static_w_sense if self._static_w_sense is not None else 0.14)
-        if not self._static_fitness_weights:
-            # Ramp adaptive bases only in adaptive mode.
+        if (not self._static_fitness_weights) or self._static_mi_sense_ramp:
+            # Ramp adaptive bases in adaptive mode, or optionally in static
+            # mode to reproduce legacy behavior.
             w_mi_base = w_mi_base + jnp.clip((self._t - 10000) / 50000 * 0.20, 0.00, 0.20) * ramp_gate
             w_sense_base = w_sense_base + jnp.clip((self._t - 10000) / 50000 * 0.20, 0.00, 0.20) * ramp_gate
         # Direct code-separation pressure (pop_var) kept intentionally low.
