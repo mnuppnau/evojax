@@ -270,40 +270,28 @@ def build_real_by_class_mnist(
     root="./data",
     train=True,
     download=True,
-    n_classes=8,
+    n_classes=10,
 ):
     """
     Returns:
         real_by_class: list of n_classes JAX arrays
                        real_by_class[c].shape == (Nc, 28, 28)
     """
-    from medmnist import BloodMNIST
+    dataset = torchvision.datasets.MNIST(
+        root=root, train=train, download=download)
 
-    split = 'train' if train else 'test'
-    dataset = BloodMNIST(split=split, download=download, root=root)
+    images = np.array(dataset.data, dtype=np.float32) / 255.0
+    labels = np.array(dataset.targets, dtype=np.int32)
 
-    # Buckets for each class
     buckets = [[] for _ in range(n_classes)]
-
-    for i in range(len(dataset)):
-        img, label = dataset[i]
-        # img: PIL Image 28x28, label: numpy array shape (1,)
-        img_np = np.array(img, dtype=np.float32) / 255.0
-        if img_np.ndim == 3 and img_np.shape[-1] == 3:
-            # Convert RGB microscopy image to grayscale for 1-channel generator/discriminator.
-            img_np = (
-                0.2989 * img_np[..., 0]
-                + 0.5870 * img_np[..., 1]
-                + 0.1140 * img_np[..., 2]
-            )
-        lbl = int(label.item() if hasattr(label, 'item') else label[0])
-        if lbl < n_classes:
-            buckets[lbl].append(img_np)
+    for img_np, lbl in zip(images, labels):
+        if 0 <= int(lbl) < n_classes:
+            buckets[int(lbl)].append(img_np)
 
     # Guard against requesting more codes than dataset classes.
     non_empty = [b for b in buckets if len(b) > 0]
     if len(non_empty) == 0:
-        raise ValueError('No images found while building BloodMNIST class buckets.')
+        raise ValueError('No images found while building MNIST class buckets.')
     for idx, bucket in enumerate(buckets):
         if len(bucket) == 0:
             exemplar = non_empty[idx % len(non_empty)][0]
@@ -382,7 +370,13 @@ def continuous_loss(c_true, mu, logsigma):
     # NLL of Gaussian: 0.5 * log(2π) + logsigma + 0.5 * ((x - mu) / sigma)^2
     # We can drop the constant 0.5 * log(2π)
     nll = logsigma + 0.5 * ((c_true - mu) / jnp.exp(logsigma)) ** 2
-    
+
+    # Cap per-element NLL to prevent gradient explosion when mu is far from
+    # truth (e.g. after Generator output range change).  Without this cap the
+    # cont term can reach hundreds, dominating D-step loss and destabilising
+    # both D training and the G-step fitness_mi signal.
+    nll = jnp.minimum(nll, 10.0)
+
     return jnp.mean(nll)
 
 #def neg_log_likelihood_normal(x, mean, logvar):
@@ -408,7 +402,7 @@ class Latent_Points(VectorizedTask):
                  batch_size: int = 1024,
                  dataset_size: int = 800,  # Similar to MNIST
                  latent_dim: int = 62,
-                 n_classes: int = 8,
+                 n_classes: int = 10,
                  n_cont: int = 2,
                  feature_dim: int = 256,
                  test: bool = False):
@@ -465,6 +459,7 @@ class Latent_Points(VectorizedTask):
                 noise = jax.random.normal(noise_aux_key, (self.batch_size, 28, 28, 1)) * 0.1
             else:
                 # --- Controlled Experiment (Latent Vector Design) ---
+                cat_key, rem_key, noise_key_local = random.split(cat_key, 3)
                 # Generate base vectors, repeat n_classes times -> enough to fill batch
                 n_sets = self.batch_size // self.n_classes  # 5 for batch=64, n_classes=11
                 n_ctrl = n_sets * self.n_classes             # 55 controlled samples
@@ -487,10 +482,16 @@ class Latent_Points(VectorizedTask):
                 codes60 = jnp.tile(jnp.arange(self.n_classes), n_sets)  # (55,) for 5*11
                 onehot60 = jax.nn.one_hot(codes60, self.n_classes) # (55, 11)
 
-                # Fill remaining spots (e.g. 9 spots for batch 64)
+                # Fill remaining slots with a randomized subset of codes so
+                # the same early code indices are not overrepresented every batch.
                 remainder = self.batch_size - n_ctrl
-                codes_rem = jnp.tile(jnp.arange(self.n_classes), (remainder // self.n_classes) + 1)[:remainder]
-                onehot_rem = jax.nn.one_hot(codes_rem, self.n_classes)
+                if remainder > 0:
+                    reps_rem = (remainder + self.n_classes - 1) // self.n_classes
+                    rem_pool = jnp.tile(jnp.arange(self.n_classes), reps_rem)
+                    codes_rem = random.permutation(rem_key, rem_pool)[:remainder]
+                    onehot_rem = jax.nn.one_hot(codes_rem, self.n_classes)
+                else:
+                    onehot_rem = jnp.zeros((0, self.n_classes), dtype=onehot60.dtype)
 
                 batch_cat_one_hot = jnp.concatenate([onehot60, onehot_rem], axis=0)
 
@@ -498,7 +499,7 @@ class Latent_Points(VectorizedTask):
                     [z_base, batch_cat_one_hot, batch_con], axis=-1)
 
                 # Instance Noise for Discriminator stability
-                noise = jax.random.normal(cat_key, (self.batch_size, 28, 28, 1)) * 0.1
+                noise = jax.random.normal(noise_key_local, (self.batch_size, 28, 28, 1)) * 0.1
 
             return State(
                 obs=batch_latent_concat,
@@ -608,11 +609,12 @@ class Latent_Points(VectorizedTask):
             r_sense_mean = jnp.mean(nearest_dist)
             r_sense = 0.7 * r_min_pair + 0.3 * r_sense_mean
 
-            # r_intra: Cluster Tightness Reward
-            # (Keeping original scaling logic)
+            # r_intra: Cluster tightness reward (BloodMNIST-tuned window).
+            # Reward is highest when per-code spread is in [0.03, 0.12] and
+            # decays outside this range.
             spread_flat = spreads.flatten()
-            below = jnp.clip((spread_flat / 0.05), 0.0, 1.0)
-            above = 1.0 - jnp.clip((spread_flat - 0.2) / 0.2, 0.0, 1.0)
+            below = jnp.clip((spread_flat / 0.03), 0.0, 1.0)
+            above = 1.0 - jnp.clip((spread_flat - 0.12) / 0.12, 0.0, 1.0)
             reward_k = jnp.minimum(below, above)
             r_intra = jnp.mean(reward_k)
 
@@ -664,7 +666,8 @@ class Latent_Points(VectorizedTask):
                 loss_q_disc_cont = -continuous_loss(state.con_codes, q_cont_mu, q_cont_logsigma)
             else:
                 loss_q_disc_cont = 0.0
-            loss_q_disc = loss_q_disc_cat + loss_q_disc_cont
+            # Weight to match D-step priorities (trainer.py: cat*0.8 + cont*0.1)
+            loss_q_disc = loss_q_disc_cat*0.2 + loss_q_disc_cont * 0.05
             loss_g = -optax.sigmoid_binary_cross_entropy(action, jnp.ones((self.batch_size,))).mean()
 
             return (

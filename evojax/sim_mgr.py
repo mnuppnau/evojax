@@ -219,6 +219,7 @@ class SimManager(object):
         self._n_evaluations = max(n_evaluations, jax.local_device_count())
         self._ma_training = train_vec_task.multi_agent_training
         self._n_codes = int(getattr(train_vec_task, 'n_classes', 11))
+        self._feature_dim = int(getattr(train_vec_task, 'feature_dim', 256))
         self._task_batch_size = int(getattr(train_vec_task, 'batch_size', 64))
 
         self._t = 0
@@ -246,7 +247,7 @@ class SimManager(object):
 
         def step_once_gen(carry, input_data, task):
             (task_state, policy_state, params_gen, params_disc, obs_params, t,
-             accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads, valid_mask) = carry
+             accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads, valid_mask) = carry
             if task.multi_agent_training:
                 num_tasks, num_agents = task_state.obs.shape[:2]
                 task_state = task_state.replace(
@@ -254,7 +255,8 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            actions, disc_logits, mean_var_fake, q_flat, q_cont_mu, q_cont_logsigma, policy_state = policy_net.get_actions(
+            (actions, disc_logits, mean_var_fake, q_flat, q_cont_mu, q_cont_logsigma,
+             morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, policy_state) = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
 
             if task.multi_agent_training:
@@ -278,33 +280,38 @@ class SimManager(object):
             valid_mask = valid_mask * (1 - done.ravel())
 
             return ((task_state, policy_state, params_gen, params_disc, obs_params, t,
-                     accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_pen, safety_ratios, spreads, valid_mask),
+                     accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_pen, safety_ratios, spreads, valid_mask),
                     (org_obs, valid_mask))
 
         def rollout_gen(task_states, policy_states, params_gen, params_disc, obs_params, t,
                     step_once_gen_fn, max_steps):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
-            disc_logits = jnp.zeros((self._pop_size // 2, self._task_batch_size, self._n_codes))
-            mean_var_fake = jnp.zeros(self._pop_size//2) #//2
-            sum_per_cat_code = jnp.zeros((self._pop_size//2, self._n_codes, 256))
-            count_per_cat_code = jnp.zeros((self._pop_size//2, self._n_codes))
-            r_cons = jnp.zeros(self._pop_size//2)
-            r_sense = jnp.zeros(self._pop_size//2)
-            r_intra = jnp.zeros(self._pop_size//2)
-            r_shape_div = jnp.zeros(self._pop_size//2)
-            r_shape_div_min = jnp.zeros(self._pop_size//2)
-            normative_penalty = jnp.zeros(self._pop_size//2)
-            safety_ratios = jnp.zeros((self._pop_size//2, self._n_codes, self._n_codes))
-            spreads = jnp.zeros((self._pop_size//2, self._n_codes, 1))
+            pop_n = params_gen.shape[0]
+            disc_logits = jnp.zeros((pop_n, self._task_batch_size, self._n_codes))
+            mean_var_fake = jnp.zeros(pop_n)
+            sum_per_cat_code = jnp.zeros((pop_n, self._n_codes, self._feature_dim))
+            count_per_cat_code = jnp.zeros((pop_n, self._n_codes))
+            r_cons = jnp.zeros(pop_n)
+            r_sense = jnp.zeros(pop_n)
+            r_intra = jnp.zeros(pop_n)
+            r_shape_div = jnp.zeros(pop_n)
+            r_shape_div_min = jnp.zeros(pop_n)
+            morph_dark_range = jnp.zeros(pop_n)
+            morph_center_edge_range = jnp.zeros(pop_n)
+            edge_dark_frac = jnp.zeros(pop_n)
+            code_proto_corr = jnp.zeros(pop_n)
+            normative_penalty = jnp.zeros(pop_n)
+            safety_ratios = jnp.zeros((pop_n, self._n_codes, self._n_codes))
+            spreads = jnp.zeros((pop_n, self._n_codes, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params, t,
-              accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads, valid_masks),
+              accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads, valid_masks),
              (obs_set, obs_mask)) = jax.lax.scan(
                 step_once_gen_fn,
                 (task_states, policy_states, params_gen, params_disc, obs_params, t,
-                 accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads, valid_masks), (), max_steps)
-            return accumulated_rewards_adv, accumulated_rewards_mi, obs_set, obs_mask, task_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads
+                 accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads, valid_masks), (), max_steps)
+            return accumulated_rewards_adv, accumulated_rewards_mi, obs_set, obs_mask, task_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads
 
         def step_once_valid(carry, input_data, task):
             (task_state, policy_state, params_gen, params_disc, obs_params,
@@ -316,7 +323,8 @@ class SimManager(object):
             org_obs = task_state.obs
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
-            actions, disc_logits, _, q_flat, q_cont_mu, q_cont_logsigma, policy_state = policy_net.get_actions(
+            (actions, disc_logits, _, q_flat, q_cont_mu, q_cont_logsigma, _dark_range,
+             _center_edge_range, _edge_dark_frac, _code_proto_corr, policy_state) = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
             fake_imgs = actions
 
@@ -349,7 +357,8 @@ class SimManager(object):
                     step_once_gen_fn, max_steps):
             accumulated_rewards_adv = jnp.zeros(params_gen.shape[0])
             accumulated_rewards_mi = jnp.zeros(params_gen.shape[0])
-            fake_imgs = jnp.zeros((256,64,28, 28, 1))
+            pop_n = params_gen.shape[0]
+            fake_imgs = jnp.zeros((pop_n, self._task_batch_size, 28, 28, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params,
               accumulated_rewards_adv, accumulated_rewards_mi, fake_imgs, valid_masks),
@@ -581,7 +590,7 @@ class SimManager(object):
             scores_adv, scores_mi, all_obs, masks, final_states, fake_imgs = rollout_func(
                 task_state, policy_state, params_gen, params_disc, self.obs_params)
         else:
-            scores_adv, scores_mi, all_obs, masks, final_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads = rollout_func(
+            scores_adv, scores_mi, all_obs, masks, final_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads = rollout_func(
             task_state, policy_state, params_gen, params_disc, self.obs_params, self._i)
 
         if self._num_device > 1:
@@ -626,6 +635,14 @@ class SimManager(object):
                     r_shape_div.ravel().reshape((n_repeats, -1)), axis=0)
                 r_shape_div_min = jnp.mean(
                     r_shape_div_min.ravel().reshape((n_repeats, -1)), axis=0)
+                morph_dark_range = jnp.mean(
+                    morph_dark_range.ravel().reshape((n_repeats, -1)), axis=0)
+                morph_center_edge_range = jnp.mean(
+                    morph_center_edge_range.ravel().reshape((n_repeats, -1)), axis=0)
+                edge_dark_frac = jnp.mean(
+                    edge_dark_frac.ravel().reshape((n_repeats, -1)), axis=0)
+                code_proto_corr = jnp.mean(
+                    code_proto_corr.ravel().reshape((n_repeats, -1)), axis=0)
                 normative_penalty = jnp.mean(
                     normative_penalty.ravel().reshape((n_repeats, -1)), axis=0)
                 safety_ratios = jnp.mean(
@@ -655,6 +672,14 @@ class SimManager(object):
                 r_shape_div.ravel().reshape((-1, n_repeats)), axis=-1)
             r_shape_div_min = jnp.mean(
                 r_shape_div_min.ravel().reshape((-1, n_repeats)), axis=-1)
+            morph_dark_range = jnp.mean(
+                morph_dark_range.ravel().reshape((-1, n_repeats)), axis=-1)
+            morph_center_edge_range = jnp.mean(
+                morph_center_edge_range.ravel().reshape((-1, n_repeats)), axis=-1)
+            edge_dark_frac = jnp.mean(
+                edge_dark_frac.ravel().reshape((-1, n_repeats)), axis=-1)
+            code_proto_corr = jnp.mean(
+                code_proto_corr.ravel().reshape((-1, n_repeats)), axis=-1)
             normative_penalty = jnp.mean(
                 normative_penalty.ravel().reshape((-1, n_repeats)), axis=-1)
             safety_ratios = jnp.mean(
@@ -699,4 +724,4 @@ class SimManager(object):
             scores4 = None
             avg_per_code = None
         #self._key = new_key
-        return scores1, scores2, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, normative_penalty, safety_ratios, spreads
+        return scores1, scores2, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads

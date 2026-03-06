@@ -22,6 +22,7 @@ import jax.numpy as jnp
 from jax import random
 from flax.struct import dataclass
 from flax import linen as nn
+import torchvision
 
 from evojax.task.base import VectorizedTask
 from evojax.task.base import TaskState
@@ -76,7 +77,7 @@ class MNIST(VectorizedTask):
 
         self.max_steps = 1
         self.obs_shape = tuple([28, 28, 1])
-        self.act_shape = tuple([8, ])
+        self.act_shape = tuple([10, ])
 
         self.batch_size = batch_size
         self.batch_stats_gen = batch_stats_gen 
@@ -84,53 +85,38 @@ class MNIST(VectorizedTask):
         self.batch_stats_q = batch_stats_q
         
         self.latent_dim = 62
-        self.n_classes = 8
+        self.n_classes = 10
         self.n_con = 2
 
         self.noise_dim = self.latent_dim - self.n_con
-        #self.fake_imgs = None
-        #self.cat_codes = None
-        # Delayed importing of torchvision
-
-        try:
-            from medmnist import BloodMNIST
-        except ModuleNotFoundError:
-            print('You need to install medmnist for this task.')
-            print('  pip install medmnist')
-            sys.exit(1)
-
-        split = 'test' if test else 'train'
-        dataset = BloodMNIST(split=split, download=True, root='./data')
-
-        data = np.array(dataset.imgs, dtype=np.float32) / 255.0
-        if data.ndim == 4 and data.shape[-1] == 3:
-            data = (
-                0.2989 * data[..., 0]
-                + 0.5870 * data[..., 1]
-                + 0.1140 * data[..., 2]
-            )
-            data = np.expand_dims(data, axis=-1)
-        elif data.ndim == 3:  # (N, 28, 28) -> (N, 28, 28, 1)
-            data = np.expand_dims(data, axis=-1)
-        labels = dataset.labels.flatten()
+        dataset = torchvision.datasets.MNIST(
+            './data', train=not test, download=True)
+        data = np.array(dataset.data, dtype=np.float32) / 255.0
+        data = np.expand_dims(data, axis=-1)  # (N, 28, 28, 1)
+        labels = np.array(dataset.targets, dtype=np.int32)
 
         def reset_fn(key, noise_key, cat_key, con_key):
-            if test:
-                batch_data, batch_labels = data, labels
-            else:
-                batch_data, batch_labels = sample_batch(
-                    key, data, labels, self.batch_size)
-                batch_latent = random.normal(noise_key, (self.batch_size, self.latent_dim))
+            batch_data, batch_labels = sample_batch(
+                key, data, labels, self.batch_size)
+            batch_latent = random.normal(
+                noise_key, (self.batch_size, self.latent_dim))
 
-                reps = (self.batch_size + self.n_classes - 1) // self.n_classes
-                c = jnp.tile(jnp.arange(self.n_classes), reps)
-                c = c[:self.batch_size]
-                batch_cat_one_hot = jax.nn.one_hot(c, self.n_classes)
-                #batch_con = random.uniform(con_key, (self.batch_size, self.n_con), minval=-1.0, maxval=1.0)
+            reps = (self.batch_size + self.n_classes - 1) // self.n_classes
+            c = jnp.tile(jnp.arange(self.n_classes), reps)
+            c = c[:self.batch_size]
+            batch_cat_one_hot = jax.nn.one_hot(c, self.n_classes)
+            batch_latent_concat = jnp.concatenate(
+                [batch_latent, batch_cat_one_hot], axis=-1)
 
-                batch_latent_concat = jnp.concatenate([batch_latent, batch_cat_one_hot], axis=-1)
-            
-            return State(obs=batch_data, latent=batch_latent_concat, cat_codes=batch_cat_one_hot, labels=batch_labels, batch_stats_gen=self.batch_stats_gen, batch_stats_disc=self.batch_stats_disc, batch_stats_q=self.batch_stats_q)
+            return State(
+                obs=batch_data,
+                latent=batch_latent_concat,
+                cat_codes=batch_cat_one_hot,
+                labels=batch_labels,
+                batch_stats_gen=self.batch_stats_gen,
+                batch_stats_disc=self.batch_stats_disc,
+                batch_stats_q=self.batch_stats_q,
+            )
 
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 

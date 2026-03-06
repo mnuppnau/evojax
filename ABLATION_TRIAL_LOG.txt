@@ -202,3 +202,65 @@ Success criteria for T05
 - Improve `r_shape_div_min_avg` without degrading adversarial stability.
 - Increase within-code structural variety in 11k panels.
 - Avoid MI improvement that coincides with repeated per-code prototypes.
+
+--------------------------------------------------------------------------------
+Trial T06 - BloodMNIST Morphology Metrics + Layer-A-Only CA (implemented)
+--------------------------------------------------------------------------------
+Run ID / Source
+- Branch: claude/evolve-infogan-hypernetworks-s3r6d-67132f2-blood
+- Status: code update complete, next training run pending.
+
+Configuration intent
+- Keep CA conservative (Layer A visibility/logging only).
+- Add direct morphology diagnostics and weak fitness shaping.
+- Keep changes minimal to avoid destabilizing the D/G game.
+
+Code changes
+- Disabled Layer-B scoring influence:
+  - `topographic_score(...)` and `domain_score(...)` now ignore spread-slope inputs.
+- Added three generated-image morphology metrics:
+  - `morph_dark_range`
+  - `morph_center_edge_range`
+  - `edge_dark_frac`
+- Routed metrics end-to-end:
+  `convnet.py -> sim_mgr.py -> trainer.py -> pgpe_ca.py`.
+- Added weak morphology fitness terms in `pgpe_ca.py`:
+  - reward dark-range,
+  - reward center-edge-range,
+  - penalize excess edge-darkness above target.
+- Tightened `r_intra` window in `latent.py` to reduce within-code noise.
+- Extended logging:
+  - `metrics.tsv`: added morphology averages.
+  - `ks_weights.tsv`: added morphology weight columns.
+- Fixed rollout initialization robustness:
+  - `sim_mgr.py` metric buffers now size by `params_gen.shape[0]` (instead of `self._pop_size//2`).
+
+Rationale
+- Real-data analysis showed clear deficits in dark-mass distribution and center-vs-edge structure.
+- This patch first improves observability and introduces low-pressure corrections before stronger objective changes.
+
+Expected readout for next run
+- `edge_dark_frac_avg` should trend down without forcing adversarial collapse.
+- `morph_dark_range_avg` and `morph_center_edge_range_avg` should increase gradually.
+- `r_intra` should settle into a tighter band with less fuzzy/smeared output.
+
+--------------------------------------------------------------------------------
+Trial T07 - Blur-Based Code Spread (implemented)
+--------------------------------------------------------------------------------
+Run ID / Source
+- Branch: claude/evolve-infogan-hypernetworks-s3r6d-67132f2-blood
+- Status: code update complete; next run pending restart.
+
+Code change
+- In `evojax/policy/convnet.py`, `code_pixel_div` now uses a 3x3 edge-padded
+  average blur of generated images before variance-across-codes is computed.
+
+Rationale
+- Prior runs showed that direct pixel-space code spread pressure increased
+  blotchy/high-frequency artifacts.
+- Blurring shifts the reward toward shape-scale differences and away from
+  texture noise shortcuts.
+
+Expectation
+- Reduced blotchiness/noise at equal or better code separation.
+- Lower within-code variance drift while preserving improved D/G balance.

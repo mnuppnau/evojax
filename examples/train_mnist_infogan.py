@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Train an InfoGAN agent for BloodMNIST (MedMNIST) classification.
+"""Train an InfoGAN agent for handwritten MNIST classification.
 
-BloodMNIST: 28x28 images (converted to grayscale for this pipeline).
-Latent vector (default): 62 (noise) + 8 (discrete) + 2 (continuous) = 72.
+MNIST: 28x28 grayscale handwritten digits.
+Latent vector (default): 62 (noise) + 10 (discrete) + 2 (continuous) = 74.
 
-Example command to run this script: `python train_bloodmnist.py --gpu-id=0`
+Example command to run this script: `python train_mnist_infogan.py --gpu-id=0`
 """
 
 import argparse
@@ -88,14 +88,32 @@ def parse_args():
         '--static-fitness-weights', action='store_true',
         help='Disable adaptive fitness reweighting and use fixed weights (baseline mode).')
     parser.add_argument(
+        '--static-w-adv', type=float, default=None,
+        help='Static adversarial weight (used only with --static-fitness-weights).')
+    parser.add_argument(
+        '--static-w-mi', type=float, default=None,
+        help='Static MI weight (used only with --static-fitness-weights).')
+    parser.add_argument(
+        '--static-w-div', type=float, default=None,
+        help='Static code-diversity weight (used only with --static-fitness-weights).')
+    parser.add_argument(
+        '--static-w-sense', type=float, default=None,
+        help='Static feature-space separation weight (used only with --static-fitness-weights).')
+    parser.add_argument(
+        '--static-w-intra', type=float, default=None,
+        help='Static intra-code variation weight (used only with --static-fitness-weights).')
+    parser.add_argument(
         '--noise-dim', type=int, default=62,
         help='Noise dimensions in latent vector.')
     parser.add_argument(
-        '--n-discrete-codes', type=int, default=8,
+        '--n-discrete-codes', type=int, default=10,
         help='Number of discrete latent codes.')
     parser.add_argument(
         '--n-continuous-codes', type=int, default=2,
         help='Number of continuous latent codes.')
+    parser.add_argument(
+        '--disc-features', type=int, default=48,
+        help='Base discriminator width (controls D/Q parameter count).')
     parser.add_argument(
         '--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument(
@@ -114,12 +132,12 @@ def parse_args():
 
 
 def main(config):
-    log_dir = './log/bloodmnist'
+    log_dir = './log/mnist_infogan'
     if not os.path.exists(log_dir):
         os.makedirs(log_dir, exist_ok=True)
     logger = util.create_logger(
-        name='BloodMNIST', log_dir=log_dir, debug=config.debug)
-    logger.info('EvoJAX BloodMNIST InfoGAN Demo')
+        name='MNIST-InfoGAN', log_dir=log_dir, debug=config.debug)
+    logger.info('EvoJAX MNIST InfoGAN Demo')
     logger.info('=' * 30)
     logger.info(
         'CA blend schedule: coeff=%.4f start=%d ramp=%d rfl_gate=[%.3f, %.3f] shape_div_weight=%.3f',
@@ -145,12 +163,22 @@ def main(config):
         config.n_continuous_codes,
         config.noise_dim + config.n_discrete_codes + config.n_continuous_codes,
     )
+    if config.static_fitness_weights:
+        logger.info(
+            'Static weights: adv=%s mi=%s div=%s sense=%s intra=%s',
+            str(config.static_w_adv),
+            str(config.static_w_mi),
+            str(config.static_w_div),
+            str(config.static_w_sense),
+            str(config.static_w_intra),
+        )
 
     policy_gen = GenPolicy(
         logger=logger,
         noise_dim=config.noise_dim,
         n_discrete_codes=config.n_discrete_codes,
         n_continuous_codes=config.n_continuous_codes,
+        disc_features=config.disc_features,
     )
     feature_dim = int(policy_gen.disc_feature_dim)
 
@@ -211,6 +239,11 @@ def main(config):
         ca_blend_rfl_hi=config.ca_blend_rfl_hi,
         shape_div_weight=config.shape_div_weight,
         static_fitness_weights=config.static_fitness_weights,
+        static_w_adv=config.static_w_adv,
+        static_w_mi=config.static_w_mi,
+        static_w_div=config.static_w_div,
+        static_w_sense=config.static_w_sense,
+        static_w_intra=config.static_w_intra,
     )
 
     # Train.

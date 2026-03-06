@@ -1,0 +1,406 @@
+================================================================================
+BloodMNIST Real Data Analysis (Grayscale, normalized to [-1, 1])
+================================================================================
+Total images: 11959
+Image size: 28x28x1 grayscale
+Classes: 8
+
+────────────────────────────────────────────────────────────────────────────────
+PER-CLASS STATISTICS
+────────────────────────────────────────────────────────────────────────────────
+Class                        N    Mean     Std   Dark%  VDark%  Light%     C-E   W-Var SpatStd
+basophil                   852 +0.3280 0.4913 0.2425 0.0662 0.6472 -0.8789 0.0693 0.4149
+eosinophil                2181 +0.3664 0.4457 0.1562 0.0244 0.6120 -0.7000 0.0670 0.3629
+erythrocyte               1085 +0.5003 0.4094 0.1002 0.0560 0.7917 -0.7256 0.0686 0.3147
+immature_granulocyte      2026 +0.3124 0.4710 0.2226 0.0362 0.5726 -0.7600 0.0830 0.3726
+lymphocyte                 849 +0.4378 0.4543 0.1609 0.0654 0.7590 -0.9184 0.0584 0.3847
+monocyte                   993 +0.2857 0.4431 0.2327 0.0137 0.5578 -0.6880 0.0686 0.3573
+neutrophil                2330 +0.4178 0.4147 0.1358 0.0442 0.7288 -0.6903 0.0716 0.3167
+platelet                  1643 +0.6064 0.2525 0.0202 0.0011 0.9201 -0.2222 0.0363 0.1657
+
+Legend:
+  Dark%   = fraction of pixels < -0.2 (nucleus proxy)
+  VDark%  = fraction of pixels < -0.5 (nucleus core)
+  Light%  = fraction of pixels > +0.3 (background/cytoplasm)
+  C-E     = center_mean - edge_mean (negative = dark center = visible nucleus)
+  W-Var   = within-class pixel variance (intra-class diversity)
+  SpatStd = spatial std of class mean image (structural signal strength)
+
+────────────────────────────────────────────────────────────────────────────────
+BETWEEN-CLASS SEPARATION
+────────────────────────────────────────────────────────────────────────────────
+Code spread (var of class means):        0.029272
+Between-class variance:                  0.027791
+Within-class variance (avg):             0.065354
+Total variance:                          0.094015
+Between/Within ratio:                    0.4252
+Between-class % of total:                29.6%
+
+────────────────────────────────────────────────────────────────────────────────
+PAIRWISE CLASS DISTANCES (L2 between mean images, normalized by sqrt(784))
+────────────────────────────────────────────────────────────────────────────────
+                         basophil eosinoph erythroc immature lymphocy monocyte neutroph platelet
+basophil                      ---   0.1002   0.2755   0.0743   0.2217   0.1216   0.1407   0.4663
+eosinophil                 0.1002      ---   0.2659   0.0774   0.2479   0.0993   0.1074   0.4169
+erythrocyte                0.2755   0.2659      ---   0.2751   0.1226   0.3109   0.1711   0.2445
+immature_granulocyte       0.0743   0.0774   0.2751      ---   0.2418   0.0653   0.1366   0.4437
+lymphocyte                 0.2217   0.2479   0.1226   0.2418      ---   0.2847   0.1614   0.3584
+monocyte                   0.1216   0.0993   0.3109   0.0653   0.2847      ---   0.1731   0.4598
+neutrophil                 0.1407   0.1074   0.1711   0.1366   0.1614   0.1731      ---   0.3404
+platelet                   0.4663   0.4169   0.2445   0.4437   0.3584   0.4598   0.3404      ---
+
+Most different pairs:
+                  basophil vs platelet                  dist=0.4663
+                  monocyte vs platelet                  dist=0.4598
+      immature_granulocyte vs platelet                  dist=0.4437
+                eosinophil vs platelet                  dist=0.4169
+                lymphocyte vs platelet                  dist=0.3584
+
+Most similar pairs:
+                  basophil vs eosinophil                dist=0.1002
+                eosinophil vs monocyte                  dist=0.0993
+                eosinophil vs immature_granulocyte      dist=0.0774
+                  basophil vs immature_granulocyte      dist=0.0743
+      immature_granulocyte vs monocyte                  dist=0.0653
+
+────────────────────────────────────────────────────────────────────────────────
+KEY DISCRIMINATIVE AXES
+────────────────────────────────────────────────────────────────────────────────
+
+  dark_frac:
+    Range: 0.0202 (platelet) to 0.2425 (basophil)
+    Spread: 0.2223
+    Ranking: platelet(0.020) < erythrocyte(0.100) < neutrophil(0.136) < eosinophil(0.156) < lymphocyte(0.161) < immature_granulocyte(0.223) < monocyte(0.233) < basophil(0.242)
+
+  very_dark_frac:
+    Range: 0.0011 (platelet) to 0.0662 (basophil)
+    Spread: 0.0651
+    Ranking: platelet(0.001) < monocyte(0.014) < eosinophil(0.024) < immature_granulocyte(0.036) < neutrophil(0.044) < erythrocyte(0.056) < lymphocyte(0.065) < basophil(0.066)
+
+  light_frac:
+    Range: 0.5578 (monocyte) to 0.9201 (platelet)
+    Spread: 0.3623
+    Ranking: monocyte(0.558) < immature_granulocyte(0.573) < eosinophil(0.612) < basophil(0.647) < neutrophil(0.729) < lymphocyte(0.759) < erythrocyte(0.792) < platelet(0.920)
+
+  center_edge_diff:
+    Range: -0.9184 (lymphocyte) to -0.2222 (platelet)
+    Spread: 0.6962
+    Ranking: lymphocyte(-0.918) < basophil(-0.879) < immature_granulocyte(-0.760) < erythrocyte(-0.726) < eosinophil(-0.700) < neutrophil(-0.690) < monocyte(-0.688) < platelet(-0.222)
+
+  spatial_std:
+    Range: 0.1657 (platelet) to 0.4149 (basophil)
+    Spread: 0.2492
+    Ranking: platelet(0.166) < erythrocyte(0.315) < neutrophil(0.317) < monocyte(0.357) < eosinophil(0.363) < immature_granulocyte(0.373) < lymphocyte(0.385) < basophil(0.415)
+
+  mean:
+    Range: 0.2857 (monocyte) to 0.6064 (platelet)
+    Spread: 0.3208
+    Ranking: monocyte(0.286) < immature_granulocyte(0.312) < basophil(0.328) < eosinophil(0.366) < neutrophil(0.418) < lymphocyte(0.438) < erythrocyte(0.500) < platelet(0.606)
+
+────────────────────────────────────────────────────────────────────────────────
+NUCLEUS vs CYTOPLASM STRUCTURE (Center 12x12 vs Edge ring)
+────────────────────────────────────────────────────────────────────────────────
+Class                    CenterMean   EdgeMean   C-E Diff   Nucleus?
+basophil                    -0.3894    +0.4895    -0.8789     STRONG
+eosinophil                  -0.2050    +0.4950    -0.7000     STRONG
+erythrocyte                 -0.0921    +0.6336    -0.7256     STRONG
+immature_granulocyte        -0.3080    +0.4520    -0.7600     STRONG
+lymphocyte                  -0.3119    +0.6065    -0.9184     STRONG
+monocyte                    -0.2760    +0.4121    -0.6880     STRONG
+neutrophil                  -0.1458    +0.5445    -0.6903     STRONG
+platelet                    +0.4250    +0.6473    -0.2222     STRONG
+
+────────────────────────────────────────────────────────────────────────────────
+COMPARISON: REAL vs GENERATED (iteration 36000)
+────────────────────────────────────────────────────────────────────────────────
+
+Code          Mean     Std   Dark%  VDark%  Light%     C-E   W-Var SpatStd
+code_0     +0.2999 0.5847 0.3009 0.1424 0.5834 -0.8057 0.1827 0.3990
+code_1     +0.3161 0.5635 0.2730 0.1263 0.5920 -0.7197 0.1512 0.4078
+code_2     +0.3187 0.5733 0.2647 0.1494 0.6051 -0.8348 0.1624 0.4078
+code_3     +0.2974 0.5694 0.2950 0.1215 0.5756 -0.7544 0.1467 0.4213
+code_4     +0.3155 0.5749 0.2726 0.1413 0.6062 -0.8740 0.1510 0.4237
+code_5     +0.3026 0.5605 0.2718 0.1220 0.5719 -0.7753 0.1587 0.3943
+code_6     +0.3131 0.5640 0.2610 0.1373 0.5987 -0.7038 0.2006 0.3428
+code_7     +0.3183 0.5767 0.2615 0.1480 0.6063 -0.8815 0.1408 0.4379
+
+Metric comparison:
+  Metric                                    Real  Generated      Ratio
+  Code spread                           0.029272   0.016610       1.76x
+  Center-edge diff range                  0.6962     0.1778       3.92x
+  Dark_frac range across codes            0.2223     0.0399       5.58x
+  Mean brightness range                   0.3208     0.0213      15.05x
+  Spatial structure range                 0.2492     0.0951       2.62x
+  Avg within-class variance               0.0654     0.1618       0.40x
+
+Gap analysis (what the generator needs to learn):
+  Code spread gap:            1.8x — codes need more pixel-level differentiation
+  Nucleus structure gap:       Center-edge diff range is 3.9x wider in real data
+  Dark fraction gap:           Real classes range 0.222 vs generated 0.040
+  Morphological diversity:     Real spatial_std ranges 0.2492 vs generated 0.0951
+
+────────────────────────────────────────────────────────────────────────────────
+NATURAL SIMILARITY CLUSTERS IN REAL DATA
+────────────────────────────────────────────────────────────────────────────────
+
+The 8 BloodMNIST classes form natural similarity clusters that any generator
+must respect. Some classes SHOULD look similar (same cell lineage), while
+others are morphologically distinct.
+
+Cluster 1: GRANULOCYTES (multi-lobed nuclei, granular cytoplasm)
+  - basophil, eosinophil, neutrophil, immature_granulocyte
+  - These share a common granulocyte appearance: segmented/lobed dark nucleus
+    with surrounding granular cytoplasm. The distinguishing features in RGB
+    are stain color (eosinophil = pink granules, basophil = dark granules,
+    neutrophil = pale granules), but in grayscale these collapse to
+    subtle intensity differences.
+
+Cluster 2: MONONUCLEAR CELLS (single round nucleus)
+  - lymphocyte, monocyte
+  - Large round dark nucleus with thin cytoplasm ring.
+  - Lymphocytes are smaller; monocytes are larger with kidney-shaped nucleus.
+
+Cluster 3: ERYTHROCYTES (no nucleus)
+  - erythrocyte
+  - Small, uniform, pale discs with no nucleus (biconcave disc = 
+    slightly darker center ring in grayscale).
+  - Very low dark_frac and very_dark_frac.
+
+Cluster 4: PLATELETS (tiny fragments)
+  - platelet
+  - Much smaller than other cells, appear as small dark dots or irregular
+    fragments. Brightest overall (highest mean pixel value).
+
+================================================================================
+LAYERED APPROACH: CA-DRIVEN CODE DIFFERENTIATION
+================================================================================
+
+GOAL: Improve within-code cytoplasm/nuclei generation while increasing
+between-code morphological separation, without destroying cross-code
+similarities (e.g., all granulocytes should share basic structure).
+
+The fundamental challenge: the CA currently has no visibility into
+pixel-level code separation. It tracks adv, MI, entropy, r_sense (feature-
+space separation), and shape_div, but NOT the actual between-code pixel
+distance that determines visual differentiation.
+
+─── LAYER A: METRIC INFRASTRUCTURE (IMPLEMENTED, ACTIVE) ──────────────────
+
+STATUS: Deployed and logging.
+
+What it does:
+  - Added a code_spread circular buffer (10th element) to metric_history
+  - Computes spread_short (20-gen) and spread_med (50-gen) slopes via
+    least-squares regression
+  - avg_code_spread = mean(pop_var) flows from code_pixel_div through
+    tell() into the metric history each generation
+  - Both slopes are logged to ks_weights.tsv for monitoring
+
+What it provides:
+  - The CA can now SEE whether code separation is improving, stagnating,
+    or declining. Before Layer A, the CA was completely blind to this.
+  - Slope magnitudes from the current run:
+    spread_short ~ [-0.002, +0.003] (noisy, generation-level jitter)
+    spread_med   ~ [-0.0007, +0.0007] (smoother, trend-level signal)
+  - The code_spread values themselves trend:
+    1k-5k: 0.069 → 15k-20k: 0.077 → 31k-36k: 0.083
+    (improving but still below real data target of 0.100)
+
+Files modified:
+  - knowledge_sources.py: initialize_metric_history, update_metric_history,
+    compute_metric_slopes (now returns 13 slopes)
+  - pgpe_ca.py: tell() passes avg_code_spread to metric history
+  - trainer.py: ks_weights.tsv header includes spread_short, spread_med
+  - util.py: checkpoint migration pads older metric_history tuples
+
+─── LAYER B: KS SCORING AWARENESS (IMPLEMENTED, DISABLED FOR BASELINE) ────
+
+STATUS: Code exists but spread influence is zeroed out (Layer-A-only mode).
+        Will re-enable once baseline behavior is confirmed stable.
+
+What it does:
+  - topographic_score() receives spread_short:
+    When spread is stagnating (slope < 3e-5), boosts Topographic KS score
+    by up to +0.4. This shifts CA weight toward output-space structural
+    exploration — the Topographic KS's natural role since it tracks
+    per-code D-feature-space centroids.
+  - domain_score() receives spread_med:
+    Rewards Domain KS when spread is improving (up to +0.2 at slope=1e-4).
+    Penalizes when spread is declining (up to -0.15 at slope=-5e-5).
+    When "exploit the rules" isn't producing code separation, weight
+    shifts away from Domain KS toward Topographic/Historical.
+
+  Calibration (based on observed slope magnitudes):
+    - Topographic threshold: 3e-5 (code_spread improvement of ~0.001
+      over 20 generations). Dead-band width 6e-5.
+    - Domain multipliers: 2000x (improving) and 3000x (declining),
+      calibrated so slopes of 1e-4 produce meaningful [0, 0.2] adjustments.
+
+What it achieves:
+  - The CA responds to code-spread stagnation by shifting guidance weight.
+  - When all codes look identical (spread flat), Topographic KS gets boosted,
+    encouraging the CA to suggest parameters that explore output-space
+    structure rather than exploiting the current (non-differentiating) rules.
+  - When spread is improving, Domain KS is rewarded — "the rules are working,
+    keep exploiting them."
+
+Why it's currently disabled:
+  - Need a clean baseline to isolate the effect of the weight changes from
+    the previous run's w_mi_base/w_sense_base adjustments.
+  - Will re-enable once we confirm the base fitness weights produce stable
+    training through 50k+ iterations.
+
+Files modified:
+  - helper_functions.py: topographic_score(), domain_score() accept
+    spread_short/spread_med (currently assigned to _ for no-op)
+  - knowledge_sources.py: get_center_guidance(), get_stdev_guidance()
+    unpack and pass spread slopes to scoring functions
+
+─── LAYER C: DOMAIN KS PARETO ARCHIVE (PLANNED, NOT IMPLEMENTED) ──────────
+
+STATUS: Design complete, pending Layer B validation.
+
+What it will do:
+  - Add code_spread (or a proxy like best_pop_var) as a 5th Pareto
+    objective in the Domain KS archive selection.
+  - Current Pareto sort: [|adv|, |mi|, -shape_div, |entropy|]
+  - Proposed sort:        [|adv|, |mi|, -shape_div, -code_spread, |entropy|]
+  - This ensures the 20-solution archive RETAINS solutions that achieved
+    higher between-code pixel separation, even if they're slightly worse
+    on adv or MI.
+
+Why it matters:
+  - Currently, the archive converges to solutions with virtually identical
+    code_spread profiles (archive_stdev_diversity = 0.000053 in prior run).
+  - Even with Layer B shifting KS weights toward Topographic KS when spread
+    stagnates, the archived solutions being blended don't HAVE high-spread
+    diversity to offer.
+  - Layer C gives the archive actual high-spread solutions to blend toward.
+
+Additional change: _domain_ks_select_index() will get a new branch:
+  - Detect code_spread stagnation (spread_med near zero for extended period)
+  - Select the archived solution with highest code_spread
+  - Priority: collapse > spread_stagnation > adv_stagnation > normal
+
+Dependencies:
+  - Need code_spread to flow into update_domain_ks() as a new metric
+    (currently not passed — would add as 11th element or replace an
+    existing tracked metric)
+  - Need to validate that high-spread solutions can coexist on the Pareto
+    front with high-adv solutions (5-objective Pareto may be too permissive)
+
+─── LAYER D: DIRECT FITNESS SIGNAL (FUTURE CONSIDERATION) ─────────────────
+
+STATUS: Not planned for immediate implementation.
+
+If Layers A-C are insufficient, consider:
+  - A direct code_spread fitness component (rank_normalized, weight ~0.1-0.2)
+    that rewards population members whose generated images show higher
+    between-code pixel variance.
+  - This differs from the existing r_sense (feature-space separation) because
+    it operates in raw pixel space, directly targeting the visual signal.
+  - Risk: PGPE may find shortcuts (e.g., brightness offsets per code rather
+    than morphological differences). Would need to combine with the existing
+    brightness-normalization in code_pixel_div.
+
+Alternative: Instead of pixel-space code_spread, use a NUCLEUS-SPECIFIC
+  separation metric:
+  - Compute dark_frac per code per population member
+  - Reward population members where dark_frac varies across codes
+  - This directly targets the primary discriminative axis identified
+    in this analysis (dark_frac ranges from 0.147 to 0.473 in real data)
+
+─── ARCHITECTURAL CONSIDERATIONS ──────────────────────────────────────────
+
+Why codes converge to similar images:
+  1. The HyperNetwork processes discrete code as an embedding lookup, but
+     the embedding dimensionality and the HN architecture may not provide
+     enough code-conditional capacity to produce distinct weight sets.
+  2. PGPE evolves the HN parameters, not the generator directly. If the HN
+     maps different code embeddings to similar generator weights, the
+     generator produces similar images regardless of code.
+  3. The MI loss (Q-head) can be satisfied by subtle statistical patterns
+     invisible to the human eye — the Q-head learns to classify based on
+     imperceptible noise patterns rather than morphological differences.
+
+What the generator needs to learn (from this analysis):
+  - NUCLEUS DIFFERENTIATION: dark_frac spans 0.147 (platelet/erythrocyte)
+    to 0.473 (basophil). The generator's current dark_frac range across
+    codes is only 0.394-0.435 — nearly flat.
+  - CENTER-EDGE CONTRAST: Real cells have C-E diff ranging from -0.311
+    (lymphocyte, strong nucleus) to +0.033 (platelet, no nucleus).
+    Generated images range only -0.219 to -0.158 — all look like they
+    have moderate nuclei.
+  - CELL SIZE: Platelets are tiny fragments; erythrocytes are uniform discs;
+    lymphocytes have large nucleus-to-cell ratio. This size variation isn't
+    captured by the current generator.
+
+================================================================================
+UPDATE (2026-03-02): LAYER A/B STATUS + CURRENT RUN READOUT (~12k)
+================================================================================
+
+Branch context:
+  claude/evolve-infogan-hypernetworks-s3r6d-67132f2-blood
+
+─── LAYER A (ACTIVE) ─────────────────────────────────────────────────────────
+
+Layer A remains active and is now the primary CA observability layer.
+
+Current Layer A behavior:
+  - code_spread history buffers/slopes are logged (spread_short, spread_med).
+  - KS telemetry is written to ks_weights.tsv each logging step.
+  - Spread trends are visible without forcing CA reweighting behavior.
+
+Additional observability added in the same pass:
+  - morph_dark_range_avg
+  - morph_center_edge_range_avg
+  - edge_dark_frac_avg
+These are now logged to metrics.tsv and can be aligned with image checkpoints.
+
+─── LAYER B (PRESENT IN CODE, NEUTRALIZED FOR NOW) ──────────────────────────
+
+Layer B scoring hooks are still present structurally, but spread-driven score
+adjustments are intentionally disabled for baseline stability:
+  - topographic_score(..., spread_short): spread input ignored (no-op)
+  - domain_score(..., spread_med): spread input ignored (no-op)
+
+Interpretation:
+  - This run should be interpreted as "Layer A diagnostics ON, Layer B influence OFF."
+  - CA blend activity remains low in practice when health gates are not met.
+
+─── CURRENT RESULTS (RUN THROUGH ITER 12.3k) ────────────────────────────────
+
+Source:
+  - log/bloodmnist/metrics.tsv
+  - log/bloodmnist/ks_weights.tsv
+  - iteration-1000.npy, 4000.npy, 8000.npy, 12000.npy
+
+Window summary (iter 8000-12300):
+  - real_fake_loss mean: 0.6349
+  - real_fake_loss > 0.6: 95.5% of logged points
+  - real_fake_loss in [0.4, 0.6]: 4.5%
+  - adv_max mean: -0.7566 (adv_max > -0.6: 0%)
+  - mi_avg mean: -1.1000
+  - r_sense_avg mean: 0.0246
+  - r_intra_avg mean: 0.9541
+  - spread_avg mean: 0.0420
+  - ca_blend mean: 0.0107
+  - objective_health mean: ~0.0001 (effectively off)
+
+Morphology metrics (iter 8000-12300):
+  - morph_dark_range_avg mean: 0.1192
+  - morph_center_edge_range_avg mean: 0.5965
+  - edge_dark_frac_avg mean: 0.0334
+
+Image-side trend (snapshot-level):
+  - Saturation fraction (|x| > 0.85): 0.5847 (1k) -> 0.0082 (12k)
+  - Edge dark artifact proxy: reduced vs early snapshots
+  - Overall contrast/variation is smoother, but nuclei darkness weakens with
+    time (dark mass shrinks and C-E magnitude relaxes toward less negative).
+
+Current diagnosis:
+  1) The latest updates improved stability against extreme saturation and
+     reduced border-dark artifacts.
+  2) Training is still discriminator-dominant in the mid phase (high rfl).
+  3) Code-level morphology remains under-separated relative to real data.
+  4) This is a partial improvement, not yet a target-quality regime.

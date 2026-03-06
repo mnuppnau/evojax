@@ -353,7 +353,23 @@ def load_checkpoint(
     solver_hn._stdev = jnp.array(ckpt['pgpe_stdev'])
     solver_hn._t = int(ckpt['pgpe_t'])
     solver_hn._opt_state = _to_jax(ckpt['pgpe_opt_state'])
-    solver_hn.belief_space = _to_jax(ckpt['belief_space'])
+    belief_space = _to_jax(ckpt['belief_space'])
+
+    # Migrate older checkpoints: metric_history (element [6]) may have
+    # fewer buffers than the current code expects (e.g., 9 → 10 after
+    # adding code_spread buffer). Pad with zeros to match current schema.
+    EXPECTED_METRIC_HISTORY_LEN = 10
+    metric_history = belief_space[6]
+    if isinstance(metric_history, (tuple, list)) and len(metric_history) < EXPECTED_METRIC_HISTORY_LEN:
+        old_len = len(metric_history)
+        window_size = metric_history[0].shape[0]
+        padding = tuple(jnp.zeros((window_size,)) for _ in range(EXPECTED_METRIC_HISTORY_LEN - old_len))
+        metric_history = tuple(metric_history) + padding
+        belief_space = belief_space[:6] + (metric_history,)
+        if logger:
+            logger.info('Migrated metric_history: padded %d -> %d elements', old_len, EXPECTED_METRIC_HISTORY_LEN)
+
+    solver_hn.belief_space = belief_space
 
     # --- Restore Discriminator state ---
     params_disc = _to_jax(ckpt['params_disc'])

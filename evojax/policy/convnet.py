@@ -107,7 +107,7 @@ class HyperNetwork(nn.Module):
 
         weights = nn.Dense(
             self.chunk_size,
-            kernel_init=jax.nn.initializers.normal(stddev=0.025)
+            kernel_init=jax.nn.initializers.normal(stddev=0.01)
         )(x)
 
         return weights
@@ -159,6 +159,10 @@ class ParameterAdapter:
 
         self.split_indices = np.cumsum(self.param_sizes)[:-1]
 
+        # Per-layer chunk counts for proper reconstruction (avoids padding misalignment)
+        self.layer_chunks_split = [(int(s) + chunk_size - 1) // chunk_size for s in self.param_sizes]
+        self.layer_chunks_split_indices = np.cumsum(self.layer_chunks_split)[:-1].tolist()
+
         # --- D. Input Dimensions ---
         self.N_LAYERS = int(layer_ids_np.max()) + 1
         self.N_CHUNKS = int(chunk_ids_np.max()) + 1
@@ -187,86 +191,104 @@ class ParameterAdapter:
         # 4. Run HyperNet
         flat_chunks = self._make_hn().apply(
             hypernet_params, self.chunk_ids, self.static_context)
-        
-        # 5. Reconstruct
-        raw_stream = flat_chunks.reshape(-1)
-        total_gen_params = self.split_indices[-1] + self.param_sizes[-1]
-        valid_stream = raw_stream[:total_gen_params]
-        param_list = jnp.split(valid_stream, self.split_indices)
-        
-        reshaped_params = [
-            p.reshape(s) for p, s in zip(param_list, self.param_shapes)
-        ]
+
+        # 5. Reconstruct — split by layer first, then truncate padding per-layer
+        chunks_per_layer = jnp.split(flat_chunks, self.layer_chunks_split_indices)
+
+        reshaped_params = []
+        for i, chunks in enumerate(chunks_per_layer):
+            flat = chunks.reshape(-1)
+            reshaped = flat[:self.param_sizes[i]].reshape(self.param_shapes[i])
+            reshaped_params.append(reshaped)
+
         return tree_util.tree_unflatten(self.target_tree, reshaped_params)
 
 class Generator(nn.Module):
     features: int = 64
     training: bool = True
-    
+    n_codes: int = -1   # Must be set explicitly (e.g. 8 for BloodMNIST)
+    noise_dim: int = -1  # Must be set explicitly (e.g. 62)
+    code_seed_scale: float = 3.0
+    cont_seed_scale: float = 1.0
+
     @nn.compact
     def __call__(self, z):
-        def _reflect_conv(x, features, kernel_size, kernel_init=None):
-            """Convolution with reflection padding to remove edge darkening bias."""
-            pad_h = kernel_size[0] // 2
-            pad_w = kernel_size[1] // 2
-            x = jnp.pad(
-                x,
-                ((0, 0), (pad_h, pad_h), (pad_w, pad_w), (0, 0)),
-                mode='reflect',
-            )
-            conv_kwargs = dict(features=features, kernel_size=kernel_size, strides=(1, 1), padding='VALID')
-            if kernel_init is not None:
-                conv_kwargs['kernel_init'] = kernel_init
-            return nn.Conv(**conv_kwargs)(x)
-                
-        # BETTER: Project z -> 7*7*8 (small depth) -> Conv to 64
-        x = nn.Dense(7 * 7 * 8)(z) # 74 -> 392 outputs = 29k params. Very manageable.
+        # Split latent paths: noise and codes are handled by separate projections
+        # to avoid code leakage into the noise seed path.
+        noise_only = z[:, :self.noise_dim]
+        code_onehot = z[:, self.noise_dim:self.noise_dim + self.n_codes]
+        cont_codes = z[:, self.noise_dim + self.n_codes:]
+
+        # Strengthen code influence with a dedicated seed path.
+        seed_base = nn.Dense(7 * 7 * 8, name='seed_dense')(noise_only)
+        seed_code = nn.Dense(
+            7 * 7 * 8,
+            use_bias=False,
+            name='seed_code_dense',
+        )(code_onehot)
+
+        x = seed_base + (jnp.asarray(self.code_seed_scale, dtype=seed_base.dtype) * seed_code)
+        if cont_codes.shape[-1] > 0:
+            seed_cont = nn.Dense(
+                7 * 7 * 8,
+                use_bias=False,
+                name='seed_cont_dense',
+            )(cont_codes)
+            x = x + (jnp.asarray(self.cont_seed_scale, dtype=seed_base.dtype) * seed_cont)
         x = x.reshape((x.shape[0], 7, 7, 8))
-        
+
         # Now use a Conv to expand depth (standard HyperNet texture generation)
-        x = _reflect_conv(x, self.features, kernel_size=(3, 3))
+        x = nn.Conv(self.features, kernel_size=(3, 3), strides=(1, 1), padding='SAME')(x)
         x = nn.GroupNorm(num_groups=32)(x)
         x = jnp.tanh(x)
-        
-        # ... Rest of the Resize-Conv network ...
+
         # 2. UPSAMPLE BLOCK 1 (7x7 -> 14x14)
-        # Resize: Nearest Neighbor is clean and sharp (no ringing).
-        x = jax.image.resize(x, shape=(x.shape[0], 14, 14, x.shape[3]), method='nearest')
-        
-        # Convolve: Process the upsampled features
-        # We maintain 'features' depth (64) to keep capacity high
-        x = _reflect_conv(
-            x,
+        x = jax.image.resize(x, shape=(x.shape[0], 14, 14, x.shape[3]), method='linear')
+
+        x = nn.Conv(
             self.features,
             kernel_size=(5, 5),
+            strides=(1, 1),
+            padding='SAME',
             kernel_init=normal_init(0.02),
-        )
+        )(x)
+        x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
+        x = jnp.tanh(x)
+
+        # Extra 14x14 refinement block
+        x = nn.Conv(
+            self.features,
+            kernel_size=(3, 3),
+            strides=(1, 1),
+            padding='SAME',
+            kernel_init=normal_init(0.02),
+        )(x)
         x = nn.GroupNorm(num_groups=32, epsilon=1e-5)(x)
         x = jnp.tanh(x)
 
         # 3. UPSAMPLE BLOCK 2 (14x14 -> 28x28)
-        x = jax.image.resize(x, shape=(x.shape[0], 28, 28, x.shape[3]), method='nearest')
-        
-        # Convolve
-        x = _reflect_conv(
-            x,
-            self.features // 2,  # Reduce depth to 32
+        x = jax.image.resize(x, shape=(x.shape[0], 28, 28, x.shape[3]), method='linear')
+
+        x = nn.Conv(
+            self.features // 2,
             kernel_size=(5, 5),
+            strides=(1, 1),
+            padding='SAME',
             kernel_init=normal_init(0.02),
-        )
-        x = nn.GroupNorm(num_groups=16, epsilon=1e-5)(x) # Adjusted groups for smaller depth
+        )(x)
+        x = nn.GroupNorm(num_groups=16, epsilon=1e-5)(x)
         x = jnp.tanh(x)
 
-        # 4. OUTPUT BLOCK (28x28 -> 28x28)
-        # Collapse to 1 channel (Grayscale)
-        x = _reflect_conv(
-            x,
+        # 4. OUTPUT BLOCK (28x28 -> 28x28, 1 channel grayscale)
+        x = nn.Conv(
             1,
             kernel_size=(5, 5),
+            strides=(1, 1),
+            padding='SAME',
             kernel_init=normal_init(0.02),
-        )
-        x = jnp.tanh(x)
-        
+        )(x)
+        x = jax.nn.sigmoid(x)
+
         return x
 
 # assumes you already have: normal_init
@@ -282,7 +304,7 @@ class Discriminator(nn.Module):
     def __call__(self, x):
         """
         Args:
-            x: (B, 28, 28, 1) in [-1, 1]
+            x: (B, 28, 28, 1) in [0, 1]
             train: bool (True during training, False during eval)
 
         Returns:
@@ -290,7 +312,7 @@ class Discriminator(nn.Module):
             q_cat_logits:    (B, q_cat)
             q_cont_mu:       (B, q_cont) or None
             q_cont_logsigma: (B, q_cont) or None
-            q_feat_avg:      (B, features*4)
+            q_feat_avg:      (B, features*2)
         """
 
         def SN(layer):
@@ -298,47 +320,70 @@ class Discriminator(nn.Module):
             return nn.SpectralNorm(layer)
 
         train = False
-        # ----- shared backbone -----
+        # ----- shared backbone (SAME padding for full spatial coverage) -----
         h = SN(nn.Conv(
             self.features,
             kernel_size=(4, 4),
             strides=(2, 2),
-            padding="VALID",
+            padding="SAME",
             kernel_init=normal_init(0.02),
-        ))(x, update_stats=train)
+        ))(x, update_stats=train)  # 28x28 -> 14x14
         h = nn.leaky_relu(h, 0.2)
 
         h = SN(nn.Conv(
             self.features * 2,
             kernel_size=(4, 4),
             strides=(2, 2),
-            padding="VALID",
+            padding="SAME",
             kernel_init=normal_init(0.02),
-        ))(h, update_stats=train)
+        ))(h, update_stats=train)  # 14x14 -> 7x7
         h = nn.leaky_relu(h, 0.2)
 
-        # ----- D head -----
+        # ----- D head (spatial conv reduction, SAME for full coverage) -----
+        d = SN(nn.Conv(
+            self.features * 2,
+            kernel_size=(4, 4),
+            strides=(2, 2),
+            padding="SAME",
+            kernel_init=normal_init(0.02),
+        ))(h, update_stats=train)  # 7x7 -> 4x4
+        d = nn.leaky_relu(d, 0.2)
+
         d = SN(nn.Conv(
             1,
             kernel_size=(4, 4),
-            strides=(2, 2),
+            strides=(1, 1),
             padding="VALID",
             kernel_init=normal_init(0.02),
-        ))(h, update_stats=train)  # -> (B, 1, 1, 1)
+        ))(d, update_stats=train)  # 4x4 -> 1x1
         d_logits = d.reshape((d.shape[0], -1))  # (B, 1)
 
         # ----- Q trunk -----
+        # Brightness guard: remove global spatial bias before Q to reduce
+        # steganographic "global intensity" shortcuts.
+        h_q = h - jnp.mean(h, axis=(1, 2), keepdims=True)
+
+        # Spatial Q head (no GAP): keeps topology-sensitive code prediction
+        # while using a bottleneck to control parameter count.
         q = SN(nn.Conv(
-            self.features * 4,
-            kernel_size=(4, 4),
-            strides=(2, 2),
-            padding="VALID",
+            self.features,
+            kernel_size=(1, 1),
+            strides=(1, 1),
+            padding="SAME",
             kernel_init=normal_init(0.02),
-        ))(h, update_stats=train)  # -> typically (B, 1, 1, features*4)
+        ))(h_q, update_stats=train)
         q = nn.leaky_relu(q, 0.2)
 
-        q_feat_avg = jnp.mean(q, axis=(1, 2))      # (B, features*4)
-        q_flat = q.reshape((q.shape[0], -1))       # (B, features*4)
+        q = SN(nn.Conv(
+            self.features * 2,
+            kernel_size=(7, 7),
+            strides=(1, 1),
+            padding="VALID",
+            kernel_init=normal_init(0.02),
+        ))(q, update_stats=train)
+        q = nn.leaky_relu(q, 0.2)
+        q_flat = q.reshape((q.shape[0], -1))  # (B, features*2)
+        q_feat_avg = q_flat
 
         # ----- Q categorical head -----
         q_cat_logits = SN(nn.Dense(
@@ -687,7 +732,8 @@ class GenPolicy(PolicyNetwork):
             logger: logging.Logger = None,
             noise_dim: int = 62,
             n_discrete_codes: int = 10,
-            n_continuous_codes: int = 2):
+            n_continuous_codes: int = 2,
+            disc_features: int = 64):
         if logger is None:
             self._logger = create_logger('ConvNetPolicy')
         else:
@@ -696,17 +742,22 @@ class GenPolicy(PolicyNetwork):
         self.noise_dim = int(noise_dim)
         self.n_classes = int(n_discrete_codes)
         self.n_cont = int(n_continuous_codes)
+        self.disc_features = int(disc_features)
+        self.disc_feature_dim = self.disc_features * 2
         self.total_latent_dim = self.noise_dim + self.n_classes + self.n_cont
 
-        self.model_gen = Generator(training=False)
+        self.model_gen = Generator(
+            training=False, n_codes=self.n_classes, noise_dim=self.noise_dim)
        
         self.model_disc = Discriminator(
+            features=self.disc_features,
             train=False,
             q_cat=self.n_classes,
             q_cont=self.n_cont,
         )
 
         self.model_q = Discriminator(
+            features=self.disc_features,
             q_cat=self.n_classes,
             q_cont=self.n_cont,
         )
@@ -784,16 +835,83 @@ class GenPolicy(PolicyNetwork):
             # Code pixel diversity: variance across codes sharing the same z.
             # Latent design: groups of n_classes consecutive samples share same z,
             # differ only by code. Any pixel difference = code influence.
+            # We compute this on a lightly blurred image to de-emphasize
+            # high-frequency pixel noise shortcuts and favor shape-level
+            # differentiation.
+            def _blur3x3(x):
+                x_pad = jnp.pad(x, ((0, 0), (1, 1), (1, 1), (0, 0)), mode='edge')
+                return (
+                    x_pad[:, 0:-2, 0:-2, :] + x_pad[:, 0:-2, 1:-1, :] + x_pad[:, 0:-2, 2:, :]
+                    + x_pad[:, 1:-1, 0:-2, :] + x_pad[:, 1:-1, 1:-1, :] + x_pad[:, 1:-1, 2:, :]
+                    + x_pad[:, 2:, 0:-2, :] + x_pad[:, 2:, 1:-1, :] + x_pad[:, 2:, 2:, :]
+                ) / 9.0
+
+            fake_for_div = _blur3x3(fake_data)
             # Brightness-normalized: subtract per-image mean so the generator
-            # cannot cheat by encoding codes as bright vs dark. Forces
-            # structural/textural diversity instead.
+            # cannot cheat by encoding codes as bright vs dark.
             n_classes = self.n_classes
-            n_ctrl = (fake_data.shape[0] // n_classes) * n_classes  # 55 for batch=64
-            grouped = fake_data[:n_ctrl].reshape(-1, n_classes, 28, 28, 1)
-            grouped_centered = grouped - grouped.mean(axis=(2, 3), keepdims=True)
+            n_ctrl = (fake_for_div.shape[0] // n_classes) * n_classes
+            grouped_blur = fake_for_div[:n_ctrl].reshape(-1, n_classes, 28, 28, 1)
+            grouped_centered = grouped_blur - grouped_blur.mean(axis=(2, 3), keepdims=True)
             code_pixel_div = jnp.mean(jnp.var(grouped_centered, axis=1))
 
-            return preds, q_cat, code_pixel_div, q_flat, q_cont_mu, q_cont_logsigma
+            # Morphology diagnostics use unblurred images
+            grouped = fake_data[:n_ctrl].reshape(-1, n_classes, 28, 28, 1)
+            grouped_centered_raw = grouped - grouped.mean(axis=(2, 3), keepdims=True)
+
+            # Morphology-aware diagnostics across codes:
+            # 1) dark_frac_range: per-code dark pixel fraction range
+            # 2) center_edge_range: per-code (center-edge) contrast range
+            # 3) edge_dark_frac: dark mass in 2-pixel border ring (artifact proxy)
+            dark_thresh = 0.3  # sigmoid output [0,1]: "dark" = below 0.3
+            dark_frac_per_code = jnp.mean((grouped < dark_thresh).astype(jnp.float32), axis=(0, 2, 3, 4))
+            dark_frac_range = jnp.max(dark_frac_per_code) - jnp.min(dark_frac_per_code)
+
+            center = grouped[:, :, 8:20, 8:20, :]
+            center_mean_per_code = jnp.mean(center, axis=(0, 2, 3, 4))
+            total_mean_per_code = jnp.mean(grouped, axis=(0, 2, 3, 4))
+            center_pixels = jnp.float32(12 * 12)
+            total_pixels = jnp.float32(28 * 28)
+            edge_mean_per_code = (
+                total_mean_per_code * total_pixels - center_mean_per_code * center_pixels
+            ) / (total_pixels - center_pixels)
+            center_edge_per_code = center_mean_per_code - edge_mean_per_code
+            center_edge_range = jnp.max(center_edge_per_code) - jnp.min(center_edge_per_code)
+
+            border_mask = jnp.ones((28, 28), dtype=jnp.float32).at[2:26, 2:26].set(0.0)
+            border_pixels = jnp.sum(border_mask)
+            edge_dark_per_image = (
+                jnp.sum(
+                    (fake_data[:n_ctrl, :, :, 0] < dark_thresh).astype(jnp.float32) * border_mask[None, :, :],
+                    axis=(1, 2),
+                ) / jnp.maximum(border_pixels, 1.0)
+            )
+            edge_dark_frac = jnp.mean(edge_dark_per_image)
+
+            # Mean pairwise correlation between code prototypes (lower is better).
+            # This penalizes cross-code template collapse directly.
+            code_proto = jnp.mean(grouped_centered_raw, axis=0)  # [K, H, W, C]
+            code_proto_flat = code_proto.reshape(n_classes, -1)
+            code_proto_flat = code_proto_flat - code_proto_flat.mean(axis=1, keepdims=True)
+            code_proto_norm = code_proto_flat / jnp.maximum(
+                jnp.linalg.norm(code_proto_flat, axis=1, keepdims=True), 1e-6
+            )
+            corr_mat = code_proto_norm @ code_proto_norm.T
+            upper = jnp.triu_indices(n_classes, k=1)
+            code_proto_corr = jnp.mean(corr_mat[upper])
+
+            return (
+                preds,
+                q_cat,
+                code_pixel_div,
+                q_flat,
+                q_cont_mu,
+                q_cont_logsigma,
+                dark_frac_range,
+                center_edge_range,
+                edge_dark_frac,
+                code_proto_corr,
+            )
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
 
@@ -820,10 +938,33 @@ class GenPolicy(PolicyNetwork):
 
         #jax.debug.print('params gen : {} ', params_gen)
 
-        preds, disc_logits, mean_var_fake, q_flat, q_cont_mu, q_cont_logsigma = self._forward_fn_gen(
+        (
+            preds,
+            disc_logits,
+            mean_var_fake,
+            q_flat,
+            q_cont_mu,
+            q_cont_logsigma,
+            dark_frac_range,
+            center_edge_range,
+            edge_dark_frac,
+            code_proto_corr,
+        ) = self._forward_fn_gen(
             params_hn, params_disc, batch_stats_disc, t_states.obs, t_states.noise)
         
-        return preds, disc_logits, mean_var_fake, q_flat, q_cont_mu, q_cont_logsigma, p_states
+        return (
+            preds,
+            disc_logits,
+            mean_var_fake,
+            q_flat,
+            q_cont_mu,
+            q_cont_logsigma,
+            dark_frac_range,
+            center_edge_range,
+            edge_dark_frac,
+            code_proto_corr,
+            p_states,
+        )
         #return self._forward_fn(params, t_states.obs), p_states
 
 class DiscPolicy(PolicyNetwork):

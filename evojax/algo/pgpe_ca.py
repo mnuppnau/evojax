@@ -254,6 +254,12 @@ class PGPE(NEAlgorithm):
         ca_blend_rfl_lo: float = -1.0,
         ca_blend_rfl_hi: float = -1.0,
         shape_div_weight: float = 0.12,
+        static_fitness_weights: bool = False,
+        static_w_adv: Optional[float] = None,
+        static_w_mi: Optional[float] = None,
+        static_w_div: Optional[float] = None,
+        static_w_sense: Optional[float] = None,
+        static_w_intra: Optional[float] = None,
         logger: logging.Logger = None,
     ):
         """Initialization function.
@@ -279,6 +285,10 @@ class PGPE(NEAlgorithm):
             ca_blend_rfl_lo - Optional lower bound of real_fake_loss gate.
             ca_blend_rfl_hi - Optional upper bound of real_fake_loss gate.
             shape_div_weight - Weight for conditional shape diversity reward.
+            static_fitness_weights - Disable slope/health-driven adaptive
+                                     weighting and use fixed fitness weights.
+            static_w_* - Optional static fitness weights used when
+                         static_fitness_weights=True.
         """
 
         if logger is None:
@@ -301,6 +311,12 @@ class PGPE(NEAlgorithm):
         self._ca_blend_rfl_lo = float(ca_blend_rfl_lo)
         self._ca_blend_rfl_hi = float(ca_blend_rfl_hi)
         self._shape_div_weight = float(max(shape_div_weight, 0.0))
+        self._static_fitness_weights = bool(static_fitness_weights)
+        self._static_w_adv = None if static_w_adv is None else float(static_w_adv)
+        self._static_w_mi = None if static_w_mi is None else float(static_w_mi)
+        self._static_w_div = None if static_w_div is None else float(static_w_div)
+        self._static_w_sense = None if static_w_sense is None else float(static_w_sense)
+        self._static_w_intra = None if static_w_intra is None else float(static_w_intra)
         self._runtime_real_fake_loss = np.nan
         self._debug_last = {}
         self._ks_winner_counts = np.zeros((4,), dtype=np.int64)
@@ -327,8 +343,9 @@ class PGPE(NEAlgorithm):
         if optimizer_config is None:
             optimizer_config = {}
         decay_coef = optimizer_config.get("center_lr_decay_coef", 1.0)
+        self._lr_decay_coef = decay_coef
         self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 10000
+            "center_lr_decay_steps", 100000
         )
 
         if optimizer == "adam":
@@ -410,7 +427,7 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], r_shape_div: Union[np.ndarray, jnp.ndarray], r_shape_div_min: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], safety_ratios: Union[np.ndarray, jnp.ndarray], spreads: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], r_shape_div: Union[np.ndarray, jnp.ndarray], r_shape_div_min: Union[np.ndarray, jnp.ndarray], morph_dark_range: Union[np.ndarray, jnp.ndarray], morph_center_edge_range: Union[np.ndarray, jnp.ndarray], edge_dark_frac: Union[np.ndarray, jnp.ndarray], code_proto_corr: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], safety_ratios: Union[np.ndarray, jnp.ndarray], spreads: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
 
        
         #if avg_r_anchor < 0.0009:
@@ -769,8 +786,9 @@ class PGPE(NEAlgorithm):
         #   need w_sense * 0.0092 ≈ w_adv * 0.0465 → w_sense ≈ 5.0 * w_adv
         # With min-pair r_sense (higher variance ~0.015), w_sense ~3.0 suffices.
         # --- CA-driven adaptive weight modulation ---
-        # Base weights (user-tuned sweet spot from the stable 0-195k regime)
-        w_adv_base = 0.53
+        # Base weights (user-tuned sweet spot from the stable regime).
+        # In static mode, these are fixed and do not ramp with iteration.
+        w_adv_base = jnp.float32(self._static_w_adv if self._static_w_adv is not None else 0.53)
         # Health gates for MI/sense pressure:
         # - D health from real_fake_loss window
         # - Shape health from worst-code conditional shape diversity
@@ -785,35 +803,37 @@ class PGPE(NEAlgorithm):
         d_health = jnp.where(rfl_finite, jnp.minimum(d_gate_lo, d_gate_hi), 1.0)
 
         shape_min_pop = jnp.mean(r_shape_div_min)
-        shape_lo = jnp.float32(0.08)
-        shape_hi = jnp.float32(0.13)
+        # Relaxed for current BloodMNIST regime so objective_health can open.
+        shape_lo = jnp.float32(0.02)
+        shape_hi = jnp.float32(0.05)
         shape_health = jnp.clip((shape_min_pop - shape_lo) / (shape_hi - shape_lo + 1e-8), 0.0, 1.0)
 
         # Combined health factor for MI/sense pressure.
         objective_health = d_health * shape_health
         ramp_gate = 0.25 + 0.75 * objective_health
 
-        w_mi_base = 0.30
-        # Ramp w_mi_base from 0.30 to 0.50 over 50k iterations (starts at 10k),
-        # but only when D/shape health are adequate.
-        w_mi_base = w_mi_base + jnp.clip((self._t - 10000) / 50000 * 0.20, 0.00, 0.20) * ramp_gate
-        w_sense_base = 0.10
-        # Ramp w_sense_base from 0.10 to 0.30 over 50k iterations (starts at 10k),
-        # but only when D/shape health are adequate.
-        w_sense_base = w_sense_base + jnp.clip((self._t - 10000) / 50000 * 0.20, 0.00, 0.20) * ramp_gate
-        w_div_base = 0.48
+        w_mi_base = jnp.float32(self._static_w_mi if self._static_w_mi is not None else 0.30)
+        w_sense_base = jnp.float32(self._static_w_sense if self._static_w_sense is not None else 0.14)
+        if not self._static_fitness_weights:
+            # Ramp adaptive bases only in adaptive mode.
+            w_mi_base = w_mi_base + jnp.clip((self._t - 10000) / 50000 * 0.20, 0.00, 0.20) * ramp_gate
+            w_sense_base = w_sense_base + jnp.clip((self._t - 10000) / 50000 * 0.20, 0.00, 0.20) * ramp_gate
+        # Direct code-separation pressure (pop_var) kept intentionally low.
+        w_div_base = jnp.float32(self._static_w_div if self._static_w_div is not None else 0.16)
+        w_intra_base = jnp.float32(self._static_w_intra if self._static_w_intra is not None else 0.05)
         w_norm_base = 0.04
 
         # Compute metric slopes from CA belief space
         slopes = compute_metric_slopes(self.belief_space)
         (adv_short, mi_short, adv_med, mi_med, ent_long,
-         sense_short, intra_short, adv_avg_short, sense_med, shape_short, shape_med) = slopes
+         sense_short, intra_short, adv_avg_short, sense_med,
+         shape_short, shape_med, spread_short, spread_med) = slopes
 
         # Mirror KS scoring used by the guidance functions for structured logs.
-        ks_dom_score = domain_score(adv_med, mi_med, ent_long)
+        ks_dom_score = domain_score(adv_med, mi_med, ent_long, spread_med)
         ks_sit_score = situational_score(adv_short, mi_short)
         ks_hist_score = historical_score(ent_long, adv_short)
-        ks_topo_score = topographic_score(ent_long, adv_med)
+        ks_topo_score = topographic_score(ent_long, adv_med, spread_short)
         ks_scores = jnp.array(
             [ks_dom_score, ks_sit_score, ks_hist_score, ks_topo_score],
             dtype=jnp.float32,
@@ -823,73 +843,85 @@ class PGPE(NEAlgorithm):
         # CA adaptation: adjust weights based on detected trends.
         # Positive slope = metric improving, Negative = metric declining.
         # Each adjustment is clamped to prevent runaway weight changes.
-
-        # 1. If fitness_adv is dropping (D winning), boost w_adv, reduce diversity pressure
-        #    adv_avg_short < 0 means avg adversarial fitness is declining
-        adv_distress = jnp.clip(-adv_avg_short * 50.0, 0.0, 0.2)
-        w_adv = w_adv_base + adv_distress
-        w_div = w_div_base - adv_distress * 0.5  # ease off diversity when D is crushing
-
-        # 2. If MI quality is stalling/declining, temporarily increase MI pressure.
-        #    This is intentionally conservative: we only add up to +0.20.
-        mi_distress_short = jnp.clip(-mi_short * 30.0, 0.0, 0.15)
-        mi_distress_med = jnp.clip(-mi_med * 20.0, 0.0, 0.10)
-        mi_distress = jnp.clip(mi_distress_short + mi_distress_med, 0.0, 0.20) * objective_health
-        w_mi = w_mi_base + mi_distress
-        # When MI is in distress, ease off pixel diversity slightly so pressure
-        # shifts toward informative code alignment instead of texture variance.
-        w_div = w_div - mi_distress * 0.25
-
-        # 3. If r_sense is spiking too fast (divergence precursor), reduce w_sense
-        #    sense_short > 0 means separation is increasing (good, but too fast = bad)
-        sense_overshoot = jnp.clip(sense_short * 100.0 - 0.5, 0.0, 0.08)
-        # If separation stays weak, give a modest sense boost.
-        sense_target = 0.03
-        sense_mean = jnp.mean(r_sense)
-        sense_deficit = jnp.clip((sense_target - sense_mean) * 2.5, 0.0, 0.08) * objective_health
-        sense_decline = jnp.clip(-sense_med * 25.0, 0.0, 0.05) * objective_health
-        w_sense = w_sense_base - sense_overshoot + sense_deficit + sense_decline
-
-        # 4. If r_intra is dropping (within-code variation collapsing), boost w_intra
-        #    so PGPE rewards members that maintain within-code variety (use z-noise)
-        intra_distress = jnp.clip(-intra_short * 100.0, 0.0, 0.15)
-        w_intra_base = 0.15
-        w_intra = w_intra_base + intra_distress  # CA boosts when codes are tightening
-        # 4b. Conditional shape-diversity pressure: increase when shape-div
-        # trend is declining; keep strict caps to avoid destabilizing adv.
-        shape_distress = jnp.clip(-shape_short * 30.0, 0.0, 0.10)
-        shape_relief = jnp.clip(shape_short * 15.0, 0.0, 0.04)
-        w_shape = self._shape_div_weight + shape_distress - shape_relief
-        w_shape = jnp.clip(w_shape, 0.02, 0.20)
-
-        # 5. r_cons floor penalty: penalize only when centroid consistency drops
-        #    below a minimum threshold. This prevents drift without over-anchoring.
-        cons_floor = 0.05
-        cons_shortfall = jnp.maximum(0.0, cons_floor - r_cons)  # per-member penalty
-        w_cons_floor = 0.1
-
-        if self._t < 10000:
-            w_mi_clip_max = 0.35
-            w_sense_clip_max = 0.1
+        if self._static_fitness_weights:
+            # Post-fix baseline mode: fixed weights, no adaptive modulation.
+            w_adv = jnp.float32(w_adv_base)
+            w_mi = jnp.float32(w_mi_base)
+            w_div = jnp.float32(w_div_base)
+            w_sense = jnp.float32(w_sense_base)
+            w_intra = jnp.float32(w_intra_base)
+            w_shape = jnp.clip(jnp.float32(self._shape_div_weight), 0.02, 0.20)
+            mi_guard = jnp.float32(0.0)
+            w_cons_floor = jnp.float32(0.1)
+            # Keep these variables defined for diagnostics consistency.
+            adv_distress = jnp.float32(0.0)
+            mi_distress = jnp.float32(0.0)
         else:
-            w_mi_clip_max = 0.55
-            w_sense_clip_max = 0.30
+            # 1. If fitness_adv is dropping (D winning), boost w_adv, reduce diversity pressure
+            #    adv_avg_short < 0 means avg adversarial fitness is declining
+            adv_distress = jnp.clip(-adv_avg_short * 50.0, 0.0, 0.2)
+            w_adv = w_adv_base + adv_distress
+            w_div = w_div_base - adv_distress * 0.5  # ease off diversity when D is crushing
 
-        # Ensure no weight goes negative
-        w_adv = jnp.maximum(w_adv, 0.1)
-        w_div = jnp.maximum(w_div, 0.1)
-        # Extra damping under poor D/shape health to avoid shortcut collapse.
-        w_mi = w_mi - (1.0 - objective_health) * 0.12
-        w_sense = w_sense - (1.0 - objective_health) * 0.06
-        w_mi = jnp.clip(w_mi, 0.05, w_mi_clip_max)
-        w_sense = jnp.clip(w_sense, 0.02, w_sense_clip_max)
+            # 2. If MI quality is stalling/declining, temporarily increase MI pressure.
+            #    This is intentionally conservative: we only add up to +0.20.
+            mi_distress_short = jnp.clip(-mi_short * 30.0, 0.0, 0.15)
+            mi_distress_med = jnp.clip(-mi_med * 20.0, 0.0, 0.10)
+            mi_distress = jnp.clip(mi_distress_short + mi_distress_med, 0.0, 0.20) * objective_health
+            w_mi = w_mi_base + mi_distress
+            # When MI is in distress, ease off pixel diversity slightly so pressure
+            # shifts toward informative code alignment instead of texture variance.
+            w_div = w_div - mi_distress * 0.25
 
-        # MI guard: when worst-code shape diversity collapses, reduce MI
-        # pressure so optimization cannot improve MI by prototype collapse.
-        shape_min_target = 0.10
-        mi_guard = jnp.clip((shape_min_target - shape_min_pop) * 3.0, 0.0, 0.12)
-        w_mi = jnp.clip(w_mi - mi_guard, 0.05, w_mi_clip_max)
-        w_shape = jnp.clip(w_shape + (mi_guard * 0.5), 0.02, 0.20)
+            # 3. If r_sense is spiking too fast (divergence precursor), reduce w_sense
+            #    sense_short > 0 means separation is increasing (good, but too fast = bad)
+            sense_overshoot = jnp.clip(sense_short * 100.0 - 0.5, 0.0, 0.08)
+            # If separation stays weak, give a modest sense boost.
+            sense_target = 0.03
+            sense_mean = jnp.mean(r_sense)
+            sense_deficit = jnp.clip((sense_target - sense_mean) * 2.5, 0.0, 0.08) * objective_health
+            sense_decline = jnp.clip(-sense_med * 25.0, 0.0, 0.05) * objective_health
+            w_sense = w_sense_base - sense_overshoot + sense_deficit + sense_decline
+
+            # 4. If r_intra is dropping (within-code variation collapsing), boost w_intra
+            #    so PGPE rewards members that maintain within-code variety (use z-noise)
+            intra_distress = jnp.clip(-intra_short * 100.0, 0.0, 0.15)
+            w_intra = w_intra_base + intra_distress  # CA boosts when codes are tightening
+            # 4b. Conditional shape-diversity pressure: increase when shape-div
+            # trend is declining; keep strict caps to avoid destabilizing adv.
+            shape_distress = jnp.clip(-shape_short * 30.0, 0.0, 0.10)
+            shape_relief = jnp.clip(shape_short * 15.0, 0.0, 0.04)
+            w_shape = self._shape_div_weight + shape_distress - shape_relief
+            w_shape = jnp.clip(w_shape, 0.02, 0.20)
+
+            # 5. r_cons floor penalty: penalize only when centroid consistency drops
+            #    below a minimum threshold. This prevents drift without over-anchoring.
+            cons_floor = 0.05
+            cons_shortfall = jnp.maximum(0.0, cons_floor - r_cons)  # per-member penalty
+            w_cons_floor = 0.1
+
+            if self._t < 10000:
+                w_mi_clip_max = 0.35
+                w_sense_clip_max = 0.1
+            else:
+                w_mi_clip_max = 0.45
+                w_sense_clip_max = 0.16
+
+            # Ensure no weight goes negative
+            w_adv = jnp.maximum(w_adv, 0.1)
+            w_div = jnp.maximum(w_div, 0.02)
+            # Extra damping under poor D/shape health to avoid shortcut collapse.
+            w_mi = w_mi - (1.0 - objective_health) * 0.12
+            w_sense = w_sense - (1.0 - objective_health) * 0.06
+            w_mi = jnp.clip(w_mi, 0.05, w_mi_clip_max)
+            w_sense = jnp.clip(w_sense, 0.02, w_sense_clip_max)
+
+            # MI guard: when worst-code shape diversity collapses, reduce MI
+            # pressure so optimization cannot improve MI by prototype collapse.
+            shape_min_target = 0.10
+            mi_guard = jnp.clip((shape_min_target - shape_min_pop) * 3.0, 0.0, 0.12)
+            w_mi = jnp.clip(w_mi - mi_guard, 0.05, w_mi_clip_max)
+            w_shape = jnp.clip(w_shape + (mi_guard * 0.5), 0.02, 0.20)
 
         # Normative: keep low
         w_norm = w_norm_base * ca_weight
@@ -898,13 +930,36 @@ class PGPE(NEAlgorithm):
         # prioritize the worst code while retaining global mean.
         shape_score = 0.7 * r_shape_div_min + 0.3 * r_shape_div
 
+        # Morphology-aware terms (BloodMNIST):
+        # Zeroed for post-alignment-fix baseline. Metrics still logged.
+        w_dark_range = 0.0
+        w_center_edge_range = 0.0
+        w_edge_dark_penalty = 0.0
+        edge_dark_target = 0.08
+        edge_dark_excess = jnp.maximum(0.0, edge_dark_frac - edge_dark_target)
+        # Anti-collapse: zeroed for baseline. Re-enable after characterization.
+        w_code_corr = 0.0
+        code_corr_target = 0.82
+        code_corr_excess = jnp.maximum(0.0, code_proto_corr - code_corr_target)
+        code_corr_penalty = jnp.where(
+            jnp.max(code_corr_excess) > 1e-6,
+            rank_normalize(code_corr_excess),
+            jnp.zeros_like(code_corr_excess),
+        )
+
         # 3. Calculate Fitness (all rank_normalize for scale parity)
         fitness_scores = (
             (rank_normalize(fitness_adv) * w_adv)          # Quality (capped, can't dominate)
             + (rank_normalize(fitness_mi) * w_mi)          # MI signal
             + (rank_normalize(r_sense) * w_sense)          # Feature-space code separation
-            #+ (rank_normalize(pop_var) * w_div)            # Pixel-space code diversity
+            + (rank_normalize(pop_var) * w_div)            # Pixel-space code diversity
             + (rank_normalize(r_intra) * w_intra)          # Within-code variation (use z-noise)
+            #+ (rank_normalize(morph_dark_range) * w_dark_range)
+            #+ (rank_normalize(morph_center_edge_range) * w_center_edge_range)
+            # Use raw excess (not rank-normalized) so members at/under target
+            # receive exactly zero penalty instead of tie-rank noise.
+            #- (edge_dark_excess * w_edge_dark_penalty)
+            #- (code_corr_penalty * w_code_corr)
             #+ (rank_normalize(shape_score) * w_shape)      # Conditional shape variation (min+mean)
             #- (rank_normalize(cons_shortfall) * w_cons_floor) # Penalize centroid drift below floor
             #- (rank_normalize(normative_penalty) * w_norm) # Safety/spread limits
@@ -981,6 +1036,7 @@ class PGPE(NEAlgorithm):
             avg_r_intra=jnp.mean(r_intra),
             avg_fitness_adv=jnp.mean(fitness_adv),
             avg_r_shape_div=jnp.mean(shape_score),
+            avg_code_spread=jnp.mean(pop_var),
         )
 
         # Domain KS: Pareto front with GAN diagnostic metadata (r_sense, r_cons)
@@ -1072,6 +1128,9 @@ class PGPE(NEAlgorithm):
         ca_stdev_scale = jnp.linalg.norm(ca_grad_stdev) + 1e-12
         ca_grad_stdev = ca_grad_stdev * (r_stdev_scale / ca_stdev_scale)
 
+        # Capture REINFORCE stdev direction before CA blending overwrites grad_stdev
+        reinforce_stdev_direction = jnp.mean(jnp.sign(grad_stdev))
+
         # Use jnp.where to guard the blend — prevents 0*NaN=NaN propagation.
         # Unlike arithmetic (0.0 * NaN = NaN), jnp.where truly selects one
         # branch without contamination from the other.
@@ -1085,6 +1144,41 @@ class PGPE(NEAlgorithm):
             (1.0 - ca_blend) * grad_stdev + ca_blend * ca_grad_stdev,
             grad_stdev
         )
+
+        # --- Exploration & CA insight metrics ---
+        # Stdev distribution stats (tracks whether exploration is growing/shrinking)
+        stdev_mean = jnp.mean(self._stdev)
+        stdev_std = jnp.std(self._stdev)
+        stdev_min = jnp.min(self._stdev)
+        stdev_max = jnp.max(self._stdev)
+
+        # REINFORCE vs CA gradient magnitudes (before blending)
+        reinforce_grad_norm = r_center_scale  # already computed above
+        ca_grad_norm = ca_center_scale        # raw CA gradient norm (pre-rescaling)
+        reinforce_stdev_grad_norm = r_stdev_scale
+        ca_stdev_grad_norm = ca_stdev_scale
+
+        # CA stdev guidance direction: positive = CA wants wider exploration
+        # Fraction of dims where CA suggests increasing stdev
+        ca_stdev_direction = jnp.mean(jnp.sign(ca_stdev_g - self._stdev))
+        # Mean relative change CA is suggesting for stdev
+        ca_stdev_rel_delta = jnp.mean((ca_stdev_g - self._stdev) / (self._stdev + 1e-8))
+
+        # Domain KS archive stdev diversity: how different are archived exploration profiles
+        domain_ks = self.belief_space[1]
+        archived_stdevs = domain_ks[1]  # (20, param_size)
+        # Mean stdev per archived solution, then std of those means
+        archive_stdev_means = jnp.mean(archived_stdevs, axis=1)  # (20,)
+        archive_stdev_diversity = jnp.std(archive_stdev_means)
+        # Range of archived stdev profiles
+        archive_stdev_range = jnp.max(archive_stdev_means) - jnp.min(archive_stdev_means)
+        # Number of non-zero archive entries (how full is the Pareto archive)
+        archive_occupancy = jnp.sum(jnp.any(archived_stdevs != 0, axis=1))
+
+        # Effective center LR after decay
+        decay_step = self._t // self._lr_decay_steps
+        effective_center_lr = self._center_lr * jnp.power(
+            jnp.float32(self._lr_decay_coef), jnp.float32(decay_step))
 
         # Cache diagnostics for trainer-side structured TSV logging.
         ks_winner_idx = int(np.asarray(ks_winner))
@@ -1102,6 +1196,8 @@ class PGPE(NEAlgorithm):
             "sense_med": sense_med,
             "shape_short": shape_short,
             "shape_med": shape_med,
+            "spread_short": spread_short,
+            "spread_med": spread_med,
             "w_adv": w_adv,
             "w_mi": w_mi,
             "w_div": w_div,
@@ -1114,12 +1210,21 @@ class PGPE(NEAlgorithm):
             "d_health": d_health,
             "shape_health": shape_health,
             "objective_health": objective_health,
+            "static_fitness_weights": jnp.float32(1.0 if self._static_fitness_weights else 0.0),
             "ca_blend": ca_blend,
             "ca_has_data": jnp.float32(has_ca_data),
             "ca_rfl_gate": rfl_gate,
             "shape_div_avg": jnp.mean(r_shape_div),
             "shape_div_min_avg": jnp.mean(r_shape_div_min),
             "shape_div_score_avg": jnp.mean(shape_score),
+            "morph_dark_range_avg": jnp.mean(morph_dark_range),
+            "morph_center_edge_range_avg": jnp.mean(morph_center_edge_range),
+            "edge_dark_frac_avg": jnp.mean(edge_dark_frac),
+            "code_proto_corr_avg": jnp.mean(code_proto_corr),
+            "w_dark_range": w_dark_range,
+            "w_center_edge_range": w_center_edge_range,
+            "w_edge_dark_penalty": w_edge_dark_penalty,
+            "w_code_corr": w_code_corr,
             "ks_dom_score": ks_scores[0],
             "ks_sit_score": ks_scores[1],
             "ks_hist_score": ks_scores[2],
@@ -1129,6 +1234,22 @@ class PGPE(NEAlgorithm):
             "ks_hist_weight": ks_weights_dbg[2],
             "ks_topo_weight": ks_weights_dbg[3],
             "ks_winner": jnp.array(ks_winner_idx, dtype=jnp.float32),
+            # --- Exploration & CA insight metrics ---
+            "stdev_mean": stdev_mean,
+            "stdev_std": stdev_std,
+            "stdev_min": stdev_min,
+            "stdev_max": stdev_max,
+            "reinforce_grad_norm": reinforce_grad_norm,
+            "ca_grad_norm": ca_grad_norm,
+            "reinforce_stdev_grad_norm": reinforce_stdev_grad_norm,
+            "ca_stdev_grad_norm": ca_stdev_grad_norm,
+            "ca_stdev_direction": ca_stdev_direction,
+            "ca_stdev_rel_delta": ca_stdev_rel_delta,
+            "archive_stdev_diversity": archive_stdev_diversity,
+            "archive_stdev_range": archive_stdev_range,
+            "archive_occupancy": archive_occupancy,
+            "effective_center_lr": effective_center_lr,
+            "reinforce_stdev_direction": reinforce_stdev_direction,
         }
 
         self._opt_state = self._opt_update(

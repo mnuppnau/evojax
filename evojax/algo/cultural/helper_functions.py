@@ -292,23 +292,29 @@ def historical_score(entropy_long, adv_slope_short):
     return jnp.clip(raw_score, 0.0, 2.0)
 
 @jit
-def topographic_score(entropy_long, adv_slope_med):
+def topographic_score(entropy_long, adv_slope_med, spread_short=0.0):
     # Maybe you want topographic exploration if entropy_long is starting to slip but not fully collapsed,
     # or if adv_slope_med is near 0 => no big improvement.
-    
+
     mid_entropy_drop = jnp.clip(2.5 - entropy_long, 0.0, 2.5) / 2.5  # partial "need" for exploring codes
     slow_improvement = jnp.clip(-adv_slope_med, 0.0, 1.0)  # if adv_slope_med>0 => no improvement => 0 here
-    
+
+    # Layer-A-only mode: keep spread slopes logged, but do not let spread drive
+    # KS scoring until baseline behavior is stable.
+    _ = spread_short
     raw_score = mid_entropy_drop + slow_improvement
     return jnp.clip(raw_score, 0.0, 2.0)
 
 @jit
-def domain_score(adv_slope_med, mi_slope_med, entropy_long):
+def domain_score(adv_slope_med, mi_slope_med, entropy_long, spread_med=0.0):
     # Example: moderate negative slopes => stable improvement => Domain KS can refine
-    moderate_adv = jnp.clip(-adv_slope_med, 0.0, 1.0)  
+    moderate_adv = jnp.clip(-adv_slope_med, 0.0, 1.0)
     moderate_mi  = jnp.clip(-mi_slope_med, 0.0, 1.0)
     # If entropy_long is also moderate (e.g., ~2), that might be "good enough" => domain
     normal_entropy = jnp.exp(-jnp.abs(2.0 - entropy_long))  # peak around 2.0
-    
-    raw_score = (moderate_adv + moderate_mi) + normal_entropy + 0.897#/2.0 + normal_entropy
+
+    # Layer-A-only mode: keep spread slopes logged, but do not let spread drive
+    # KS scoring until baseline behavior is stable.
+    _ = spread_med
+    raw_score = (moderate_adv + moderate_mi) + normal_entropy + 0.897
     return jnp.clip(raw_score, 0.0, 2.0)

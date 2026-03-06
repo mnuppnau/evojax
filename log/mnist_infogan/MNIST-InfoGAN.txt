@@ -1,0 +1,13 @@
+MNIST-InfoGAN: 2026-03-06 08:39:06,380 [INFO] EvoJAX MNIST InfoGAN Demo
+MNIST-InfoGAN: 2026-03-06 08:39:06,380 [INFO] ==============================
+MNIST-InfoGAN: 2026-03-06 08:39:06,380 [INFO] CA blend schedule: coeff=0.0000 start=3000 ramp=2000 rfl_gate=[0.400, 0.580] shape_div_weight=0.120
+MNIST-InfoGAN: 2026-03-06 08:39:06,380 [INFO] LR schedule: center=0.0048 stdev=0.0620 init_std=0.0320 decay_coef=1.0000 decay_steps=100000
+MNIST-InfoGAN: 2026-03-06 08:39:06,380 [INFO] Latent config: noise=62 discrete=10 continuous=2 total=74
+MNIST-InfoGAN: 2026-03-06 08:39:06,380 [INFO] Static weights: adv=0.53 mi=0.34 div=0.18 sense=0.22 intra=0.04
+MNIST-InfoGAN: 2026-03-06 08:39:11,259 [INFO] GenPolicy.num_params = 225945
+MNIST-InfoGAN: 2026-03-06 08:39:11,259 [INFO] GenPolicy.num_params_hypernet = 32608
+MNIST-InfoGAN: 2026-03-06 08:39:11,388 [INFO] DiscPolicy.num_params = 203407
+MNIST-InfoGAN: 2026-03-06 08:39:11,388 [INFO] DiscPolicy.num_batch_stats = 280
+MNIST-InfoGAN: 2026-03-06 08:39:14,260 [INFO] use_for_loop=False
+MNIST-InfoGAN: 2026-03-06 08:39:14,624 [INFO] Start to train for 1 iterations.
+MNIST-InfoGAN: 2026-03-06 08:39:23,511 [INFO] Training done, best_score_gen=-inf
