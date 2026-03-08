@@ -1,6 +1,12 @@
+import sys
 import numpy as np
 
-data = np.load('iteration-1000.npy')
+if len(sys.argv) < 2:
+    print("Usage: python3 analyze_images.py <filename.npy>")
+    sys.exit(1)
+
+filename = sys.argv[1]
+data = np.load(filename)
 print(f"Loaded data shape: {data.shape}")
 
 n_classes = 10

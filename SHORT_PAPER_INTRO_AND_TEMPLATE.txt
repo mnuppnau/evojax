@@ -1,0 +1,141 @@
+AAAI-Style Short Paper Notes
+
+Note
+- AAAI main technical-track papers use the AAAI two-column format and allow up to 7 pages of technical content plus references.
+- If your venue is a workshop or short-paper venue using AAAI style, keep the AAAI format but follow that venue's shorter page limit.
+
+----------------------------------------------------------------------------
+Condensed Introduction (Short-Paper Version)
+----------------------------------------------------------------------------
+
+Generative Adversarial Networks (GANs) are difficult to train because adversarial dynamics can lead to instability, mode collapse, and brittle gradients. InfoGAN is attractive in this setting because it encourages latent variables to capture disentangled, human-inspectable structure without supervision. This is especially relevant in healthcare, where synthetic data should be controllable and auditable rather than merely realistic.
+
+In our prior work \cite{}, we replaced generator backpropagation with PGPE, evolving the generator against a moving discriminator objective. While this avoided direct gradient propagation through the generator, it still required evolutionary search over a very large parameter space (more than 500k generator parameters), which often produced partial mode coverage and duplicated latent-code assignments. In the strongest MNIST runs, one class was typically missing and one or more codes collapsed to repeated digits.
+
+In this work, we reduce that search burden with a HyperNetwork. Rather than evolving the full generator directly, PGPE optimizes a compact HyperNetwork that emits the weights of a larger image generator conditioned on latent codes, while the discriminator/Q-network is still trained with backpropagation. This yields a smaller, more structured search space and an architectural prior over generator weights. We present stable baseline results on MNIST and grayscale-converted BloodMNIST, showing improved mode coverage, cleaner code allocation, and more stable late-stage training than direct parameter search. These baselines provide the foundation for our full-paper study, which will add cultural-algorithm guidance and ablation analyses.
+
+----------------------------------------------------------------------------
+What To Cut From The Full Introduction For The Short Paper
+----------------------------------------------------------------------------
+
+Keep
+- InfoGAN instability + why disentanglement matters for auditable control.
+- Prior PGPE generator-evolution result as the direct baseline.
+- HyperNetwork motivation: reduce search dimensionality and impose structure.
+- Brief statement that this short paper presents baseline results only.
+
+Cut or reduce to one sentence
+- Transformer attention motivation.
+- Detailed NEAT history.
+- Detailed HyperNEAT / CPPN explanation.
+- Long discussion of indirect encoding history.
+
+Suggested one-sentence bridge if you still want the broader motivation
+- More broadly, this work is part of a longer-term effort to study controllable, interpretable latent mechanisms that may later inform harder settings such as attention-based sequence models.
+
+----------------------------------------------------------------------------
+Suggested 2-3 Page Short-Paper Template
+----------------------------------------------------------------------------
+
+Title
+- One line, method + domain.
+- Example:
+  Evolutionary HyperNet-InfoGAN Baselines for Controllable Synthetic Image Generation
+
+Abstract
+- 120-170 words.
+- Include:
+  - problem
+  - method
+  - datasets
+  - one main result
+  - why it matters for trustworthy medical AI
+
+1. Introduction (0.4-0.6 page)
+- Problem:
+  controllable synthetic medical data needs auditable latent structure.
+- Gap:
+  direct PGPE search over full generator weights is too high-dimensional and unstable.
+- Contribution:
+  HyperNetwork-based evolutionary baseline.
+- Scope:
+  short paper focuses on stable baselines, not the full CA system.
+
+2. Method (0.4-0.6 page)
+- One short paragraph on the architecture:
+  - HyperNetwork emits generator weights
+  - PGPE updates HyperNetwork
+  - discriminator/Q trained by backprop
+- One short paragraph on the evaluation protocol:
+  - shared-z groups
+  - discrete code variation
+  - metrics: `r_sense`, `r_intra`, mode coverage / code allocation
+- Draft paragraph:
+  We evaluate disentanglement with a shared-z protocol designed to isolate the effect of the discrete code. For each sampled latent group, multiple samples share the same continuous noise vector while only the discrete code is changed, so differences within the group should reflect code-dependent structure rather than random noise. We then measure inter-code separation in the discriminator feature space with `r_sense`, which rewards code centroids that move apart, and within-code variation with `r_intra`, which tracks whether samples assigned to the same code remain coherent without collapsing to a single prototype. In practice, we pair these metrics with direct inspection of fixed image grids and report mode coverage / duplicate-code failures as the main qualitative indicators of controllable generation.
+- Include one compact figure if space permits:
+  a diagram of HyperNetwork -> Generator, with PGPE and D/Q updates
+
+3. Experimental Setup (0.25-0.4 page)
+- Datasets:
+  - MNIST: 28x28 grayscale, 10 classes
+  - BloodMNIST: grayscale-converted 28x28, 8 classes
+- Same baseline used across both datasets
+- Keep only the most important training settings
+- Do not list every hyperparameter; defer to appendix/full paper if allowed
+- Draft paragraph:
+  We use the same baseline architecture and training protocol across both datasets, changing only the number of discrete classes. The latent vector contains 62 noise dimensions, a dataset-specific one-hot discrete code (10 for MNIST and 8 for BloodMNIST), and 2 continuous codes. A HyperNetwork generates the weights of the image generator, while PGPE updates the HyperNetwork parameters and the discriminator/Q-network is optimized with backpropagation. All images are generated at 28x28 resolution in grayscale, with BloodMNIST converted from its original color representation to match the baseline pipeline. To focus this short paper on a stable reference system, we disable cultural-algorithm guidance and report the HyperNetwork-PGPE baseline alone; all CA ablations are deferred to the full paper.
+
+4. Results (0.7-1.0 page)
+- MNIST:
+  - emphasize improved mode coverage relative to prior direct PGPE baseline
+  - show fewer duplicate-code failures
+- BloodMNIST:
+  - frame as medically relevant proof-of-concept
+  - report partial disentanglement and class-consistent morphology
+- Include:
+  - one image grid figure
+  - one compact table
+
+Recommended compact table columns
+- Method
+- Evolved parameter space
+- Dataset
+- Mode coverage / code allocation summary
+- Main failure mode
+
+5. Trust Relevance and Limitations (0.2-0.3 page)
+- Why this matters:
+  controllable latent structure is easier to audit than unconstrained generation
+- Limitation:
+  baseline results do not yet establish clinically trustworthy generation
+- Position the work as an intermediate step toward that goal
+
+6. Conclusion (0.1-0.2 page)
+- HyperNetworks make PGPE search more tractable.
+- Baseline transfer to BloodMNIST is promising but incomplete.
+- Full paper will add CA guidance and ablation studies.
+
+----------------------------------------------------------------------------
+Suggested Figure/Table Budget
+----------------------------------------------------------------------------
+
+If you have 2 pages of technical content
+- Figure 1: sample grids (MNIST + BloodMNIST)
+- Table 1: direct PGPE vs HyperNetwork PGPE baseline summary
+- No separate related work section; fold it into the introduction
+
+If you have 3-4 pages of technical content
+- Figure 1: method diagram
+- Figure 2: sample grids
+- Table 1: baseline comparison
+- Short limitations paragraph
+
+----------------------------------------------------------------------------
+Minimal Storyline For The Short Paper
+----------------------------------------------------------------------------
+
+1. Direct evolutionary search over full generator weights is too hard.
+2. A HyperNetwork reduces and structures the search space.
+3. This produces a much stronger PGPE baseline on MNIST.
+4. The same setup transfers to BloodMNIST with partial but meaningful disentanglement.
+5. Full CA-guided optimization is the next step, not the main claim of the short paper.

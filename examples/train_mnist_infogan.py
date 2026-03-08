@@ -106,6 +106,33 @@ def parse_args():
         '--static-w-intra', type=float, default=None,
         help='Static intra-code variation weight (used only with --static-fitness-weights).')
     parser.add_argument(
+        '--static-div-ramp-target', type=float, default=None,
+        help='Optional late-training target for static w_div.')
+    parser.add_argument(
+        '--static-div-ramp-start-iter', type=int, default=-1,
+        help='Absolute iteration where the static diversity ramp begins.')
+    parser.add_argument(
+        '--static-div-ramp-end-iter', type=int, default=-1,
+        help='Absolute iteration where the static diversity ramp reaches target.')
+    parser.add_argument(
+        '--static-sense-ramp-target', type=float, default=None,
+        help='Optional late-training target for static w_sense; replaces the legacy sense ramp when set.')
+    parser.add_argument(
+        '--static-sense-ramp-start-iter', type=int, default=-1,
+        help='Absolute iteration where the static sense ramp begins.')
+    parser.add_argument(
+        '--static-sense-ramp-end-iter', type=int, default=-1,
+        help='Absolute iteration where the static sense ramp reaches target.')
+    parser.add_argument(
+        '--static-intra-ramp-target', type=float, default=None,
+        help='Optional late-training target for static w_intra.')
+    parser.add_argument(
+        '--static-intra-ramp-start-iter', type=int, default=-1,
+        help='Absolute iteration where the static intra ramp begins.')
+    parser.add_argument(
+        '--static-intra-ramp-end-iter', type=int, default=-1,
+        help='Absolute iteration where the static intra ramp reaches target.')
+    parser.add_argument(
         '--noise-dim', type=int, default=62,
         help='Noise dimensions in latent vector.')
     parser.add_argument(
@@ -168,13 +195,24 @@ def main(config):
     )
     if config.static_fitness_weights:
         logger.info(
-            'Static weights: adv=%s mi=%s div=%s sense=%s intra=%s (mi_sense_ramp=%s)',
+            'Static weights: adv=%s mi=%s div=%s sense=%s intra=%s '
+            '(mi_sense_ramp=%s div_ramp=%s[%s,%s] sense_ramp=%s[%s,%s] '
+            'intra_ramp=%s[%s,%s])',
             str(config.static_w_adv),
             str(config.static_w_mi),
             str(config.static_w_div),
             str(config.static_w_sense),
             str(config.static_w_intra),
             str(config.static_mi_sense_ramp),
+            str(config.static_div_ramp_target),
+            str(config.static_div_ramp_start_iter),
+            str(config.static_div_ramp_end_iter),
+            str(config.static_sense_ramp_target),
+            str(config.static_sense_ramp_start_iter),
+            str(config.static_sense_ramp_end_iter),
+            str(config.static_intra_ramp_target),
+            str(config.static_intra_ramp_start_iter),
+            str(config.static_intra_ramp_end_iter),
         )
 
     policy_gen = GenPolicy(
@@ -249,6 +287,15 @@ def main(config):
         static_w_div=config.static_w_div,
         static_w_sense=config.static_w_sense,
         static_w_intra=config.static_w_intra,
+        static_div_ramp_target=config.static_div_ramp_target,
+        static_div_ramp_start_iter=config.static_div_ramp_start_iter,
+        static_div_ramp_end_iter=config.static_div_ramp_end_iter,
+        static_sense_ramp_target=config.static_sense_ramp_target,
+        static_sense_ramp_start_iter=config.static_sense_ramp_start_iter,
+        static_sense_ramp_end_iter=config.static_sense_ramp_end_iter,
+        static_intra_ramp_target=config.static_intra_ramp_target,
+        static_intra_ramp_start_iter=config.static_intra_ramp_start_iter,
+        static_intra_ramp_end_iter=config.static_intra_ramp_end_iter,
     )
 
     # Train.

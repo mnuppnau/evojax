@@ -261,6 +261,15 @@ class PGPE(NEAlgorithm):
         static_w_div: Optional[float] = None,
         static_w_sense: Optional[float] = None,
         static_w_intra: Optional[float] = None,
+        static_div_ramp_target: Optional[float] = None,
+        static_div_ramp_start_iter: int = -1,
+        static_div_ramp_end_iter: int = -1,
+        static_sense_ramp_target: Optional[float] = None,
+        static_sense_ramp_start_iter: int = -1,
+        static_sense_ramp_end_iter: int = -1,
+        static_intra_ramp_target: Optional[float] = None,
+        static_intra_ramp_start_iter: int = -1,
+        static_intra_ramp_end_iter: int = -1,
         logger: logging.Logger = None,
     ):
         """Initialization function.
@@ -292,6 +301,26 @@ class PGPE(NEAlgorithm):
                                    keep the legacy time-ramp on MI/sense bases.
             static_w_* - Optional static fitness weights used when
                          static_fitness_weights=True.
+            static_div_ramp_target - Optional late-training target for the
+                                     static diversity weight.
+            static_div_ramp_start_iter - Absolute iteration where the late
+                                         static diversity ramp begins.
+            static_div_ramp_end_iter - Absolute iteration where the late
+                                       static diversity ramp reaches target.
+            static_sense_ramp_target - Optional late-training target for the
+                                       static sense weight. When set, this
+                                       linearly interpolates from
+                                       static_w_sense to this target.
+            static_sense_ramp_start_iter - Absolute iteration where the late
+                                           static sense ramp begins.
+            static_sense_ramp_end_iter - Absolute iteration where the late
+                                         static sense ramp reaches target.
+            static_intra_ramp_target - Optional late-training target for the
+                                       static intra-code weight.
+            static_intra_ramp_start_iter - Absolute iteration where the late
+                                           static intra ramp begins.
+            static_intra_ramp_end_iter - Absolute iteration where the late
+                                         static intra ramp reaches target.
         """
 
         if logger is None:
@@ -321,6 +350,21 @@ class PGPE(NEAlgorithm):
         self._static_w_div = None if static_w_div is None else float(static_w_div)
         self._static_w_sense = None if static_w_sense is None else float(static_w_sense)
         self._static_w_intra = None if static_w_intra is None else float(static_w_intra)
+        self._static_div_ramp_target = (
+            None if static_div_ramp_target is None else float(static_div_ramp_target)
+        )
+        self._static_div_ramp_start_iter = int(static_div_ramp_start_iter)
+        self._static_div_ramp_end_iter = int(static_div_ramp_end_iter)
+        self._static_sense_ramp_target = (
+            None if static_sense_ramp_target is None else float(static_sense_ramp_target)
+        )
+        self._static_sense_ramp_start_iter = int(static_sense_ramp_start_iter)
+        self._static_sense_ramp_end_iter = int(static_sense_ramp_end_iter)
+        self._static_intra_ramp_target = (
+            None if static_intra_ramp_target is None else float(static_intra_ramp_target)
+        )
+        self._static_intra_ramp_start_iter = int(static_intra_ramp_start_iter)
+        self._static_intra_ramp_end_iter = int(static_intra_ramp_end_iter)
         self._runtime_real_fake_loss = np.nan
         self._debug_last = {}
         self._ks_winner_counts = np.zeros((4,), dtype=np.int64)
@@ -816,16 +860,45 @@ class PGPE(NEAlgorithm):
         objective_health = d_health * shape_health
         ramp_gate = 0.25 + 0.75 * objective_health
 
+        def _apply_static_ramp(anchor, target, start_iter, end_iter):
+            if target is None:
+                return anchor
+            ramp_start = float(start_iter)
+            ramp_end = float(end_iter)
+            ramp_span = max(ramp_end - ramp_start, 1.0)
+            phase = jnp.clip((self._t - ramp_start) / ramp_span, 0.0, 1.0)
+            target_val = jnp.float32(target)
+            return anchor + (target_val - anchor) * phase
+
         w_mi_base = jnp.float32(self._static_w_mi if self._static_w_mi is not None else 0.30)
-        w_sense_base = jnp.float32(self._static_w_sense if self._static_w_sense is not None else 0.14)
+        w_div_anchor = jnp.float32(self._static_w_div if self._static_w_div is not None else 0.16)
+        w_sense_anchor = jnp.float32(self._static_w_sense if self._static_w_sense is not None else 0.14)
+        w_intra_anchor = jnp.float32(self._static_w_intra if self._static_w_intra is not None else 0.05)
+        w_sense_base = w_sense_anchor
         if (not self._static_fitness_weights) or self._static_mi_sense_ramp:
             # Ramp adaptive bases in adaptive mode, or optionally in static
             # mode to reproduce legacy behavior.
             w_mi_base = w_mi_base + jnp.clip((self._t - 10000) / 50000 * 0.20, 0.00, 0.20) * ramp_gate
-            w_sense_base = w_sense_base + jnp.clip((self._t - 10000) / 50000 * 0.20, 0.00, 0.20) * ramp_gate
-        # Direct code-separation pressure (pop_var) kept intentionally low.
-        w_div_base = jnp.float32(self._static_w_div if self._static_w_div is not None else 0.16)
-        w_intra_base = jnp.float32(self._static_w_intra if self._static_w_intra is not None else 0.05)
+            if self._static_sense_ramp_target is None:
+                w_sense_base = w_sense_base + jnp.clip((self._t - 10000) / 50000 * 0.20, 0.00, 0.20) * ramp_gate
+        w_div_base = _apply_static_ramp(
+            w_div_anchor,
+            self._static_div_ramp_target,
+            self._static_div_ramp_start_iter,
+            self._static_div_ramp_end_iter,
+        )
+        w_sense_base = _apply_static_ramp(
+            w_sense_base,
+            self._static_sense_ramp_target,
+            self._static_sense_ramp_start_iter,
+            self._static_sense_ramp_end_iter,
+        )
+        w_intra_base = _apply_static_ramp(
+            w_intra_anchor,
+            self._static_intra_ramp_target,
+            self._static_intra_ramp_start_iter,
+            self._static_intra_ramp_end_iter,
+        )
         w_norm_base = 0.04
 
         # Compute metric slopes from CA belief space

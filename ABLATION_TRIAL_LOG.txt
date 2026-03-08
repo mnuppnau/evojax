@@ -1,266 +1,163 @@
-OrganSMNIST Hyper-InfoGAN + Cultural Algorithms
+MNIST Hyper-InfoGAN
 Ablation Trial Log
-Last updated: 2026-02-23
+Last updated: 2026-03-06
 
 Purpose
-- Track every training/code adjustment as a reproducible ablation record for the short paper.
-- Tie each trial to configuration, rationale, metrics, and image observations (especially iteration 11k panels).
-- Keep this file updated after each code adjustment (same cadence as PLAN.md updates).
+- Track the MNIST-first baseline after the BloodMNIST detour and the major bug-fix cycle.
+- Record exact baseline/reference runs before changing weights, learning rates, or CA behavior again.
+- Keep this file aligned with `PLAN.md`.
 
-Codebase Snapshot
-- Framework: EvoJAX-derived HyperNetwork + PGPE + InfoGAN-style objective + CA belief space/KS guidance.
-- Current working branch: claude/evolve-infogan-hypernetworks-s3r6d-stable-67132f2.
-- Current dataset: OrganSMNIST (11 classes, 28x28 grayscale).
-- Current primary run command pattern:
-  python examples/train_organsmnist.py --gpu-id='0,1' --checkpoint-interval=5000
+Current branch
+- `claude/evolve-infogan-hypernetworks-s3r6d-67132f2-mnist-debug`
 
-Evaluation Protocol (for comparability)
-- Primary scalar window: iterations 1000-12000 (unless otherwise noted).
-- Core metrics: adv_max, mi_avg, real_fake_loss band occupancy, r_sense, r_intra.
-- Route 2 metric: r_shape_div_avg (feature-space conditional shape diversity proxy).
-- Image checkpoint focus: iteration-11000.npy plus nearby checkpoints (8k, 9k, 10k, 12k).
+Locked architecture for all current MNIST runs
+- Dataset/output scale:
+  - MNIST real data in `[0, 1]`
+  - Generator output via `sigmoid`
+- Latent:
+  - `z = [noise(62), discrete(10), continuous(2)]`
+- HyperNetwork:
+  - learned chunk embeddings
+  - hidden widths `48 -> 48`
+  - fixed chunk reconstruction (no padding-misaligned flatten split)
+- Generator:
+  - split latent paths:
+    - `seed_base(noise only)`
+    - `seed_code(discrete only)`
+    - `seed_cont(continuous only)`
+  - `code_seed_scale = 3.0`
+- Discriminator / Q:
+  - SAME-padded full-coverage backbone
+  - spatial Q head without GAP
+  - brightness guard before Q
+- Dynamic rollout plumbing:
+  - no hard-coded `256` feature-dim assumptions
 
---------------------------------------------------------------------------------
-Trial T00 - Stable branch baseline reference (pre-Phase-2 A/B)
---------------------------------------------------------------------------------
-Run ID / Source
-- Branch/commit lineage: stable-67132f2 line (before Route 2 metric integration).
-- Reference logs: historical branch logs and notes (not a single frozen run folder).
-
-Configuration
-- Discriminator threshold gate: real_fake_loss > 0.3.
-- CA blend configured conservatively and phased in (varied across runs).
-
-Rationale
-- Establish a practical baseline with healthier D/G balance and better contrast/diversity than unstable mainline.
-
-Observed behavior
-- More stable adversarial dynamics than unstable branch.
-- Still partial disentanglement; repeated/near-repeated shapes remained a recurrent issue.
-
---------------------------------------------------------------------------------
-Trial T01 - Control (No CA blend)
---------------------------------------------------------------------------------
-Run ID / Source
-- Folder: runs/phase2_ab/control_seed42
-- Log files: runs/phase2_ab/control_seed42/metrics.tsv, runs/phase2_ab/control_seed42/ks_weights.tsv
-
-Configuration
-- CA blend disabled: ca_blend_coeff = 0.0
-- Other training knobs kept matched to A/B setup.
-
-Rationale
-- Baseline for measuring net effect of CA blend schedule changes.
-
-Window summary (iter 1000-12000)
-- adv_max mean: -1.2594
-- mi_avg mean: -0.5101
-- r_sense mean: 0.0589
-- r_intra mean: 0.8259
-- real_fake_loss mean: 0.3799
-- real_fake_loss in [0.4, 0.6]: 36.4%
-
-Image notes (11k)
-- Higher local detail/contrast in some runs, but lower within-code variation in shape structure.
-
-Interpretation
-- CA-off can preserve detail but D/G balance is weaker (rfl too often below 0.4).
+Major bugs fixed before these MNIST baseline runs
+1. HyperNetwork chunk misalignment in generator parameter reconstruction.
+2. Wrong MNIST scale / output pairing after switching back from BloodMNIST.
+3. D and Q blind spots from VALID/stride geometry.
+4. Q-head GAP shortcut enabling code watermarking.
+5. Latent leak where the noise path saw full `z`.
+6. Hard-coded discriminator feature dimension in rollout carry / centroids.
+7. Remainder-code batching bias in training and preview assembly.
 
 --------------------------------------------------------------------------------
-Trial T02 - CA blend = 0.03
+Trial R00 - Archived stable reference run
 --------------------------------------------------------------------------------
-Run ID / Source
-- Folder: runs/phase2_ab/treatment_seed42
-- Log files: runs/phase2_ab/treatment_seed42/metrics.tsv, runs/phase2_ab/treatment_seed42/ks_weights.tsv
+Status
+- Archived reference, not the active run.
+- User saved all images and metrics from this run.
+- `checkpoint_10000.pkl` was preserved and reused for the next trial.
 
-Configuration
-- CA blend schedule active (with delayed/ramped setup from Phase 2).
-- Effective blend over window reflected by mean ca_blend ~0.011.
+Command family
+- `python examples/train_mnist_infogan.py --gpu-id='0,1' --checkpoint-interval=5000 --ca-blend-coeff=0.0 --static-fitness-weights`
 
-Rationale
-- Test whether moderate CA blend improves D/G balance without killing image quality.
+Important behavior
+- This was "legacy static":
+  - `static_fitness_weights = 1`
+  - `ca_blend = 0.0`
+  - MI/sense still ramped because static mode had the old leak
+- Effective weight regime:
+  - `w_adv = 0.53`
+  - `w_div = 0.16`
+  - `w_intra = 0.05`
+  - `w_mi = 0.30 -> 0.50` (gated ramp)
+  - `w_sense = 0.14 -> 0.34` (gated ramp)
+- Default PGPE/LR regime:
+  - `center_lr = 0.0048`
+  - `std_lr = 0.062`
+  - `init_std = 0.032`
+  - `lr_decay_coef = 1.0`
+  - `lr_decay_steps = 100000`
 
-Window summary (iter 1000-12000)
-- adv_max mean: -1.1868 (better than control)
-- mi_avg mean: -0.6229 (worse than control)
-- r_sense mean: 0.0610
-- r_intra mean: 0.8556
-- real_fake_loss mean: 0.4039
-- real_fake_loss in [0.4, 0.6]: 56.4%
+Outcome
+- Most stable MNIST run so far.
+- Healthy discriminator balance and usable MI trend.
+- Best overall image quality / semantic structure to date.
+- Main remaining failure mode:
+  - late semantic aliasing between a small number of code columns
+  - especially the `1 / 4 / 8 / 9` family
 
-Image notes (11k)
-- Better D/G health vs control, but MI-side behavior suggested stronger prototype pressure in several codes.
-
-Interpretation
-- CA blend improved discriminator health but MI tradeoff remained unresolved.
-
---------------------------------------------------------------------------------
-Trial T03 - CA blend = 0.015
---------------------------------------------------------------------------------
-Run ID / Source
-- Folder: runs/phase2_ab/treatment_adj_seed42
-- Log files: runs/phase2_ab/treatment_adj_seed42/metrics.tsv, runs/phase2_ab/treatment_adj_seed42/ks_weights.tsv
-
-Configuration
-- CA blend coefficient reduced from 0.03 to 0.015.
-- Effective blend over window reflected by mean ca_blend ~0.0079.
-
-Rationale
-- Keep rfl benefit while reducing MI/disentanglement interference.
-
-Window summary (iter 1000-12000)
-- adv_max mean: -1.1288 (best among T01-T03)
-- mi_avg mean: -0.7198 (worst among T01-T03)
-- r_sense mean: 0.0573
-- r_intra mean: 0.8417
-- real_fake_loss mean: 0.4358
-- real_fake_loss in [0.4, 0.6]: 70.0%
-
-Image notes (11k)
-- More complex contrast, but repeated shapes within codes persisted.
-
-Interpretation
-- Better adversarial balance did not translate into stronger within-code structural diversity.
+Use
+- This is the reference archive for all future image and metric comparisons.
 
 --------------------------------------------------------------------------------
-Trial T04 - Route 2: r_shape_div integration
+Trial B01 - Active baseline run (resume from 10k, lower separation pressure)
 --------------------------------------------------------------------------------
-Run ID / Source
-- Current active run on updated code.
-- Live logs: log/organsmnist/metrics.tsv, log/organsmnist/ks_weights.tsv
-- Current image checkpoints: iteration-1000.npy ... iteration-11000.npy
+Status
+- Active baseline run.
+- Purpose is narrow: test whether slightly lower `w_sense` reduces early style-splitting without breaking the stable R00 dynamics.
 
-Code changes (Route 2 pivot)
-- Added r_shape_div in latent task as conditional diversity proxy:
-  Var[f_D(G(z,c)) | c] in discriminator feature space.
-- Routed r_shape_div through sim_mgr -> trainer -> solver tell().
-- Added fitness term: rank_normalize(r_shape_div) * w_shape.
-- Extended Domain KS archive with r_shape_div and 4-axis Pareto:
-  [|adv|, |mi|, -shape_div, |entropy|].
-- Domain KS stagnation path now selects highest r_shape_div archive member.
-- Added CLI knob: --shape-div-weight (default 0.12).
+Run source
+- Resume from `log/mnist_infogan/checkpoints/checkpoint_10000.pkl`
 
-Configuration used
-- Same command family as previous run, with Route 2 code now active:
-  python examples/train_organsmnist.py --gpu-id='0,1' --checkpoint-interval=5000 \
-    --ca-blend-coeff=0.015 --ca-blend-start-iter=4500 --ca-blend-ramp-iters=3000 \
-    --ca-blend-rfl-lo=0.43 --ca-blend-rfl-hi=0.56 --shape-div-weight=0.12
+Effective configuration
+- `ca_blend = 0.0`
+- `static_fitness_weights = 1`
+- `static_mi_sense_ramp = 1`
+- Static override:
+  - `static_w_sense = 0.10`
+- Other weights remain at the R00 legacy-static defaults / ramps:
+  - `w_adv = 0.53`
+  - `w_div = 0.16`
+  - `w_intra = 0.05`
+  - `w_mi = 0.30 -> 0.50` (gated ramp)
+  - `w_sense = 0.10 -> 0.30` (gated ramp)
+- PGPE/LR kept unchanged from R00:
+  - `center_lr = 0.0048`
+  - `std_lr = 0.062`
+  - `init_std = 0.032`
+  - `lr_decay_coef = 1.0`
+  - `lr_decay_steps = 100000`
 
-Current observations (iter 8000-10500 snapshot)
-- adv_max mean: -0.8397
-- mi_avg mean: -0.6474
-- r_sense mean: 0.0619
-- r_intra mean: 0.9144
-- r_shape_div mean: 0.1370
-- real_fake_loss mean: 0.5022
+Why this is the first tweak
+- The stable reference run already had workable dynamics.
+- The earliest semantic failure was style-splitting into duplicate code columns.
+- Lowering `w_sense` is the smallest change that directly targets over-separation on style axes.
 
-Image notes (through ~11k)
-- D/G balance remains healthy, but repeated shapes within each code are still the dominant visual failure mode.
-- Some codes show minor variation, but not enough for strong within-code disentanglement.
+Early metric window (current run, ~10.4k-12.3k)
+- `real_fake_loss`: `0.522 - 0.595`, last `0.590`
+- `adv_avg`: `-1.211 - -0.920`, last `-0.946`
+- `mi_avg`: `-0.025 - 0.024`, last `0.002`
+- `mi_max`: `0.030 - 0.051`, last `0.045`
+- `r_sense_avg`: `0.109 - 0.162`, last `0.146`
+- `r_intra_avg`: `0.461 - 0.967`, last `0.811`
+- `spread_avg`: `0.014 - 0.039`, last `0.026`
 
-Interpretation
-- Route 2 plumbing is correct and stable.
-- Mean-only r_shape_div appears insufficient to penalize per-code collapse.
+Early image read
+- Very early behavior showed a straight-`1` / slanted-`1` split.
+- After lowering `w_sense`, the slanted `1`s started moving toward `2`s instead of staying locked as a second `1` column.
+- This is the right thing to watch next; the run is still too early to treat it as resolved.
 
---------------------------------------------------------------------------------
-Trial T05 - Collapse-sensitive Route 2 refinement (implemented)
---------------------------------------------------------------------------------
-Run ID / Source
-- Code update only (next run pending on this patch set).
-- Modified files:
-  evojax/task/latent.py
-  evojax/sim_mgr.py
-  evojax/trainer.py
-  evojax/algo/pgpe_ca.py
-  evojax/algo/cultural/knowledge_sources.py
-  scripts/compare_metrics_tsv.py
+Decision checkpoints for B01
+- `12k absolute`:
+  - check whether the early duplicate-`1` pattern is already weakening
+- `15k absolute`:
+  - first serious semantic check
+  - the slanted `1` column should be trending toward a distinct class, not another style variant
+- `20k absolute`:
+  - primary decision point
+  - code columns should show clearer semantic commitment than R00 at the same iteration
+- `25k-30k absolute`:
+  - stop / retune if duplicate columns are still fixed in place
 
-Code changes
-- Added `shape_div_min` (worst-code conditional diversity) end-to-end.
-- Kept `shape_div_mean` and changed shape reward to collapse-sensitive blend:
-  `shape_score = 0.7 * shape_div_min + 0.3 * shape_div_mean`.
-- Added shape-div history buffer + slopes in CA (`shape_short`, `shape_med`).
-- Made `w_shape` CA-adaptive with strict clamp `[0.02, 0.20]`.
-- Added MI guard:
-  when `shape_div_min` falls below target, reduce `w_mi` and nudge `w_shape`.
-- Extended logs:
-  - `metrics.tsv`: now includes `r_shape_div_min_avg`.
-  - `ks_weights.tsv`: now includes `shape_short`, `shape_med`,
-    `shape_div_min_avg`, `shape_div_score_avg`, and `mi_guard`.
+Comparison protocol against R00
+- Compare both:
+  - absolute iterations: `12k`, `15k`, `20k`, `25k`, `35k`
+  - relative-to-resume windows: `+2k`, `+5k`, `+10k`, `+15k`
+- Primary image questions:
+  1. Did the duplicate `1` family shrink?
+  2. Did the reassigned column become a real new digit rather than a style variant?
+  3. Did any new code collapse appear elsewhere?
+  4. Are within-code samples still coherent and readable?
+- Primary metric questions:
+  1. Does `real_fake_loss` stay in the healthy band (`~0.52-0.60`)?
+  2. Does `mi_avg` stay near or above `0` by `15k-20k`?
+  3. Does `r_sense_avg` remain non-collapsed without driving duplicate style columns?
+  4. Does `r_intra_avg` stay healthy rather than collapsing into near-identical samples?
 
-Rationale
-- Mean-only conditional diversity allowed partial code collapse to hide in averages.
-- This patch promotes worst-code recovery and prevents MI-only prototype shortcuts.
-
-Validation command for T05
-- python examples/train_organsmnist.py --gpu-id='0,1' --checkpoint-interval=5000 \
-  --ca-blend-coeff=0.015 --ca-blend-start-iter=4500 --ca-blend-ramp-iters=3000 \
-  --ca-blend-rfl-lo=0.43 --ca-blend-rfl-hi=0.56 --shape-div-weight=0.12
-
-Success criteria for T05
-- Maintain healthy `real_fake_loss` occupancy.
-- Improve `r_shape_div_min_avg` without degrading adversarial stability.
-- Increase within-code structural variety in 11k panels.
-- Avoid MI improvement that coincides with repeated per-code prototypes.
-
---------------------------------------------------------------------------------
-Trial T06 - BloodMNIST Morphology Metrics + Layer-A-Only CA (implemented)
---------------------------------------------------------------------------------
-Run ID / Source
-- Branch: claude/evolve-infogan-hypernetworks-s3r6d-67132f2-blood
-- Status: code update complete, next training run pending.
-
-Configuration intent
-- Keep CA conservative (Layer A visibility/logging only).
-- Add direct morphology diagnostics and weak fitness shaping.
-- Keep changes minimal to avoid destabilizing the D/G game.
-
-Code changes
-- Disabled Layer-B scoring influence:
-  - `topographic_score(...)` and `domain_score(...)` now ignore spread-slope inputs.
-- Added three generated-image morphology metrics:
-  - `morph_dark_range`
-  - `morph_center_edge_range`
-  - `edge_dark_frac`
-- Routed metrics end-to-end:
-  `convnet.py -> sim_mgr.py -> trainer.py -> pgpe_ca.py`.
-- Added weak morphology fitness terms in `pgpe_ca.py`:
-  - reward dark-range,
-  - reward center-edge-range,
-  - penalize excess edge-darkness above target.
-- Tightened `r_intra` window in `latent.py` to reduce within-code noise.
-- Extended logging:
-  - `metrics.tsv`: added morphology averages.
-  - `ks_weights.tsv`: added morphology weight columns.
-- Fixed rollout initialization robustness:
-  - `sim_mgr.py` metric buffers now size by `params_gen.shape[0]` (instead of `self._pop_size//2`).
-
-Rationale
-- Real-data analysis showed clear deficits in dark-mass distribution and center-vs-edge structure.
-- This patch first improves observability and introduces low-pressure corrections before stronger objective changes.
-
-Expected readout for next run
-- `edge_dark_frac_avg` should trend down without forcing adversarial collapse.
-- `morph_dark_range_avg` and `morph_center_edge_range_avg` should increase gradually.
-- `r_intra` should settle into a tighter band with less fuzzy/smeared output.
-
---------------------------------------------------------------------------------
-Trial T07 - Blur-Based Code Spread (implemented)
---------------------------------------------------------------------------------
-Run ID / Source
-- Branch: claude/evolve-infogan-hypernetworks-s3r6d-67132f2-blood
-- Status: code update complete; next run pending restart.
-
-Code change
-- In `evojax/policy/convnet.py`, `code_pixel_div` now uses a 3x3 edge-padded
-  average blur of generated images before variance-across-codes is computed.
-
-Rationale
-- Prior runs showed that direct pixel-space code spread pressure increased
-  blotchy/high-frequency artifacts.
-- Blurring shifts the reward toward shape-scale differences and away from
-  texture noise shortcuts.
-
-Expectation
-- Reduced blotchiness/noise at equal or better code separation.
-- Lower within-code variance drift while preserving improved D/G balance.
+Current interpretation
+- B01 is the new active baseline run.
+- R00 remains the archived reference pack.
+- No further weight or LR changes should be made until the `20k` comparison against R00 is complete.
