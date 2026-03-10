@@ -305,6 +305,46 @@ def build_real_by_class_mnist(
 
     return real_by_class
 
+def build_real_by_class_bloodmnist(
+    root="./data",
+    train=True,
+    n_classes=8,
+):
+    """
+    Returns:
+        real_by_class: list of n_classes JAX arrays
+                       real_by_class[c].shape == (Nc, 28, 28)
+    """
+    data = np.load(f"{root}/bloodmnist.npz")
+    split_prefix = "train" if train else "test"
+    images = data[f"{split_prefix}_images"].astype(np.float32)
+    labels = data[f"{split_prefix}_labels"].astype(np.int32).reshape(-1)
+
+    gray = (
+        0.2989 * images[..., 0]
+        + 0.5870 * images[..., 1]
+        + 0.1140 * images[..., 2]
+    ) / 255.0
+
+    buckets = [[] for _ in range(n_classes)]
+    for img_np, lbl in zip(gray, labels):
+        if 0 <= int(lbl) < n_classes:
+            buckets[int(lbl)].append(img_np)
+
+    non_empty = [b for b in buckets if len(b) > 0]
+    if len(non_empty) == 0:
+        raise ValueError('No images found while building BloodMNIST class buckets.')
+    for idx, bucket in enumerate(buckets):
+        if len(bucket) == 0:
+            exemplar = non_empty[idx % len(non_empty)][0]
+            buckets[idx].append(exemplar)
+
+    real_by_class = [
+        jnp.asarray(np.stack(b, axis=0), dtype=jnp.float32)
+        for b in buckets
+    ]
+    return real_by_class
+
 def sample_batch(key: jnp.ndarray,
                  latent_inputs: jnp.ndarray,
                  cat_codes: jnp.ndarray,
@@ -405,6 +445,7 @@ class Latent_Points(VectorizedTask):
                  n_classes: int = 10,
                  n_cont: int = 2,
                  feature_dim: int = 256,
+                 dataset_name: str = 'mnist',
                  test: bool = False):
         self.max_steps = 1
         self.obs_shape = (latent_dim + n_classes + n_cont,)
@@ -422,13 +463,17 @@ class Latent_Points(VectorizedTask):
         self.n_classes = n_classes
         self.n_cont = n_cont
         self.feature_dim = feature_dim
+        self.dataset_name = dataset_name.lower()
 
         self.noise_dim = latent_dim
 
         key = jax.random.PRNGKey(0)
         self.rff_params = rff_init(key, d_in=28*28, D_total=2048)
 
-        real_by_class = build_real_by_class_mnist(train=True, n_classes=self.n_classes)
+        if self.dataset_name == 'bloodmnist':
+            real_by_class = build_real_by_class_bloodmnist(train=True, n_classes=self.n_classes)
+        else:
+            real_by_class = build_real_by_class_mnist(train=True, n_classes=self.n_classes)
         # Precompute once
         self.mu_classes = compute_real_class_means(self.rff_params, real_by_class)
         

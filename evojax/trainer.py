@@ -1118,16 +1118,22 @@ class Trainer(object):
 
         self._key, subkey = jax.random.split(self._key)
         
-        dataset = torchvision.datasets.MNIST(
-            './data', train=True, download=True)
-        data_raw = np.array(dataset.data, dtype=np.float32)
-        if data_raw.ndim == 3:
-            data_raw = np.expand_dims(data_raw, axis=-1)
-        self.data = data_raw / 255.0
+        if hasattr(train_task_disc, 'data') and hasattr(train_task_disc, 'labels'):
+            data_raw = np.array(train_task_disc.data, dtype=np.float32)
+            if data_raw.ndim == 3:
+                data_raw = np.expand_dims(data_raw, axis=-1)
+            self.data = data_raw if data_raw.max() <= 1.0 else data_raw / 255.0
+            self.labels = np.array(train_task_disc.labels, dtype=np.int32).flatten()
+        else:
+            dataset = torchvision.datasets.MNIST(
+                './data', train=True, download=True)
+            data_raw = np.array(dataset.data, dtype=np.float32)
+            if data_raw.ndim == 3:
+                data_raw = np.expand_dims(data_raw, axis=-1)
+            self.data = data_raw / 255.0
+            self.labels = np.array(dataset.targets, dtype=np.int32).flatten()
 
         self._key, subkey = jax.random.split(self._key)
-
-        self.labels = np.array(dataset.targets, dtype=np.int32).flatten()
 
         # initialize the discriminator
         variables_disc = Discriminator(

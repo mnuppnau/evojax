@@ -32,7 +32,7 @@ if PROJECT_ROOT not in sys.path:
 
 from jax import random
 from evojax import Trainer
-from evojax.task.mnist import MNIST
+from evojax.task.bloodmnist import BloodMNIST
 from evojax.task.latent import Latent_Points
 from evojax.policy.convnet import GenPolicy, DiscPolicy
 from evojax.algo import PGPE_CA, PGPE_DISC, PGPE_Q
@@ -88,6 +88,51 @@ def parse_args():
         '--static-fitness-weights', action='store_true',
         help='Disable adaptive fitness reweighting and use fixed weights (baseline mode).')
     parser.add_argument(
+        '--static-mi-sense-ramp', action='store_true',
+        help='With static weights, keep legacy MI base ramp over training.')
+    parser.add_argument(
+        '--static-w-adv', type=float, default=None,
+        help='Static adversarial weight (used only with --static-fitness-weights).')
+    parser.add_argument(
+        '--static-w-mi', type=float, default=None,
+        help='Static MI weight (used only with --static-fitness-weights).')
+    parser.add_argument(
+        '--static-w-div', type=float, default=None,
+        help='Static code-diversity weight (used only with --static-fitness-weights).')
+    parser.add_argument(
+        '--static-w-sense', type=float, default=None,
+        help='Static feature-space separation weight (used only with --static-fitness-weights).')
+    parser.add_argument(
+        '--static-w-intra', type=float, default=None,
+        help='Static intra-code variation weight (used only with --static-fitness-weights).')
+    parser.add_argument(
+        '--static-div-ramp-target', type=float, default=None,
+        help='Optional late-training target for static w_div.')
+    parser.add_argument(
+        '--static-div-ramp-start-iter', type=int, default=-1,
+        help='Absolute iteration where the static diversity ramp begins.')
+    parser.add_argument(
+        '--static-div-ramp-end-iter', type=int, default=-1,
+        help='Absolute iteration where the static diversity ramp reaches target.')
+    parser.add_argument(
+        '--static-sense-ramp-target', type=float, default=None,
+        help='Optional late-training target for static w_sense; replaces the legacy sense ramp when set.')
+    parser.add_argument(
+        '--static-sense-ramp-start-iter', type=int, default=-1,
+        help='Absolute iteration where the static sense ramp begins.')
+    parser.add_argument(
+        '--static-sense-ramp-end-iter', type=int, default=-1,
+        help='Absolute iteration where the static sense ramp reaches target.')
+    parser.add_argument(
+        '--static-intra-ramp-target', type=float, default=None,
+        help='Optional late-training target for static w_intra.')
+    parser.add_argument(
+        '--static-intra-ramp-start-iter', type=int, default=-1,
+        help='Absolute iteration where the static intra ramp begins.')
+    parser.add_argument(
+        '--static-intra-ramp-end-iter', type=int, default=-1,
+        help='Absolute iteration where the static intra ramp reaches target.')
+    parser.add_argument(
         '--noise-dim', type=int, default=62,
         help='Noise dimensions in latent vector.')
     parser.add_argument(
@@ -96,6 +141,9 @@ def parse_args():
     parser.add_argument(
         '--n-continuous-codes', type=int, default=2,
         help='Number of continuous latent codes.')
+    parser.add_argument(
+        '--disc-features', type=int, default=48,
+        help='Base discriminator width (controls D/Q parameter count).')
     parser.add_argument(
         '--gpu-id', type=str, help='GPU(s) to use.')
     parser.add_argument(
@@ -145,12 +193,34 @@ def main(config):
         config.n_continuous_codes,
         config.noise_dim + config.n_discrete_codes + config.n_continuous_codes,
     )
+    if config.static_fitness_weights:
+        logger.info(
+            'Static weights: adv=%s mi=%s div=%s sense=%s intra=%s '
+            '(mi_sense_ramp=%s div_ramp=%s[%s,%s] sense_ramp=%s[%s,%s] '
+            'intra_ramp=%s[%s,%s])',
+            str(config.static_w_adv),
+            str(config.static_w_mi),
+            str(config.static_w_div),
+            str(config.static_w_sense),
+            str(config.static_w_intra),
+            str(config.static_mi_sense_ramp),
+            str(config.static_div_ramp_target),
+            str(config.static_div_ramp_start_iter),
+            str(config.static_div_ramp_end_iter),
+            str(config.static_sense_ramp_target),
+            str(config.static_sense_ramp_start_iter),
+            str(config.static_sense_ramp_end_iter),
+            str(config.static_intra_ramp_target),
+            str(config.static_intra_ramp_start_iter),
+            str(config.static_intra_ramp_end_iter),
+        )
 
     policy_gen = GenPolicy(
         logger=logger,
         noise_dim=config.noise_dim,
         n_discrete_codes=config.n_discrete_codes,
         n_continuous_codes=config.n_continuous_codes,
+        disc_features=config.disc_features,
     )
     feature_dim = int(policy_gen.disc_feature_dim)
 
@@ -160,8 +230,8 @@ def main(config):
     init_params_hypernet = policy_gen.init_params_hypernet
     flat_params_hypernet = policy_gen.flat_params_hypernet
 
-    train_task_mnist = MNIST(batch_size=config.batch_size, test=False)
-    test_task_mnist = MNIST(batch_size=config.batch_size, test=True)
+    train_task_blood = BloodMNIST(batch_size=config.batch_size, test=False)
+    test_task_blood = BloodMNIST(batch_size=config.batch_size, test=True)
 
     belief_space_key = random.PRNGKey(config.seed+12)
     belief_space = initialize_belief_space(
@@ -178,6 +248,7 @@ def main(config):
         n_classes=config.n_discrete_codes,
         n_cont=config.n_continuous_codes,
         feature_dim=feature_dim,
+        dataset_name='bloodmnist',
         test=False,
     )
     test_task_latent = Latent_Points(
@@ -186,6 +257,7 @@ def main(config):
         n_classes=config.n_discrete_codes,
         n_cont=config.n_continuous_codes,
         feature_dim=feature_dim,
+        dataset_name='bloodmnist',
         test=True,
     )
 
@@ -211,6 +283,21 @@ def main(config):
         ca_blend_rfl_hi=config.ca_blend_rfl_hi,
         shape_div_weight=config.shape_div_weight,
         static_fitness_weights=config.static_fitness_weights,
+        static_mi_sense_ramp=config.static_mi_sense_ramp,
+        static_w_adv=config.static_w_adv,
+        static_w_mi=config.static_w_mi,
+        static_w_div=config.static_w_div,
+        static_w_sense=config.static_w_sense,
+        static_w_intra=config.static_w_intra,
+        static_div_ramp_target=config.static_div_ramp_target,
+        static_div_ramp_start_iter=config.static_div_ramp_start_iter,
+        static_div_ramp_end_iter=config.static_div_ramp_end_iter,
+        static_sense_ramp_target=config.static_sense_ramp_target,
+        static_sense_ramp_start_iter=config.static_sense_ramp_start_iter,
+        static_sense_ramp_end_iter=config.static_sense_ramp_end_iter,
+        static_intra_ramp_target=config.static_intra_ramp_target,
+        static_intra_ramp_start_iter=config.static_intra_ramp_start_iter,
+        static_intra_ramp_end_iter=config.static_intra_ramp_end_iter,
     )
 
     # Train.
@@ -219,8 +306,8 @@ def main(config):
         solver_hn=solver_hn,
         train_task_gen=train_task_latent,
         test_task_gen=test_task_latent,
-        train_task_disc=train_task_mnist,
-        test_task_disc=test_task_mnist,
+        train_task_disc=train_task_blood,
+        test_task_disc=test_task_blood,
         max_iter=config.max_iter,
         log_interval=config.log_interval,
         test_interval=config.test_interval,
@@ -236,9 +323,11 @@ def main(config):
     )
     trainer.run(demo_mode=False)
 
-    # Test the final model.
-    trainer.model_dir = log_dir
-    trainer.run(demo_mode=True)
+    logger.info(
+        'Training complete. Final model artifacts saved to %s '
+        '(post-train demo_mode evaluation skipped for adversarial trainer).',
+        log_dir,
+    )
 
 
 if __name__ == '__main__':

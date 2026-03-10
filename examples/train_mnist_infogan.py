@@ -321,9 +321,11 @@ def main(config):
     )
     trainer.run(demo_mode=False)
 
-    # Test the final model.
-    trainer.model_dir = log_dir
-    trainer.run(demo_mode=True)
+    logger.info(
+        'Training complete. Final model artifacts saved to %s '
+        '(post-train demo_mode evaluation skipped for adversarial trainer).',
+        log_dir,
+    )
 
 
 if __name__ == '__main__':

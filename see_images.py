@@ -2,8 +2,8 @@ import numpy as np
 import sys
 
 filename = sys.argv[1]
+n_classes = int(sys.argv[2]) if len(sys.argv) > 2 else 10
 data = np.load(filename)
-n_classes = 10
 
 chars = " .:-=+*#%@"
 def to_ascii(img):
@@ -20,7 +20,7 @@ def to_ascii(img):
 
 for i in range(n_classes):
     print(f"--- Code {i} Prototype ---")
-    imgs = data[i:60:10, :, :, 0]
+    imgs = data[i:data.shape[0]:n_classes, :, :, 0]
     mean_img = np.mean(imgs, axis=0)
     print(to_ascii(mean_img))
 

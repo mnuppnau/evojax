@@ -1,25 +1,24 @@
-MNIST Hyper-InfoGAN
+BloodMNIST Hyper-InfoGAN
 Ablation Trial Log
-Last updated: 2026-03-06
+Last updated: 2026-03-10
 
 Purpose
-- Track the MNIST-first baseline after the BloodMNIST detour and the major bug-fix cycle.
-- Record exact baseline/reference runs before changing weights, learning rates, or CA behavior again.
+- Track BloodMNIST baseline characterization and the ordered CA ablation ladder.
+- Measure what the current CA integration actually helps with before changing controller inputs.
 - Keep this file aligned with `PLAN.md`.
 
 Current branch
-- `claude/evolve-infogan-hypernetworks-s3r6d-67132f2-mnist-debug`
+- `claude/evolve-infogan-hypernetworks-s3r6d-67132f2-blood-baseline`
 
-Locked architecture for all current MNIST runs
-- Dataset/output scale:
-  - MNIST real data in `[0, 1]`
-  - Generator output via `sigmoid`
+Locked architecture for this BloodMNIST phase
+- BloodMNIST grayscale conversion, real data in `[0, 1]`
+- Generator output via `sigmoid`
 - Latent:
-  - `z = [noise(62), discrete(10), continuous(2)]`
+  - `z = [noise(62), discrete(8), continuous(2)]`
 - HyperNetwork:
   - learned chunk embeddings
   - hidden widths `48 -> 48`
-  - fixed chunk reconstruction (no padding-misaligned flatten split)
+  - correct chunk reconstruction
 - Generator:
   - split latent paths:
     - `seed_base(noise only)`
@@ -30,134 +29,236 @@ Locked architecture for all current MNIST runs
   - SAME-padded full-coverage backbone
   - spatial Q head without GAP
   - brightness guard before Q
-- Dynamic rollout plumbing:
-  - no hard-coded `256` feature-dim assumptions
+- Plumbing:
+  - dynamic discriminator feature dimension
+  - no hard-coded rollout / centroid feature size
 
-Major bugs fixed before these MNIST baseline runs
-1. HyperNetwork chunk misalignment in generator parameter reconstruction.
-2. Wrong MNIST scale / output pairing after switching back from BloodMNIST.
-3. D and Q blind spots from VALID/stride geometry.
-4. Q-head GAP shortcut enabling code watermarking.
-5. Latent leak where the noise path saw full `z`.
-6. Hard-coded discriminator feature dimension in rollout carry / centroids.
-7. Remainder-code batching bias in training and preview assembly.
+What the current CA is expected to help with
+- better timing of exploration vs commitment
+- avoiding premature prototype hardening
+- reweighting `adv / mi / div / sense / intra` when training drifts
+- possibly helping PGPE escape late plateau behavior
+
+What the current CA is not yet expected to solve alone
+- true hematologic morphology disentanglement
+- forcing separation on nucleus/cytoplasm structure instead of cheap proxies
+- preventing clock-face or size-only coding unless those failure modes are made explicit in controller signals
+
+Current morphology concern to monitor
+- a likely failure mode is one generic cell template reused across codes, with differences carried mostly by:
+  - cell size
+  - global darkness / contrast
+  - nucleus orientation around the center
+- `code_proto_corr_avg` is therefore a key metric in every run review
 
 --------------------------------------------------------------------------------
-Trial R00 - Archived stable reference run
+Trial BLD-B00 - Locked non-CA BloodMNIST baseline
 --------------------------------------------------------------------------------
 Status
-- Archived reference, not the active run.
-- User saved all images and metrics from this run.
-- `checkpoint_10000.pkl` was preserved and reused for the next trial.
+- Active reference baseline.
+- Continue running to at least `100k` unless adversarial health breaks.
 
-Command family
-- `python examples/train_mnist_infogan.py --gpu-id='0,1' --checkpoint-interval=5000 --ca-blend-coeff=0.0 --static-fitness-weights`
+Command
+```bash
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0 \
+  --static-fitness-weights \
+  --static-mi-sense-ramp \
+  --static-w-div=0.18 \
+  --static-w-sense=0.08 \
+  --static-w-intra=0.03 \
+  --static-div-ramp-target=0.16 \
+  --static-div-ramp-start-iter=12000 \
+  --static-div-ramp-end-iter=28000 \
+  --static-sense-ramp-target=0.14 \
+  --static-sense-ramp-start-iter=12000 \
+  --static-sense-ramp-end-iter=28000 \
+  --static-intra-ramp-target=0.04 \
+  --static-intra-ramp-start-iter=12000 \
+  --static-intra-ramp-end-iter=28000 \
+  --disc-features=48
+```
 
-Important behavior
-- This was "legacy static":
-  - `static_fitness_weights = 1`
-  - `ca_blend = 0.0`
-  - MI/sense still ramped because static mode had the old leak
-- Effective weight regime:
-  - `w_adv = 0.53`
-  - `w_div = 0.16`
-  - `w_intra = 0.05`
-  - `w_mi = 0.30 -> 0.50` (gated ramp)
-  - `w_sense = 0.14 -> 0.34` (gated ramp)
-- Default PGPE/LR regime:
-  - `center_lr = 0.0048`
-  - `std_lr = 0.062`
-  - `init_std = 0.032`
-  - `lr_decay_coef = 1.0`
-  - `lr_decay_steps = 100000`
-
-Outcome
-- Most stable MNIST run so far.
-- Healthy discriminator balance and usable MI trend.
-- Best overall image quality / semantic structure to date.
-- Main remaining failure mode:
-  - late semantic aliasing between a small number of code columns
-  - especially the `1 / 4 / 8 / 9` family
+Current read (~58k)
+- Stable adversarial health:
+  - `real_fake_loss` roughly `0.55 - 0.60`
+- MI has become clearly positive:
+  - `mi_avg` roughly `0.07 - 0.08`
+- Code separation exists but is still moderate:
+  - `r_sense_avg` roughly `0.12 - 0.14`
+- Images are clean and smooth:
+  - circular cell bodies
+  - no major edge-connection artifact
+- Main remaining weakness:
+  - disentanglement is still dominated by easy morphology axes such as size, darkness, and nucleus placement/orientation
 
 Use
-- This is the reference archive for all future image and metric comparisons.
+- This is the BloodMNIST reference run for all CA comparisons.
+
+Archive checkpoints to compare
+- `20k`
+- `60k`
+- `100k`
+- `150k` if still healthy
 
 --------------------------------------------------------------------------------
-Trial B01 - Active baseline run (resume from 10k, lower separation pressure)
+Trial BLD-A01 - Dynamic fitness weighting only
 --------------------------------------------------------------------------------
 Status
-- Active baseline run.
-- Purpose is narrow: test whether slightly lower `w_sense` reduces early style-splitting without breaking the stable R00 dynamics.
+- Next ablation to run after `BLD-B00` baseline characterization.
 
-Run source
-- Resume from `log/mnist_infogan/checkpoints/checkpoint_10000.pkl`
+Purpose
+- Isolate dynamic fitness weighting from CA gradient guidance.
 
-Effective configuration
-- `ca_blend = 0.0`
-- `static_fitness_weights = 1`
-- `static_mi_sense_ramp = 1`
-- Static override:
-  - `static_w_sense = 0.10`
-- Other weights remain at the R00 legacy-static defaults / ramps:
-  - `w_adv = 0.53`
-  - `w_div = 0.16`
-  - `w_intra = 0.05`
-  - `w_mi = 0.30 -> 0.50` (gated ramp)
-  - `w_sense = 0.10 -> 0.30` (gated ramp)
-- PGPE/LR kept unchanged from R00:
-  - `center_lr = 0.0048`
-  - `std_lr = 0.062`
-  - `init_std = 0.032`
-  - `lr_decay_coef = 1.0`
-  - `lr_decay_steps = 100000`
+Command
+```bash
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.0 \
+  --disc-features=48
+```
 
-Why this is the first tweak
-- The stable reference run already had workable dynamics.
-- The earliest semantic failure was style-splitting into duplicate code columns.
-- Lowering `w_sense` is the smallest change that directly targets over-separation on style axes.
+What changes relative to BLD-B00
+- `--static-fitness-weights` is removed
+- adaptive weighting is enabled
+- CA gradient blend remains off
 
-Early metric window (current run, ~10.4k-12.3k)
-- `real_fake_loss`: `0.522 - 0.595`, last `0.590`
-- `adv_avg`: `-1.211 - -0.920`, last `-0.946`
-- `mi_avg`: `-0.025 - 0.024`, last `0.002`
-- `mi_max`: `0.030 - 0.051`, last `0.045`
-- `r_sense_avg`: `0.109 - 0.162`, last `0.146`
-- `r_intra_avg`: `0.461 - 0.967`, last `0.811`
-- `spread_avg`: `0.014 - 0.039`, last `0.026`
+Question
+- Does adaptive weighting alone improve late code commitment and morphology separation, or does it mainly change health / stability?
 
-Early image read
-- Very early behavior showed a straight-`1` / slanted-`1` split.
-- After lowering `w_sense`, the slanted `1`s started moving toward `2`s instead of staying locked as a second `1` column.
-- This is the right thing to watch next; the run is still too early to treat it as resolved.
+Primary comparison targets vs BLD-B00
+- `code_proto_corr_avg`
+- `mi_avg`
+- `r_sense_avg`
+- `real_fake_loss`
+- image evidence that codes differ by more than size/orientation
 
-Decision checkpoints for B01
-- `12k absolute`:
-  - check whether the early duplicate-`1` pattern is already weakening
-- `15k absolute`:
-  - first serious semantic check
-  - the slanted `1` column should be trending toward a distinct class, not another style variant
-- `20k absolute`:
-  - primary decision point
-  - code columns should show clearer semantic commitment than R00 at the same iteration
-- `25k-30k absolute`:
-  - stop / retune if duplicate columns are still fixed in place
+--------------------------------------------------------------------------------
+Trial BLD-A02 - CA gradient blend only
+--------------------------------------------------------------------------------
+Status
+- Queue after `BLD-A01`.
 
-Comparison protocol against R00
-- Compare both:
-  - absolute iterations: `12k`, `15k`, `20k`, `25k`, `35k`
-  - relative-to-resume windows: `+2k`, `+5k`, `+10k`, `+15k`
-- Primary image questions:
-  1. Did the duplicate `1` family shrink?
-  2. Did the reassigned column become a real new digit rather than a style variant?
-  3. Did any new code collapse appear elsewhere?
-  4. Are within-code samples still coherent and readable?
-- Primary metric questions:
-  1. Does `real_fake_loss` stay in the healthy band (`~0.52-0.60`)?
-  2. Does `mi_avg` stay near or above `0` by `15k-20k`?
-  3. Does `r_sense_avg` remain non-collapsed without driving duplicate style columns?
-  4. Does `r_intra_avg` stay healthy rather than collapsing into near-identical samples?
+Purpose
+- Isolate KS-guided CA gradient blend while keeping the baseline fitness schedule fixed.
 
-Current interpretation
-- B01 is the new active baseline run.
-- R00 remains the archived reference pack.
-- No further weight or LR changes should be made until the `20k` comparison against R00 is complete.
+Command
+```bash
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.015 \
+  --static-fitness-weights \
+  --static-mi-sense-ramp \
+  --static-w-div=0.18 \
+  --static-w-sense=0.08 \
+  --static-w-intra=0.03 \
+  --static-div-ramp-target=0.16 \
+  --static-div-ramp-start-iter=12000 \
+  --static-div-ramp-end-iter=28000 \
+  --static-sense-ramp-target=0.14 \
+  --static-sense-ramp-start-iter=12000 \
+  --static-sense-ramp-end-iter=28000 \
+  --static-intra-ramp-target=0.04 \
+  --static-intra-ramp-start-iter=12000 \
+  --static-intra-ramp-end-iter=28000 \
+  --disc-features=48
+```
+
+What changes relative to BLD-B00
+- same baseline weights and ramps
+- CA blend enabled conservatively
+
+Question
+- Can KS guidance alone nudge PGPE away from size/orientation attractors without changing the base fitness schedule?
+
+--------------------------------------------------------------------------------
+Trial BLD-A03 - Full current CA
+--------------------------------------------------------------------------------
+Status
+- Queue after `BLD-A02`.
+
+Purpose
+- Measure the full current controller: adaptive weighting plus CA blend.
+
+Command
+```bash
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.03 \
+  --disc-features=48
+```
+
+What changes relative to BLD-B00
+- no static fitness weights
+- adaptive weighting active
+- CA gradient blend active
+
+Question
+- Is the combined controller better than either component alone, or does it simply add noise / variance?
+
+--------------------------------------------------------------------------------
+Trial BLD-A04 - Morphology-aware CA (future code task)
+--------------------------------------------------------------------------------
+Status
+- Not runnable yet.
+- Only pursue after controller-only ablations are complete.
+
+Purpose
+- Extend the controller so it sees hematologic morphology failure modes explicitly.
+
+Candidate controller inputs already available in logs
+- `code_proto_corr`
+- `morph_dark_range`
+- `morph_center_edge_range`
+
+Likely next morphology metrics if needed
+- nucleus-to-cell area ratio
+- connected-component / lobulation count
+- radial intensity profile
+- contour roughness / texture granularity
+
+Question
+- Once the controller can measure morphology-specific failure modes, can it push beyond the current one-template / multi-orientation behavior?
+
+--------------------------------------------------------------------------------
+Evaluation protocol for all BloodMNIST ablations
+--------------------------------------------------------------------------------
+Compare each run at:
+- `20k`
+- `60k`
+- `100k`
+- `150k` if healthy
+
+Record side-by-side:
+- `mi_avg`
+- `mi_max`
+- `r_sense_avg`
+- `r_intra_avg`
+- `real_fake_loss`
+- `spread_avg`
+- `code_proto_corr_avg`
+- `morph_dark_range_avg`
+- `morph_center_edge_range_avg`
+
+Visual checklist
+- Are edge artifacts absent?
+- Are codes still distinguished mainly by size / darkness / orientation?
+- Do multiple columns still look like one template rotated around the center?
+- Are any codes separating by more meaningful morphology?
+- Is within-code variation still coherent?
+
+Success criteria
+- Better or equal adversarial health than `BLD-B00`
+- Lower `code_proto_corr_avg` than `BLD-B00`
+- More visually distinct per-code morphology than `BLD-B00`
+- No return of early edge/pathology artifacts
+
+Failure criteria
+- MI and `r_sense` rise while visual prototypes remain one generic cell template
+- CA destabilizes adversarial health without improving morphology separation
+- Image quality regresses to noisy or edge-connected cells

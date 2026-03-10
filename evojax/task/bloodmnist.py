@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
 import optax
 import numpy as np
 from typing import Tuple
@@ -22,7 +21,6 @@ import jax.numpy as jnp
 from jax import random
 from flax.struct import dataclass
 from flax import linen as nn
-import torchvision
 
 from evojax.task.base import VectorizedTask
 from evojax.task.base import TaskState
@@ -33,13 +31,11 @@ class State(TaskState):
     obs: jnp.ndarray
     latent: jnp.ndarray
     cat_codes: jnp.ndarray
-    #con_codes: jnp.ndarray
     labels: jnp.ndarray
-    cat_codes: jnp.ndarray
-    #fake_imgs: jnp.ndarray
     batch_stats_gen: any = None
     batch_stats_disc: any = None
     batch_stats_q: any = None
+
 
 def sample_batch(key: jnp.ndarray,
                  data: jnp.ndarray,
@@ -51,22 +47,29 @@ def sample_batch(key: jnp.ndarray,
             jnp.take(labels, indices=ix, axis=0))
 
 
-def bce_logits(logit, label):
-    """
-    Implements the BCE with logits loss, as described:
-    https://github.com/pytorch/pytorch/issues/751
-    """
-    neg_abs = -jnp.abs(logit)
-    batch_bce = jnp.maximum(logit, 0) - logit * label + jnp.log(1 + jnp.exp(neg_abs))
-    return jnp.mean(batch_bce)
-
 def loss_mutual_information(code_cat, q_cat):
     cat_loss = -jnp.mean(jnp.sum(code_cat * q_cat, axis=-1))
     mi_loss = -cat_loss
     return mi_loss
 
-class MNIST(VectorizedTask):
-    """MNIST classification task."""
+
+def _load_bloodmnist_split(test: bool = False, root: str = './data'):
+    data = np.load(f'{root}/bloodmnist.npz')
+    split_prefix = 'test' if test else 'train'
+    images = data[f'{split_prefix}_images'].astype(np.float32)
+    labels = data[f'{split_prefix}_labels'].astype(np.int32).reshape(-1)
+    # Convert RGB stain image to grayscale to match the baseline pipeline.
+    gray = (
+        0.2989 * images[..., 0]
+        + 0.5870 * images[..., 1]
+        + 0.1140 * images[..., 2]
+    ) / 255.0
+    gray = np.expand_dims(gray.astype(np.float32), axis=-1)
+    return gray, labels
+
+
+class BloodMNIST(VectorizedTask):
+    """BloodMNIST classification task (grayscale-converted baseline)."""
 
     def __init__(self,
                  batch_stats_gen: dict = None,
@@ -77,24 +80,20 @@ class MNIST(VectorizedTask):
 
         self.max_steps = 1
         self.obs_shape = tuple([28, 28, 1])
-        self.act_shape = tuple([10, ])
+        self.act_shape = tuple([8, ])
 
         self.batch_size = batch_size
-        self.batch_stats_gen = batch_stats_gen 
+        self.batch_stats_gen = batch_stats_gen
         self.batch_stats_disc = batch_stats_disc
         self.batch_stats_q = batch_stats_q
-        self.dataset_name = 'mnist'
-        
+        self.dataset_name = 'bloodmnist'
+
         self.latent_dim = 62
-        self.n_classes = 10
+        self.n_classes = 8
         self.n_con = 2
 
         self.noise_dim = self.latent_dim - self.n_con
-        dataset = torchvision.datasets.MNIST(
-            './data', train=not test, download=True)
-        data = np.array(dataset.data, dtype=np.float32) / 255.0
-        data = np.expand_dims(data, axis=-1)  # (N, 28, 28, 1)
-        labels = np.array(dataset.targets, dtype=np.int32)
+        data, labels = _load_bloodmnist_split(test=test)
         self.data = data
         self.labels = labels
 
@@ -124,22 +123,20 @@ class MNIST(VectorizedTask):
         self._reset_fn = jax.jit(jax.vmap(reset_fn))
 
         def step_fn(state, real_preds, action, q):
-            # Compute the loss
             q_cat = nn.log_softmax(q, axis=-1)
-            # cross entropy loss for Discrete Codes
             loss_q_disc = loss_mutual_information(state.cat_codes, q_cat)
-           
-            real_loss = optax.sigmoid_binary_cross_entropy(real_preds, jnp.ones((batch_size,1), dtype=jnp.float32)).mean()
-            fake_loss = optax.sigmoid_binary_cross_entropy(action, jnp.zeros((batch_size,1), dtype=jnp.float32)).mean()
+
+            real_loss = optax.sigmoid_binary_cross_entropy(
+                real_preds, jnp.ones((batch_size, 1), dtype=jnp.float32)).mean()
+            fake_loss = optax.sigmoid_binary_cross_entropy(
+                action, jnp.zeros((batch_size, 1), dtype=jnp.float32)).mean()
 
             reward_fake = -fake_loss
-
             reward_real = -real_loss
-
             reward_mi = loss_q_disc
 
             return state, reward_real, reward_fake, reward_mi, jnp.ones(())
-        
+
         self._step_fn = jax.jit(jax.vmap(step_fn))
 
     def reset(self, key: jnp.ndarray, noise_key: jnp.ndarray, cat_key: jnp.ndarray, con_key: jnp.ndarray) -> State:
