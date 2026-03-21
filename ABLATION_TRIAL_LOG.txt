@@ -1,6 +1,6 @@
 BloodMNIST Hyper-InfoGAN
 Ablation Trial Log
-Last updated: 2026-03-10
+Last updated: 2026-03-19
 
 Purpose
 - Track BloodMNIST baseline characterization and the ordered CA ablation ladder.
@@ -44,6 +44,47 @@ What the current CA is not yet expected to solve alone
 - forcing separation on nucleus/cytoplasm structure instead of cheap proxies
 - preventing clock-face or size-only coding unless those failure modes are made explicit in controller signals
 
+CA design stance for the full paper
+- The CA should be general at the optimization-framework level, not fully dataset-agnostic at the semantic level.
+- The reusable part is the controller framework:
+  - belief space
+  - KS roles
+  - rescue / adaptation logic
+- The dataset-instantiated part is the semantic interface:
+  - which proxy metrics define meaningful factors of variation
+  - which shortcuts should be penalized or diagnosed
+  - which soft bounds should be expressed in Normative KS
+
+Working KS interpretation
+- Domain KS:
+  - learns which feature-representation patterns matter in the current dataset
+  - acts as the semantic interpreter and trap detector
+- Normative KS:
+  - should express acceptable soft ranges derived from Domain-level regularities
+  - should not be treated as a fully generic statistical buffer once semantic control is needed
+- Historical KS:
+  - serves as the rescue archive when the run collapses into shortcut solutions
+- Topographic KS:
+  - tracks output-structure geometry
+  - helps explore output space, but should not define semantic correctness on its own
+
+Future transfer hypothesis: IMDb hard-attention
+- The same CA framework should transfer to a future HyperNetwork / PGPE hard-attention system.
+- What should remain general:
+  - belief-space mechanics
+  - KS roles
+  - explore / exploit / rescue logic
+  - generic optimization-health monitoring
+- What should be task-instantiated:
+  - what counts as meaningful semantic control
+  - what counts as a shortcut
+  - which soft bounds belong in Normative KS
+- Working interpretation for IMDb:
+  - Domain KS should learn whether attention selections focus on sentiment-bearing spans or cheap shortcuts such as punctuation, token frequency, or positional bias
+  - Normative KS should express soft acceptable ranges for sparsity, continuity, class-conditional diversity, or coverage of salient tokens
+  - Historical KS should preserve pre-collapse attention policies
+  - Topographic KS should track attention/output geometry without defining semantic correctness by itself
+
 Current morphology concern to monitor
 - a likely failure mode is one generic cell template reused across codes, with differences carried mostly by:
   - cell size
@@ -55,8 +96,8 @@ Current morphology concern to monitor
 Trial BLD-B00 - Locked non-CA BloodMNIST baseline
 --------------------------------------------------------------------------------
 Status
-- Active reference baseline.
-- Continue running to at least `100k` unless adversarial health breaks.
+- Restored reference baseline.
+- Rerun at `~165k` matches the original `BLD-B00` regime closely.
 
 Command
 ```bash
@@ -81,13 +122,22 @@ python examples/train_bloodmnist.py \
   --disc-features=48
 ```
 
-Current read (~58k)
-- Stable adversarial health:
-  - `real_fake_loss` roughly `0.55 - 0.60`
-- MI has become clearly positive:
-  - `mi_avg` roughly `0.07 - 0.08`
-- Code separation exists but is still moderate:
-  - `r_sense_avg` roughly `0.12 - 0.14`
+Current read (restored rerun at `~165k`)
+- Late-window metrics align with the original baseline:
+  - `150k-160k`:
+    - `mi_avg = 0.0859`
+    - `r_sense_avg = 0.1404`
+    - `r_intra_avg = 0.7493`
+    - `real_fake_loss = 0.5818`
+    - `stdev_mean = 0.0255`
+    - `code_proto_corr_avg = 0.7032`
+  - `160k-165.3k`:
+    - `mi_avg = 0.0863`
+    - `r_sense_avg = 0.1378`
+    - `r_intra_avg = 0.7394`
+    - `real_fake_loss = 0.5805`
+    - `stdev_mean = 0.0252`
+    - `code_proto_corr_avg = 0.7029`
 - Images are clean and smooth:
   - circular cell bodies
   - no major edge-connection artifact
@@ -101,13 +151,15 @@ Archive checkpoints to compare
 - `20k`
 - `60k`
 - `100k`
-- `150k` if still healthy
+- `150k`
+- `164k/165k`
 
 --------------------------------------------------------------------------------
 Trial BLD-A01 - Dynamic fitness weighting only
 --------------------------------------------------------------------------------
 Status
-- Next ablation to run after `BLD-B00` baseline characterization.
+- Completed.
+- Negative-but-useful ablation result.
 
 Purpose
 - Isolate dynamic fitness weighting from CA gradient guidance.
@@ -136,11 +188,38 @@ Primary comparison targets vs BLD-B00
 - `real_fake_loss`
 - image evidence that codes differ by more than size/orientation
 
+Outcome (~100k)
+- Stable, but not competitive with the static baseline on disentanglement.
+- Typical late-window behavior (`~90k-102k`):
+  - `mi_avg` remained low (`~0.039`)
+  - `r_sense_avg` remained modest (`~0.093`)
+  - `real_fake_loss` stayed healthy (`~0.609`)
+  - `code_proto_corr_avg` stayed high (`~0.749`)
+- Visual result:
+  - clean cells
+  - no major artifact regression
+  - persistent one-template behavior with separation still dominated by size / darkness / nucleus placement
+
+Observed adaptive-weight pattern
+- `w_adv` stayed elevated (`~0.60`)
+- `w_mi` stayed too low (`~0.21`)
+- `w_div` stayed suppressed (`~0.13`)
+- `w_sense` stayed moderate (`~0.15`)
+- `w_intra` stayed too high (`~0.12`)
+
+Interpretation
+- The current adaptive controller acts as a conservative stability controller.
+- It does not discover that MI/diversity should be emphasized more strongly for BloodMNIST disentanglement.
+- This is a valid negative result for the full paper:
+  - adaptive weighting alone improves stability more than semantics
+  - current controller priors are insufficient for morphology disentanglement
+
 --------------------------------------------------------------------------------
 Trial BLD-A02 - CA gradient blend only
 --------------------------------------------------------------------------------
 Status
-- Queue after `BLD-A01`.
+- Completed.
+- Negative ablation result.
 
 Purpose
 - Isolate KS-guided CA gradient blend while keeping the baseline fitness schedule fixed.
@@ -175,11 +254,29 @@ What changes relative to BLD-B00
 Question
 - Can KS guidance alone nudge PGPE away from size/orientation attractors without changing the base fitness schedule?
 
+Outcome (`~100k-119k`)
+- CA blend alone did not improve BloodMNIST disentanglement over `BLD-B00`.
+- Typical late-window behavior:
+  - `mi_avg ~ 0.003`
+  - `r_sense_avg ~ 0.114`
+  - `r_intra_avg ~ 0.660`
+  - `real_fake_loss ~ 0.518`
+  - `code_proto_corr_avg ~ 0.612`
+- Visual interpretation:
+  - images remained usable
+  - the clock-face / orientation shortcut remained active
+  - lower prototype correlation was not a true semantic win
+
+Interpretation
+- CA blend alone does not provide semantic guidance.
+- It can preserve or slightly reorganize a shortcut solution without producing better morphology separation.
+
 --------------------------------------------------------------------------------
 Trial BLD-A03 - Full current CA
 --------------------------------------------------------------------------------
 Status
-- Queue after `BLD-A02`.
+- Completed.
+- Negative ablation result.
 
 Purpose
 - Measure the full current controller: adaptive weighting plus CA blend.
@@ -201,14 +298,42 @@ What changes relative to BLD-B00
 Question
 - Is the combined controller better than either component alone, or does it simply add noise / variance?
 
---------------------------------------------------------------------------------
-Trial BLD-A04 - Morphology-aware CA (future code task)
+Outcome (`~120k-128k`)
+- Full current CA performed worse than `BLD-B00`, `BLD-A01`, and `BLD-A02`.
+- Typical late-window behavior:
+  - `mi_avg ~ -0.101`
+  - `r_sense_avg ~ 0.069`
+  - `r_intra_avg ~ 0.850`
+  - `real_fake_loss ~ 0.443`
+  - `code_proto_corr_avg ~ 0.632`
+  - `stdev_mean ~ 0.032`
+
+Observed controller behavior
+- `w_adv` remained high (`~0.62`)
+- `w_mi` remained too low (`~0.27`)
+- `w_div` stayed suppressed (`~0.12`)
+- `w_intra` stayed too high (`~0.10`)
+- `ca_grad_norm` dominated `reinforce_grad_norm`
+
+Interpretation
+- The current CA signal is too strong relative to the usefulness of its inputs.
+- Full current CA amplifies the wrong controller priors instead of helping PGPE escape the BloodMNIST shortcut.
+
+Trial BLD-A04 - Morphology-aware CA
 --------------------------------------------------------------------------------
 Status
-- Not runnable yet.
-- Only pursue after controller-only ablations are complete.
+- A04a completed.
+- Negative-but-informative result.
+- A04b completed.
+- Mixed-negative result.
+- A04c completed.
+- Partial-positive result.
+- A04d completed.
+- Mixed result.
+- A04e implemented in code and ready for the next run.
 
 Purpose
+- Instantiate the general CA framework with BloodMNIST-specific semantic knowledge.
 - Extend the controller so it sees hematologic morphology failure modes explicitly.
 
 Candidate controller inputs already available in logs
@@ -216,14 +341,191 @@ Candidate controller inputs already available in logs
 - `morph_dark_range`
 - `morph_center_edge_range`
 
-Likely next morphology metrics if needed
-- nucleus-to-cell area ratio
-- connected-component / lobulation count
-- radial intensity profile
-- contour roughness / texture granularity
+Implemented for A04a
+- New metric:
+  - `proto_angle_spread`
+- Added to CA history:
+  - `morph_dark_range`
+  - `code_proto_corr`
+  - `proto_angle_spread`
+- Semantic trap detector:
+  - MI is present
+  - prototype correlation stays high
+  - angle spread is non-trivial
+  - morphology diversity remains weak
+- Concrete rescue action:
+  - downweight Domain KS confidence
+  - boost Historical KS guidance
+  - boost Topographic KS guidance
+  - apply a modest stdev exploration bump
+- Explicitly unchanged in A04a:
+  - base fitness terms
+  - Normative KS behavior
+
+A04a outcome
+- The trap detector worked mechanically.
+- It reduced the orientation shortcut pressure, but did not provide a constructive morphology target.
+- The run drifted toward smoother shared-template cells instead of better hematologic separation.
+- Conclusion:
+  - shortcut detection alone is not enough
+  - the next step must add constructive biological signals
+
+Implemented for A04b
+- New metrics:
+  - `nuc_cell_ratio_range`
+  - `nuc_eccentricity_range`
+- Extended CA metric history with those biology metrics.
+- Extended Historical KS with a biology-aware rescue score.
+- Updated semantic-trap state to log:
+  - `nuc_ratio_latest`
+  - `nuc_ecc_latest`
+  - `bio_score_latest`
+- Updated Historical rescue selection:
+  - under an active semantic trap, rescue now prefers history states with stronger biology scores instead of using entropy alone.
+
+A04b outcome
+- Better than A04a on nucleus variation, but still not a successful controller.
+- Mid-run images showed some promising nucleus diversity, but late training degraded whole-cell shape.
+- Quantitatively it stayed behind `BLD-B00`:
+  - MI remained negative late
+  - code prototype correlation stayed high
+  - semantic trap remained active
+- Conclusion:
+  - constructive nucleus signals helped
+  - but the controller still lacked explicit cell-body integrity signals
+
+Implemented for A04c
+- New metrics:
+  - `cell_circularity`
+  - `cell_area_var`
+  - `nucleus_offset`
+- Extended CA metric history and diagnostics with those signals.
+- Updated semantic-trap state to log:
+  - `cell_circularity_latest`
+  - `cell_area_var_latest`
+  - `nucleus_offset_latest`
+- Expanded the morphology score used by Historical rescue so rescue favors:
+  - good cell-body compactness
+  - stable whole-cell area
+  - nucleus movement inside the cell, not whole-cell drift
+
+A04c outcome
+- Best classified as a partial positive, not a baseline-beating run.
+- Through `~195k`:
+  - nuclei became more visually distinct than in `A04a/A04b`
+  - semantic trap activity stayed near zero
+  - prototype correlation was modestly lower than `BLD-B00`
+  - but `mi_avg` remained weak/noisy and adversarial health stayed behind `BLD-B00`
+  - cell bodies still needed more structural protection
+- Useful late-window reference:
+  - `190k-195.9k`:
+    - `mi_avg = 0.0002`
+    - `r_sense_avg = 0.1262`
+    - `r_intra_avg = 0.6370`
+    - `real_fake_loss = 0.4480`
+    - `code_proto_corr_avg = 0.6742`
+    - `cell_circularity_avg = 0.6009`
+    - `nucleus_offset_avg = 0.2334`
+- Conclusion:
+  - whole-cell integrity signals improved controller perception
+  - but controller-side rescue alone still did not preserve cell-body quality strongly enough
+  - the next step is to let Normative KS express soft morphology bounds
+
+Planned after A04c: A04d
+- Add Normative KS soft bounds for the most reliable A04c signals:
+  - `cell_circularity`
+  - `nucleus_offset`
+  - maybe `cell_area_var`
+- Keep the baseline objective and run schedule fixed.
+- Use the bounds as controller-side acceptance regions rather than as a new external fitness term.
+- Goal:
+  - preserve coherent cell bodies while allowing nucleus-level morphology separation to continue
+
+Implemented for A04d
+- Normative KS now tracks soft bounds for:
+  - `cell_circularity`
+  - `cell_area_var`
+  - `nucleus_offset`
+- Center guidance now:
+  - penalizes Domain KS confidence when current morphology violates those bounds
+  - boosts Historical and Situational rescue under morphology violations
+- Stdev guidance now:
+  - mildly damps exploration when morphology is outside the learned acceptance region
+- Added structured diagnostics for:
+  - the learned normative bounds
+  - per-metric morphology violations
+  - aggregate normative-morphology violation
+
+A04d outcome
+- Better than `A04c` on stability, but still not a baseline-beating controller.
+- Through `~200k`:
+  - semantic shortcut activity stayed low
+  - adversarial health recovered somewhat relative to `A04c`
+  - MI remained positive but weak
+  - cell-body morphology still did not clearly improve beyond `BLD-B00`
+- Useful late-window reference:
+  - `180k-189k`:
+    - `mi_avg = 0.0138`
+    - `r_sense_avg = 0.1216`
+    - `r_intra_avg = 0.6799`
+    - `real_fake_loss = 0.4981`
+    - `code_proto_corr_avg = 0.6980`
+    - `cell_circularity_avg = 0.4971`
+    - `cell_area_var_avg = 0.0033`
+    - `nucleus_offset_avg = 0.1938`
+  - learned normative bounds over the same window:
+    - `norm_cell_circularity_floor = 0.4647`
+    - `norm_nucleus_offset_low = 0.1256`
+    - `norm_nucleus_offset_high = 0.1989`
+    - `norm_morph_violation = 0.0333`
+    - `norm_active = 0.0549`
+- Conclusion:
+  - the Normative KS intervention was too permissive
+  - it mostly learned to accept the current elite regime rather than push morphology upward
+  - if CA work continues, the next change should tighten the Normative KS learning rule instead of adding more generic controller machinery
+
+Implemented for A04e
+- Kept the A04d controller structure fixed.
+- Updated `update_normative_ks(...)` to use a warmup-gated asymmetric ratchet:
+  - tighten quickly when elite morphology improves
+  - relax extremely slowly after warmup
+- The ratchet gate now uses actual iteration `t`, not metric-history buffer count.
+- Added deadbands for:
+  - `cell_circularity`
+  - `cell_area_var`
+  - `nucleus_offset`
+  so small quantile noise does not repeatedly ratchet the bounds.
 
 Question
 - Once the controller can measure morphology-specific failure modes, can it push beyond the current one-template / multi-orientation behavior?
+
+Intended architectural role
+- Domain KS should learn which morphology factors are meaningful in BloodMNIST.
+- Normative KS should turn those learned regularities into soft acceptable regions.
+- This is the phase where the CA becomes dataset-semantic without losing its framework-general structure.
+
+Recommended A04d run mode
+```bash
+python examples/train_bloodmnist.py \
+  --gpu-id='0,1' \
+  --checkpoint-interval=5000 \
+  --ca-blend-coeff=0.015 \
+  --static-fitness-weights \
+  --static-mi-sense-ramp \
+  --static-w-div=0.18 \
+  --static-w-sense=0.08 \
+  --static-w-intra=0.03 \
+  --static-div-ramp-target=0.16 \
+  --static-div-ramp-start-iter=12000 \
+  --static-div-ramp-end-iter=28000 \
+  --static-sense-ramp-target=0.14 \
+  --static-sense-ramp-start-iter=12000 \
+  --static-sense-ramp-end-iter=28000 \
+  --static-intra-ramp-target=0.04 \
+  --static-intra-ramp-start-iter=12000 \
+  --static-intra-ramp-end-iter=28000 \
+  --disc-features=48
+```
 
 --------------------------------------------------------------------------------
 Evaluation protocol for all BloodMNIST ablations
@@ -244,6 +546,12 @@ Record side-by-side:
 - `code_proto_corr_avg`
 - `morph_dark_range_avg`
 - `morph_center_edge_range_avg`
+- `proto_angle_spread_avg`
+- `nuc_cell_ratio_range_avg`
+- `nuc_eccentricity_range_avg`
+- `cell_circularity_avg`
+- `cell_area_var_avg`
+- `nucleus_offset_avg`
 
 Visual checklist
 - Are edge artifacts absent?
@@ -262,3 +570,32 @@ Failure criteria
 - MI and `r_sense` rise while visual prototypes remain one generic cell template
 - CA destabilizes adversarial health without improving morphology separation
 - Image quality regresses to noisy or edge-connected cells
+
+Current ablation conclusion
+- `BLD-B00` is the restored BloodMNIST reference baseline.
+- `BLD-A01`, `BLD-A02`, and `BLD-A03` are all negative controller-only ablations.
+- The current evidence supports the following whole-system hypothesis:
+  - the CA framework is useful at the optimization level
+  - but its semantic interface must be instantiated for the dataset
+  - controller-only generic signals are not enough to break BloodMNIST shortcuts
+- the next meaningful step is `BLD-A04e`, not more generic controller tuning
+
+A04a checklist
+- [x] Keep objective fixed
+- [x] Keep Normative KS fixed
+- [x] Add explicit orientation metric
+- [x] Log semantic shortcut signals in the CA
+- [x] Add one concrete rescue actuator beyond score reweighting
+- [x] Run the first A04a ablation
+- [x] Compare against `BLD-B00` and prior `A02`
+- [x] Implement A04b biology-aware rescue signals
+- [x] Run the first A04b ablation
+- [x] Record A04b result
+- [x] Implement A04c whole-cell integrity signals
+- [x] Run the first A04c ablation
+- [x] Record A04c result
+- [x] Implement A04d Normative-KS soft bounds
+- [x] Run the first A04d ablation
+- [x] Record A04d result
+- [x] Implement A04e asymmetric-ratchet Normative KS
+- [ ] Run the first A04e ablation

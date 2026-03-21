@@ -42,6 +42,8 @@ from evojax.algo.cultural.knowledge_sources import (
     update_normative_ks,
     update_metric_history,
     compute_metric_slopes,
+    compute_semantic_trap_state,
+    compute_normative_state,
 )
 
 from evojax.algo.cultural.helper_functions import non_dominated_sort_lax
@@ -475,7 +477,7 @@ class PGPE(NEAlgorithm):
         return self._solutions, self.belief_space
 
 
-    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], r_shape_div: Union[np.ndarray, jnp.ndarray], r_shape_div_min: Union[np.ndarray, jnp.ndarray], morph_dark_range: Union[np.ndarray, jnp.ndarray], morph_center_edge_range: Union[np.ndarray, jnp.ndarray], edge_dark_frac: Union[np.ndarray, jnp.ndarray], code_proto_corr: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], safety_ratios: Union[np.ndarray, jnp.ndarray], spreads: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
+    def tell(self, fitness_adv: Union[np.ndarray, jnp.ndarray], fitness_mi: Union[np.ndarray, jnp.ndarray], disc_logits: Union[np.ndarray, jnp.ndarray], pop_var: Union[np.ndarray, jnp.ndarray], avg_per_code: Union[np.ndarray, jnp.ndarray], r_cons: Union[np.ndarray, jnp.ndarray], r_sense: Union[np.ndarray, jnp.ndarray], r_intra: Union[np.ndarray, jnp.ndarray], r_shape_div: Union[np.ndarray, jnp.ndarray], r_shape_div_min: Union[np.ndarray, jnp.ndarray], morph_dark_range: Union[np.ndarray, jnp.ndarray], morph_center_edge_range: Union[np.ndarray, jnp.ndarray], edge_dark_frac: Union[np.ndarray, jnp.ndarray], code_proto_corr: Union[np.ndarray, jnp.ndarray], proto_angle_spread: Union[np.ndarray, jnp.ndarray], nuc_cell_ratio_range: Union[np.ndarray, jnp.ndarray], nuc_eccentricity_range: Union[np.ndarray, jnp.ndarray], cell_circularity: Union[np.ndarray, jnp.ndarray], cell_area_var: Union[np.ndarray, jnp.ndarray], nucleus_offset: Union[np.ndarray, jnp.ndarray], normative_penalty: Union[np.ndarray, jnp.ndarray], safety_ratios: Union[np.ndarray, jnp.ndarray], spreads: Union[np.ndarray, jnp.ndarray], adv: bool) -> None:
 
        
         #if avg_r_anchor < 0.0009:
@@ -1071,7 +1073,11 @@ class PGPE(NEAlgorithm):
             self.belief_space,
             fitness_scores,
             spreads,
-            safety_ratios
+            safety_ratios,
+            cell_circularity,
+            cell_area_var,
+            nucleus_offset,
+            self._t,
         )
 
         # --- Update Domain, Situational, and Historical KS ---
@@ -1091,6 +1097,13 @@ class PGPE(NEAlgorithm):
         best_r_sense = jnp.array([r_sense.flatten()[best_idx]])
         best_r_cons = jnp.array([r_cons.flatten()[best_idx]])
         best_r_shape_div = jnp.array([shape_score.flatten()[best_idx]])
+        best_bio_score = jnp.array([
+            0.20 * nuc_cell_ratio_range.flatten()[best_idx]
+            + 0.15 * nuc_eccentricity_range.flatten()[best_idx]
+            + 0.35 * cell_circularity.flatten()[best_idx]
+            + 0.20 * nucleus_offset.flatten()[best_idx]
+            + 0.10 * jnp.clip(1.0 - (cell_area_var.flatten()[best_idx] / 0.02), 0.0, 1.0)
+        ])
 
         # Population-level entropy proxy from discriminator class scores.
         # Convert scores -> probabilities first to avoid log of negative values.
@@ -1115,6 +1128,14 @@ class PGPE(NEAlgorithm):
             avg_fitness_adv=jnp.mean(fitness_adv),
             avg_r_shape_div=jnp.mean(shape_score),
             avg_code_spread=jnp.mean(pop_var),
+            avg_morph_dark_range=jnp.mean(morph_dark_range),
+            avg_code_proto_corr=jnp.mean(code_proto_corr),
+            avg_proto_angle_spread=jnp.mean(proto_angle_spread),
+            avg_nuc_cell_ratio_range=jnp.mean(nuc_cell_ratio_range),
+            avg_nuc_eccentricity_range=jnp.mean(nuc_eccentricity_range),
+            avg_cell_circularity=jnp.mean(cell_circularity),
+            avg_cell_area_var=jnp.mean(cell_area_var),
+            avg_nucleus_offset=jnp.mean(nucleus_offset),
         )
 
         # Domain KS: Pareto front with GAN diagnostic metadata (r_sense, r_cons)
@@ -1135,8 +1156,24 @@ class PGPE(NEAlgorithm):
         self.belief_space = update_history_ks(
             self.belief_space, best_solution, self._stdev,
             best_scaled_noise, best_fitness_adv, best_fitness_mi,
-            best_fitness_combined, mean_disc_scores
+            best_fitness_combined, mean_disc_scores, best_bio_score
         )
+
+        semantic_state = compute_semantic_trap_state(self.belief_space)
+        (dark_range_short, code_corr_short, angle_spread_short,
+         dark_range_latest, code_corr_latest, angle_spread_latest,
+         cell_circularity_latest, cell_area_var_latest, nucleus_offset_latest,
+         nuc_ratio_latest, nuc_ecc_latest, bio_score_latest,
+         semantic_trap_score, semantic_trap_active,
+         semantic_dom_penalty, semantic_hist_boost, semantic_topo_boost,
+         semantic_stdev_boost) = semantic_state
+        normative_state = compute_normative_state(self.belief_space)
+        (norm_cell_circularity_floor, norm_cell_area_var_ceiling,
+         norm_nucleus_offset_low, norm_nucleus_offset_high,
+         norm_circ_violation, norm_area_violation, norm_offset_violation,
+         norm_morph_violation, norm_active,
+         norm_dom_penalty, norm_hist_boost, norm_sit_boost,
+         norm_stdev_scale) = normative_state
 
         fitness_scores, self._best_score, self._avg_score = process_scores(fitness_scores,False)
 
@@ -1276,6 +1313,31 @@ class PGPE(NEAlgorithm):
             "shape_med": shape_med,
             "spread_short": spread_short,
             "spread_med": spread_med,
+            "dark_range_short": dark_range_short,
+            "code_corr_short": code_corr_short,
+            "angle_spread_short": angle_spread_short,
+            "dark_range_latest": dark_range_latest,
+            "code_corr_latest": code_corr_latest,
+            "angle_spread_latest": angle_spread_latest,
+            "cell_circularity_latest": cell_circularity_latest,
+            "cell_area_var_latest": cell_area_var_latest,
+            "nucleus_offset_latest": nucleus_offset_latest,
+            "nuc_ratio_latest": nuc_ratio_latest,
+            "nuc_ecc_latest": nuc_ecc_latest,
+            "bio_score_latest": bio_score_latest,
+            "norm_cell_circularity_floor": norm_cell_circularity_floor,
+            "norm_cell_area_var_ceiling": norm_cell_area_var_ceiling,
+            "norm_nucleus_offset_low": norm_nucleus_offset_low,
+            "norm_nucleus_offset_high": norm_nucleus_offset_high,
+            "norm_circ_violation": norm_circ_violation,
+            "norm_area_violation": norm_area_violation,
+            "norm_offset_violation": norm_offset_violation,
+            "norm_morph_violation": norm_morph_violation,
+            "norm_active": norm_active,
+            "norm_dom_penalty": norm_dom_penalty,
+            "norm_hist_boost": norm_hist_boost,
+            "norm_sit_boost": norm_sit_boost,
+            "norm_stdev_scale": norm_stdev_scale,
             "w_adv": w_adv,
             "w_mi": w_mi,
             "w_div": w_div,
@@ -1299,6 +1361,12 @@ class PGPE(NEAlgorithm):
             "morph_center_edge_range_avg": jnp.mean(morph_center_edge_range),
             "edge_dark_frac_avg": jnp.mean(edge_dark_frac),
             "code_proto_corr_avg": jnp.mean(code_proto_corr),
+            "proto_angle_spread_avg": jnp.mean(proto_angle_spread),
+            "nuc_cell_ratio_range_avg": jnp.mean(nuc_cell_ratio_range),
+            "nuc_eccentricity_range_avg": jnp.mean(nuc_eccentricity_range),
+            "cell_circularity_avg": jnp.mean(cell_circularity),
+            "cell_area_var_avg": jnp.mean(cell_area_var),
+            "nucleus_offset_avg": jnp.mean(nucleus_offset),
             "w_dark_range": w_dark_range,
             "w_center_edge_range": w_center_edge_range,
             "w_edge_dark_penalty": w_edge_dark_penalty,
@@ -1311,6 +1379,12 @@ class PGPE(NEAlgorithm):
             "ks_sit_weight": ks_weights_dbg[1],
             "ks_hist_weight": ks_weights_dbg[2],
             "ks_topo_weight": ks_weights_dbg[3],
+            "semantic_trap_score": semantic_trap_score,
+            "semantic_trap_active": semantic_trap_active,
+            "semantic_dom_penalty": semantic_dom_penalty,
+            "semantic_hist_boost": semantic_hist_boost,
+            "semantic_topo_boost": semantic_topo_boost,
+            "semantic_stdev_boost": semantic_stdev_boost,
             "ks_winner": jnp.array(ks_winner_idx, dtype=jnp.float32),
             # --- Exploration & CA insight metrics ---
             "stdev_mean": stdev_mean,

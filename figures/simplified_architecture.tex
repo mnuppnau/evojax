@@ -1,0 +1,51 @@
+\begin{figure}[t]
+    \centering
+    \resizebox{0.98\columnwidth}{!}{%
+        \begin{tikzpicture}[
+            >=Stealth,
+            font=\sffamily\scriptsize,
+            node distance=0.6cm and 0.9cm,
+            block/.style={
+                rectangle, draw=black!60, rounded corners, thick,
+                minimum height=0.8cm, text width=2.0cm, align=center
+            },
+            arrow/.style={->, thick, draw=black!70}
+        ]
+
+            % Inputs
+            \node[block, fill=blue!10] (context) {Layer / Chunk\\Context};
+            \node[block, fill=blue!10, below=0.45cm of context] (latent) {Split Latent\\$\mathbf{z}_{\mathrm{base}}, \mathbf{c}_{\mathrm{cat}}, \mathbf{c}_{\mathrm{cont}}$};
+
+            % Hypernetwork and generator
+            \node[block, fill=green!10, right=1.0cm of latent] (gen) {Generator\\($\sim$225k params)};
+            \node[block, fill=purple!10, above=0.8cm of gen] (hn) {HyperNetwork\\($\sim$32k params)};
+
+            % Images and discriminator
+            \node[block, fill=gray!20, dashed, text width=1.5cm, right=of gen, yshift=0.45cm] (fake) {Fake\\$\tilde{\mathbf{x}}$};
+            \node[block, fill=gray!20, dashed, text width=1.5cm, below=0.35cm of fake] (real) {Real\\$\mathbf{x}$};
+            \node[block, fill=orange!10, text width=2.2cm, right=of fake, yshift=-0.45cm] (disc) {Shared D/Q\\Backbone + Heads};
+
+            % Optimizer
+            \node[block, fill=yellow!10, above=0.75cm of hn, text width=1.5cm] (pgpe) {PGPE};
+
+            % Forward path
+            \draw[arrow] (context) -- (hn);
+            \draw[arrow] (latent) -- (gen);
+            \draw[arrow, draw=purple!80, dashed] (hn.south) -- node[right] {\tiny generated $\theta_G$} (gen.north);
+            \draw[arrow] (gen) -- (fake);
+            \draw[arrow] (fake) -- (disc);
+            \draw[arrow] (real.east) -- (disc.west |- real.east);
+
+            % Optimization signals
+            \draw[arrow] (pgpe) -- node[right] {\tiny evolves $\theta_{HN}$} (hn);
+            \draw[arrow, draw=red!70, dashed] (disc.north) |- node[above, pos=0.68, text=red!70] {\tiny adv. + MI fitness} (pgpe.east);
+
+            % Backprop note for discriminator
+            \node[below=0.25cm of disc, text=orange!80!black] (bpnote) {\tiny backprop updates $\theta_D$};
+            \draw[arrow, draw=orange!80, dotted] (bpnote.north) -- (disc.south);
+
+        \end{tikzpicture}
+    }
+    \caption{High-level baseline architecture. PGPE evolves a compact HyperNetwork ($\sim$32k parameters) that generates the full Generator parameter set ($\sim$225k parameters), reducing the dimensionality of evolutionary search. Split latent variables condition the Generator directly, while real and generated images are evaluated by a shared Discriminator/Q network trained with backpropagation. Adversarial and mutual-information objectives provide the fitness signal used by PGPE.}
+    \label{fig:architecture}
+\end{figure}

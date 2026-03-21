@@ -863,6 +863,12 @@ class GenPolicy(PolicyNetwork):
             # 1) dark_frac_range: per-code dark pixel fraction range
             # 2) center_edge_range: per-code (center-edge) contrast range
             # 3) edge_dark_frac: dark mass in 2-pixel border ring (artifact proxy)
+            # 4) proto_angle_spread: prototype dark-mass rotation around center
+            # 5) nuc_cell_ratio_range: per-code nucleus/cell area ratio range
+            # 6) nuc_eccentricity_range: per-code nucleus eccentricity range
+            # 7) cell_circularity: whole-cell compactness averaged across codes
+            # 8) cell_area_var: cross-code variation in whole-cell area
+            # 9) nucleus_offset: nucleus centroid offset inside the cell body
             dark_thresh = 0.3  # sigmoid output [0,1]: "dark" = below 0.3
             dark_frac_per_code = jnp.mean((grouped < dark_thresh).astype(jnp.float32), axis=(0, 2, 3, 4))
             dark_frac_range = jnp.max(dark_frac_per_code) - jnp.min(dark_frac_per_code)
@@ -900,6 +906,83 @@ class GenPolicy(PolicyNetwork):
             upper = jnp.triu_indices(n_classes, k=1)
             code_proto_corr = jnp.mean(corr_mat[upper])
 
+            # Estimate whether code separation is dominated by rotating one
+            # dark mass around the center ("clock-face" shortcut).
+            proto_mean = jnp.mean(grouped, axis=0)[..., 0]  # [K, H, W]
+            dark_mass = jnp.maximum(0.0, 0.45 - proto_mean)
+            yy, xx = jnp.meshgrid(
+                jnp.arange(proto_mean.shape[1], dtype=jnp.float32),
+                jnp.arange(proto_mean.shape[2], dtype=jnp.float32),
+                indexing='ij',
+            )
+            mass = jnp.sum(dark_mass, axis=(1, 2))
+            safe_mass = jnp.maximum(mass, 1e-6)
+            cx = jnp.sum(dark_mass * xx[None, :, :], axis=(1, 2)) / safe_mass
+            cy = jnp.sum(dark_mass * yy[None, :, :], axis=(1, 2)) / safe_mass
+            center_xy = jnp.float32((proto_mean.shape[1] - 1) / 2.0)
+            dx = cx - center_xy
+            dy = cy - center_xy
+            radius = jnp.sqrt(dx * dx + dy * dy)
+            angle = jnp.arctan2(dy, dx)
+            angle_diff = jnp.abs(angle[:, None] - angle[None, :])
+            circ_diff = jnp.minimum(angle_diff, 2.0 * jnp.pi - angle_diff) / jnp.pi
+            mean_pairwise_angle = jnp.mean(circ_diff[upper])
+            radius_factor = jnp.clip(jnp.mean(radius) / 2.5, 0.0, 1.0)
+            proto_angle_spread = mean_pairwise_angle * radius_factor
+
+            cell_thresh = 0.82
+            nucleus_thresh = 0.45
+            cell_mask = (proto_mean < cell_thresh).astype(jnp.float32)
+            nucleus_mask = (proto_mean < nucleus_thresh).astype(jnp.float32)
+
+            cell_area = jnp.mean(cell_mask, axis=(1, 2))
+            nucleus_area = jnp.mean(nucleus_mask, axis=(1, 2))
+            nuc_cell_ratio = nucleus_area / jnp.maximum(cell_area, 1e-6)
+            nuc_cell_ratio_range = jnp.max(nuc_cell_ratio) - jnp.min(nuc_cell_ratio)
+            cell_area_var = jnp.var(cell_area)
+
+            cell_mass = jnp.sum(cell_mask, axis=(1, 2))
+            safe_cell_mass = jnp.maximum(cell_mass, 1e-6)
+            cell_cx = jnp.sum(cell_mask * xx[None, :, :], axis=(1, 2)) / safe_cell_mass
+            cell_cy = jnp.sum(cell_mask * yy[None, :, :], axis=(1, 2)) / safe_cell_mass
+
+            up = jnp.pad(cell_mask[:, 1:, :], ((0, 0), (0, 1), (0, 0)))
+            down = jnp.pad(cell_mask[:, :-1, :], ((0, 0), (1, 0), (0, 0)))
+            left = jnp.pad(cell_mask[:, :, 1:], ((0, 0), (0, 0), (0, 1)))
+            right = jnp.pad(cell_mask[:, :, :-1], ((0, 0), (0, 0), (1, 0)))
+            boundary = cell_mask * (
+                ((up + down + left + right) < 3.5).astype(jnp.float32)
+            )
+            perimeter = jnp.sum(boundary, axis=(1, 2))
+            circularity = 4.0 * jnp.pi * cell_mass / jnp.maximum(perimeter * perimeter, 1e-6)
+            cell_circularity = jnp.mean(jnp.clip(circularity, 0.0, 1.0))
+
+            nuc_mass = jnp.sum(nucleus_mask, axis=(1, 2))
+            safe_nuc_mass = jnp.maximum(nuc_mass, 1e-6)
+            nuc_cx = jnp.sum(nucleus_mask * xx[None, :, :], axis=(1, 2)) / safe_nuc_mass
+            nuc_cy = jnp.sum(nucleus_mask * yy[None, :, :], axis=(1, 2)) / safe_nuc_mass
+            cell_equiv_radius = jnp.sqrt(cell_mass / jnp.pi)
+            nucleus_offset_per_code = jnp.sqrt(
+                (nuc_cx - cell_cx) * (nuc_cx - cell_cx)
+                + (nuc_cy - cell_cy) * (nuc_cy - cell_cy)
+            ) / jnp.maximum(cell_equiv_radius, 1e-6)
+            nucleus_offset = jnp.mean(jnp.clip(nucleus_offset_per_code, 0.0, 1.5))
+            x0 = xx[None, :, :] - nuc_cx[:, None, None]
+            y0 = yy[None, :, :] - nuc_cy[:, None, None]
+            cov_xx = jnp.sum(nucleus_mask * x0 * x0, axis=(1, 2)) / safe_nuc_mass
+            cov_yy = jnp.sum(nucleus_mask * y0 * y0, axis=(1, 2)) / safe_nuc_mass
+            cov_xy = jnp.sum(nucleus_mask * x0 * y0, axis=(1, 2)) / safe_nuc_mass
+            cov = jnp.stack([
+                jnp.stack([cov_xx, cov_xy], axis=-1),
+                jnp.stack([cov_xy, cov_yy], axis=-1),
+            ], axis=-2)
+            eigvals = jnp.linalg.eigvalsh(cov)
+            major = jnp.maximum(eigvals[:, 1], 1e-6)
+            minor = jnp.maximum(eigvals[:, 0], 1e-6)
+            nuc_ecc = jnp.sqrt(jnp.clip(1.0 - (minor / major), 0.0, 1.0))
+            nuc_ecc = jnp.where(nuc_mass > 4.0, nuc_ecc, 0.0)
+            nuc_eccentricity_range = jnp.max(nuc_ecc) - jnp.min(nuc_ecc)
+
             return (
                 preds,
                 q_cat,
@@ -911,6 +994,12 @@ class GenPolicy(PolicyNetwork):
                 center_edge_range,
                 edge_dark_frac,
                 code_proto_corr,
+                proto_angle_spread,
+                nuc_cell_ratio_range,
+                nuc_eccentricity_range,
+                cell_circularity,
+                cell_area_var,
+                nucleus_offset,
             )
 
         self._forward_fn_gen = jax.vmap(forward_fn_gen)
@@ -949,6 +1038,12 @@ class GenPolicy(PolicyNetwork):
             center_edge_range,
             edge_dark_frac,
             code_proto_corr,
+            proto_angle_spread,
+            nuc_cell_ratio_range,
+            nuc_eccentricity_range,
+            cell_circularity,
+            cell_area_var,
+            nucleus_offset,
         ) = self._forward_fn_gen(
             params_hn, params_disc, batch_stats_disc, t_states.obs, t_states.noise)
         
@@ -963,6 +1058,12 @@ class GenPolicy(PolicyNetwork):
             center_edge_range,
             edge_dark_frac,
             code_proto_corr,
+            proto_angle_spread,
+            nuc_cell_ratio_range,
+            nuc_eccentricity_range,
+            cell_circularity,
+            cell_area_var,
+            nucleus_offset,
             p_states,
         )
         #return self._forward_fn(params, t_states.obs), p_states

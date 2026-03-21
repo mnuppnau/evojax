@@ -247,7 +247,7 @@ class SimManager(object):
 
         def step_once_gen(carry, input_data, task):
             (task_state, policy_state, params_gen, params_disc, obs_params, t,
-             accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads, valid_mask) = carry
+             accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, proto_angle_spread, nuc_cell_ratio_range, nuc_eccentricity_range, cell_circularity, cell_area_var, nucleus_offset, normative_penalty, safety_ratios, spreads, valid_mask) = carry
             if task.multi_agent_training:
                 num_tasks, num_agents = task_state.obs.shape[:2]
                 task_state = task_state.replace(
@@ -256,7 +256,7 @@ class SimManager(object):
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
             (actions, disc_logits, mean_var_fake, q_flat, q_cont_mu, q_cont_logsigma,
-             morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, policy_state) = policy_net.get_actions(
+             morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, proto_angle_spread, nuc_cell_ratio_range, nuc_eccentricity_range, cell_circularity, cell_area_var, nucleus_offset, policy_state) = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
 
             if task.multi_agent_training:
@@ -280,7 +280,7 @@ class SimManager(object):
             valid_mask = valid_mask * (1 - done.ravel())
 
             return ((task_state, policy_state, params_gen, params_disc, obs_params, t,
-                     accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_pen, safety_ratios, spreads, valid_mask),
+                     accumulated_reward_adv, accumulated_reward_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, proto_angle_spread, nuc_cell_ratio_range, nuc_eccentricity_range, cell_circularity, cell_area_var, nucleus_offset, normative_pen, safety_ratios, spreads, valid_mask),
                     (org_obs, valid_mask))
 
         def rollout_gen(task_states, policy_states, params_gen, params_disc, obs_params, t,
@@ -301,17 +301,23 @@ class SimManager(object):
             morph_center_edge_range = jnp.zeros(pop_n)
             edge_dark_frac = jnp.zeros(pop_n)
             code_proto_corr = jnp.zeros(pop_n)
+            proto_angle_spread = jnp.zeros(pop_n)
+            nuc_cell_ratio_range = jnp.zeros(pop_n)
+            nuc_eccentricity_range = jnp.zeros(pop_n)
+            cell_circularity = jnp.zeros(pop_n)
+            cell_area_var = jnp.zeros(pop_n)
+            nucleus_offset = jnp.zeros(pop_n)
             normative_penalty = jnp.zeros(pop_n)
             safety_ratios = jnp.zeros((pop_n, self._n_codes, self._n_codes))
             spreads = jnp.zeros((pop_n, self._n_codes, 1))
             valid_masks = jnp.ones(params_gen.shape[0])
             ((task_states, policy_states, params_gen, params_disc, obs_params, t,
-              accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads, valid_masks),
+              accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, proto_angle_spread, nuc_cell_ratio_range, nuc_eccentricity_range, cell_circularity, cell_area_var, nucleus_offset, normative_penalty, safety_ratios, spreads, valid_masks),
              (obs_set, obs_mask)) = jax.lax.scan(
                 step_once_gen_fn,
                 (task_states, policy_states, params_gen, params_disc, obs_params, t,
-                 accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads, valid_masks), (), max_steps)
-            return accumulated_rewards_adv, accumulated_rewards_mi, obs_set, obs_mask, task_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads
+                 accumulated_rewards_adv, accumulated_rewards_mi, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, proto_angle_spread, nuc_cell_ratio_range, nuc_eccentricity_range, cell_circularity, cell_area_var, nucleus_offset, normative_penalty, safety_ratios, spreads, valid_masks), (), max_steps)
+            return accumulated_rewards_adv, accumulated_rewards_mi, obs_set, obs_mask, task_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, proto_angle_spread, nuc_cell_ratio_range, nuc_eccentricity_range, cell_circularity, cell_area_var, nucleus_offset, normative_penalty, safety_ratios, spreads
 
         def step_once_valid(carry, input_data, task):
             (task_state, policy_state, params_gen, params_disc, obs_params,
@@ -324,7 +330,7 @@ class SimManager(object):
             normed_obs = self.obs_normalizer.normalize_obs(org_obs, obs_params)
             task_state = task_state.replace(obs=normed_obs)
             (actions, disc_logits, _, q_flat, q_cont_mu, q_cont_logsigma, _dark_range,
-             _center_edge_range, _edge_dark_frac, _code_proto_corr, policy_state) = policy_net.get_actions(
+             _center_edge_range, _edge_dark_frac, _code_proto_corr, _proto_angle_spread, _nuc_cell_ratio_range, _nuc_eccentricity_range, _cell_circularity, _cell_area_var, _nucleus_offset, policy_state) = policy_net.get_actions(
                 task_state, params_gen, params_disc, policy_state)
             fake_imgs = actions
 
@@ -424,7 +430,7 @@ class SimManager(object):
                     #features: jnp.ndarray,
                     # topographic_ks tuple of two arrays
                     topographic_ks: Tuple[jnp.ndarray, jnp.ndarray],
-                    normative_ks: Tuple[jnp.ndarray, jnp.ndarray],
+                    normative_ks: Tuple[jnp.ndarray, ...],
                     #pop_stats: jnp.ndarray,
                     #disc_reset_keys_cat_code: jnp.ndarray,
                     generator: bool,
@@ -498,7 +504,7 @@ class SimManager(object):
                         batch_stats_disc: dict,
                         #features: jnp.ndarray,
                         topographic_ks: Tuple[jnp.ndarray, jnp.ndarray],
-                        normative_ks: Tuple[jnp.ndarray, jnp.ndarray],
+                        normative_ks: Tuple[jnp.ndarray, ...],
                         #batch_stats_q: dict,
                         #pop_stats: jnp.ndarray,
                         #disc_reset_keys_cat_code: jnp.ndarray,
@@ -507,7 +513,7 @@ class SimManager(object):
         
 
         history_centroids, history_velocitys = topographic_ks
-        pop_avg_spread, pop_min_safety = normative_ks
+        pop_avg_spread, pop_min_safety = normative_ks[:2]
 
         history_centroids = jnp.ravel(history_centroids)
         history_velocitys = jnp.ravel(history_velocitys)
@@ -590,7 +596,7 @@ class SimManager(object):
             scores_adv, scores_mi, all_obs, masks, final_states, fake_imgs = rollout_func(
                 task_state, policy_state, params_gen, params_disc, self.obs_params)
         else:
-            scores_adv, scores_mi, all_obs, masks, final_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads = rollout_func(
+            scores_adv, scores_mi, all_obs, masks, final_states, disc_logits, mean_var_fake, sum_per_cat_code, count_per_cat_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, proto_angle_spread, nuc_cell_ratio_range, nuc_eccentricity_range, cell_circularity, cell_area_var, nucleus_offset, normative_penalty, safety_ratios, spreads = rollout_func(
             task_state, policy_state, params_gen, params_disc, self.obs_params, self._i)
 
         if self._num_device > 1:
@@ -643,6 +649,18 @@ class SimManager(object):
                     edge_dark_frac.ravel().reshape((n_repeats, -1)), axis=0)
                 code_proto_corr = jnp.mean(
                     code_proto_corr.ravel().reshape((n_repeats, -1)), axis=0)
+                proto_angle_spread = jnp.mean(
+                    proto_angle_spread.ravel().reshape((n_repeats, -1)), axis=0)
+                nuc_cell_ratio_range = jnp.mean(
+                    nuc_cell_ratio_range.ravel().reshape((n_repeats, -1)), axis=0)
+                nuc_eccentricity_range = jnp.mean(
+                    nuc_eccentricity_range.ravel().reshape((n_repeats, -1)), axis=0)
+                cell_circularity = jnp.mean(
+                    cell_circularity.ravel().reshape((n_repeats, -1)), axis=0)
+                cell_area_var = jnp.mean(
+                    cell_area_var.ravel().reshape((n_repeats, -1)), axis=0)
+                nucleus_offset = jnp.mean(
+                    nucleus_offset.ravel().reshape((n_repeats, -1)), axis=0)
                 normative_penalty = jnp.mean(
                     normative_penalty.ravel().reshape((n_repeats, -1)), axis=0)
                 safety_ratios = jnp.mean(
@@ -680,6 +698,18 @@ class SimManager(object):
                 edge_dark_frac.ravel().reshape((-1, n_repeats)), axis=-1)
             code_proto_corr = jnp.mean(
                 code_proto_corr.ravel().reshape((-1, n_repeats)), axis=-1)
+            proto_angle_spread = jnp.mean(
+                proto_angle_spread.ravel().reshape((-1, n_repeats)), axis=-1)
+            nuc_cell_ratio_range = jnp.mean(
+                nuc_cell_ratio_range.ravel().reshape((-1, n_repeats)), axis=-1)
+            nuc_eccentricity_range = jnp.mean(
+                nuc_eccentricity_range.ravel().reshape((-1, n_repeats)), axis=-1)
+            cell_circularity = jnp.mean(
+                cell_circularity.ravel().reshape((-1, n_repeats)), axis=-1)
+            cell_area_var = jnp.mean(
+                cell_area_var.ravel().reshape((-1, n_repeats)), axis=-1)
+            nucleus_offset = jnp.mean(
+                nucleus_offset.ravel().reshape((-1, n_repeats)), axis=-1)
             normative_penalty = jnp.mean(
                 normative_penalty.ravel().reshape((-1, n_repeats)), axis=-1)
             safety_ratios = jnp.mean(
@@ -724,4 +754,4 @@ class SimManager(object):
             scores4 = None
             avg_per_code = None
         #self._key = new_key
-        return scores1, scores2, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, normative_penalty, safety_ratios, spreads
+        return scores1, scores2, scores4, self._bd_summarize_fn(final_states), batch_stats_disc_updated, mean_var_fake, avg_per_code, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, proto_angle_spread, nuc_cell_ratio_range, nuc_eccentricity_range, cell_circularity, cell_area_var, nucleus_offset, normative_penalty, safety_ratios, spreads

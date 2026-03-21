@@ -1061,6 +1061,8 @@ class Trainer(object):
             'mi_max', 'mi_avg', 'mi_min', 'mi_std',
             'r_cons_avg', 'r_sense_avg', 'r_intra_avg', 'r_shape_div_avg', 'r_shape_div_min_avg',
             'morph_dark_range_avg', 'morph_center_edge_range_avg', 'edge_dark_frac_avg', 'code_proto_corr_avg',
+            'proto_angle_spread_avg', 'nuc_cell_ratio_range_avg', 'nuc_eccentricity_range_avg',
+            'cell_circularity_avg', 'cell_area_var_avg', 'nucleus_offset_avg',
             'norm_pen_avg', 'safety_avg', 'spread_avg',
             'real_fake_loss',
             'ca_blend', 'ca_rfl_gate', 'ca_has_data',
@@ -1075,12 +1077,23 @@ class Trainer(object):
             'adv_short', 'mi_short', 'adv_med', 'mi_med', 'ent_long',
             'sense_short', 'intra_short', 'adv_avg_short', 'sense_med', 'shape_short', 'shape_med',
             'spread_short', 'spread_med',
+            'dark_range_short', 'code_corr_short', 'angle_spread_short',
+            'dark_range_latest', 'code_corr_latest', 'angle_spread_latest',
+            'cell_circularity_latest', 'cell_area_var_latest', 'nucleus_offset_latest',
+            'nuc_ratio_latest', 'nuc_ecc_latest', 'bio_score_latest',
+            'norm_cell_circularity_floor', 'norm_cell_area_var_ceiling',
+            'norm_nucleus_offset_low', 'norm_nucleus_offset_high',
+            'norm_circ_violation', 'norm_area_violation', 'norm_offset_violation',
+            'norm_morph_violation', 'norm_active',
+            'norm_dom_penalty', 'norm_hist_boost', 'norm_sit_boost', 'norm_stdev_scale',
             'shape_div_avg', 'shape_div_min_avg', 'shape_div_score_avg',
             'w_adv', 'w_mi', 'w_div', 'w_sense', 'w_intra', 'w_shape', 'mi_guard', 'w_cons_floor', 'w_norm',
             'w_dark_range', 'w_center_edge_range', 'w_edge_dark_penalty', 'w_code_corr',
             'd_health', 'shape_health', 'objective_health',
             'ks_dom_score', 'ks_sit_score', 'ks_hist_score', 'ks_topo_score',
             'ks_dom_weight', 'ks_sit_weight', 'ks_hist_weight', 'ks_topo_weight',
+            'semantic_trap_score', 'semantic_trap_active',
+            'semantic_dom_penalty', 'semantic_hist_boost', 'semantic_topo_boost', 'semantic_stdev_boost',
             'ks_winner',
             'ks_win_dom', 'ks_win_sit', 'ks_win_hist', 'ks_win_topo',
             # CA gradient & exploration insight
@@ -1215,6 +1228,12 @@ class Trainer(object):
             morph_center_edge_range: np.ndarray,
             edge_dark_frac: np.ndarray,
             code_proto_corr: np.ndarray,
+            proto_angle_spread: np.ndarray,
+            nuc_cell_ratio_range: np.ndarray,
+            nuc_eccentricity_range: np.ndarray,
+            cell_circularity: np.ndarray,
+            cell_area_var: np.ndarray,
+            nucleus_offset: np.ndarray,
             norm_pen: np.ndarray,
             safety_ratios: np.ndarray,
             spreads: np.ndarray,
@@ -1248,6 +1267,12 @@ class Trainer(object):
             self._nan_stat(morph_center_edge_range, 'nanmean'),
             self._nan_stat(edge_dark_frac, 'nanmean'),
             self._nan_stat(code_proto_corr, 'nanmean'),
+            self._nan_stat(proto_angle_spread, 'nanmean'),
+            self._nan_stat(nuc_cell_ratio_range, 'nanmean'),
+            self._nan_stat(nuc_eccentricity_range, 'nanmean'),
+            self._nan_stat(cell_circularity, 'nanmean'),
+            self._nan_stat(cell_area_var, 'nanmean'),
+            self._nan_stat(nucleus_offset, 'nanmean'),
             self._nan_stat(norm_pen, 'nanmean'),
             self._nan_stat(safety_ratios, 'nanmean'),
             self._nan_stat(spreads, 'nanmean'),
@@ -1297,6 +1322,31 @@ class Trainer(object):
             self._to_scalar(diagnostics.get('shape_med')),
             self._to_scalar(diagnostics.get('spread_short')),
             self._to_scalar(diagnostics.get('spread_med')),
+            self._to_scalar(diagnostics.get('dark_range_short')),
+            self._to_scalar(diagnostics.get('code_corr_short')),
+            self._to_scalar(diagnostics.get('angle_spread_short')),
+            self._to_scalar(diagnostics.get('dark_range_latest')),
+            self._to_scalar(diagnostics.get('code_corr_latest')),
+            self._to_scalar(diagnostics.get('angle_spread_latest')),
+            self._to_scalar(diagnostics.get('cell_circularity_latest')),
+            self._to_scalar(diagnostics.get('cell_area_var_latest')),
+            self._to_scalar(diagnostics.get('nucleus_offset_latest')),
+            self._to_scalar(diagnostics.get('nuc_ratio_latest')),
+            self._to_scalar(diagnostics.get('nuc_ecc_latest')),
+            self._to_scalar(diagnostics.get('bio_score_latest')),
+            self._to_scalar(diagnostics.get('norm_cell_circularity_floor')),
+            self._to_scalar(diagnostics.get('norm_cell_area_var_ceiling')),
+            self._to_scalar(diagnostics.get('norm_nucleus_offset_low')),
+            self._to_scalar(diagnostics.get('norm_nucleus_offset_high')),
+            self._to_scalar(diagnostics.get('norm_circ_violation')),
+            self._to_scalar(diagnostics.get('norm_area_violation')),
+            self._to_scalar(diagnostics.get('norm_offset_violation')),
+            self._to_scalar(diagnostics.get('norm_morph_violation')),
+            self._to_scalar(diagnostics.get('norm_active')),
+            self._to_scalar(diagnostics.get('norm_dom_penalty')),
+            self._to_scalar(diagnostics.get('norm_hist_boost')),
+            self._to_scalar(diagnostics.get('norm_sit_boost')),
+            self._to_scalar(diagnostics.get('norm_stdev_scale')),
             self._to_scalar(diagnostics.get('shape_div_avg')),
             self._to_scalar(diagnostics.get('shape_div_min_avg')),
             self._to_scalar(diagnostics.get('shape_div_score_avg')),
@@ -1324,6 +1374,12 @@ class Trainer(object):
             self._to_scalar(diagnostics.get('ks_sit_weight')),
             self._to_scalar(diagnostics.get('ks_hist_weight')),
             self._to_scalar(diagnostics.get('ks_topo_weight')),
+            self._to_scalar(diagnostics.get('semantic_trap_score')),
+            self._to_scalar(diagnostics.get('semantic_trap_active')),
+            self._to_scalar(diagnostics.get('semantic_dom_penalty')),
+            self._to_scalar(diagnostics.get('semantic_hist_boost')),
+            self._to_scalar(diagnostics.get('semantic_topo_boost')),
+            self._to_scalar(diagnostics.get('semantic_stdev_boost')),
             self._to_scalar(diagnostics.get('ks_winner')),
             self._to_scalar(ks_winner_counts[0]),
             self._to_scalar(ks_winner_counts[1]),
@@ -1506,7 +1562,7 @@ class Trainer(object):
                 #jax.debug.print('topographic_ks shape: {} ', topographic_ks.shape)
                 #avg_per_code = topographic_ks[0]
                 
-                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, norm_pen, safety_ratios, spreads = self.sim_mgr_gen.eval_params(
+                scores_gen_adv, scores_gen_mi, disc_logits, bds_gen, _, mean_var_fake, avg_per_code_current, r_cons, r_sense, r_intra, r_shape_div, r_shape_div_min, morph_dark_range, morph_center_edge_range, edge_dark_frac, code_proto_corr, proto_angle_spread, nuc_cell_ratio_range, nuc_eccentricity_range, cell_circularity, cell_area_var, nucleus_offset, norm_pen, safety_ratios, spreads = self.sim_mgr_gen.eval_params(
                 params_gen=params_hn, params_disc=flat_params_disc, batch_stats_disc=flat_batch_stats_disc, topographic_ks=topographic_ks, normative_ks=normative_ks, generator=True, test=False
                 )
 
@@ -1514,7 +1570,7 @@ class Trainer(object):
                 if isinstance(self.solver_hn, QualityDiversityMethod):
                     self.solver_hn.observe_bd(bds_gen)
                 
-                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, r_shape_div=r_shape_div, r_shape_div_min=r_shape_div_min, morph_dark_range=morph_dark_range, morph_center_edge_range=morph_center_edge_range, edge_dark_frac=edge_dark_frac, code_proto_corr=code_proto_corr, normative_penalty=norm_pen, safety_ratios=safety_ratios, spreads=spreads, adv=False)
+                self.solver_hn.tell(fitness_adv=scores_gen_adv, fitness_mi=scores_gen_mi, disc_logits=disc_logits, pop_var=mean_var_fake, avg_per_code=avg_per_code_current, r_cons=r_cons, r_sense=r_sense, r_intra=r_intra, r_shape_div=r_shape_div, r_shape_div_min=r_shape_div_min, morph_dark_range=morph_dark_range, morph_center_edge_range=morph_center_edge_range, edge_dark_frac=edge_dark_frac, code_proto_corr=code_proto_corr, proto_angle_spread=proto_angle_spread, nuc_cell_ratio_range=nuc_cell_ratio_range, nuc_eccentricity_range=nuc_eccentricity_range, cell_circularity=cell_circularity, cell_area_var=cell_area_var, nucleus_offset=nucleus_offset, normative_penalty=norm_pen, safety_ratios=safety_ratios, spreads=spreads, adv=False)
 
                 
                 self.avg_mi_loss = jnp.mean(scores_gen_mi)
@@ -1605,6 +1661,48 @@ class Trainer(object):
                             i, code_proto_corr.size, code_proto_corr.max(), code_proto_corr.mean(),
                             code_proto_corr.min(), code_proto_corr.std()))
 
+                    proto_angle_spread = np.array(proto_angle_spread)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, proto_angle_spread.size, proto_angle_spread.max(), proto_angle_spread.mean(),
+                            proto_angle_spread.min(), proto_angle_spread.std()))
+
+                    nuc_cell_ratio_range = np.array(nuc_cell_ratio_range)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, nuc_cell_ratio_range.size, nuc_cell_ratio_range.max(), nuc_cell_ratio_range.mean(),
+                            nuc_cell_ratio_range.min(), nuc_cell_ratio_range.std()))
+
+                    nuc_eccentricity_range = np.array(nuc_eccentricity_range)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, nuc_eccentricity_range.size, nuc_eccentricity_range.max(), nuc_eccentricity_range.mean(),
+                            nuc_eccentricity_range.min(), nuc_eccentricity_range.std()))
+
+                    cell_circularity = np.array(cell_circularity)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, cell_circularity.size, cell_circularity.max(), cell_circularity.mean(),
+                            cell_circularity.min(), cell_circularity.std()))
+
+                    cell_area_var = np.array(cell_area_var)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, cell_area_var.size, cell_area_var.max(), cell_area_var.mean(),
+                            cell_area_var.min(), cell_area_var.std()))
+
+                    nucleus_offset = np.array(nucleus_offset)
+                    self._logger.info(
+                        'Iter={0}, size={1}, max={2:.4f}, '
+                        'avg={3:.4f}, min={4:.4f}, std={5:.4f}'.format(
+                            i, nucleus_offset.size, nucleus_offset.max(), nucleus_offset.mean(),
+                            nucleus_offset.min(), nucleus_offset.std()))
+
                     norm_pen = np.array(norm_pen)
                     self._logger.info(
                         'Iter={0}, size={1}, max={2:.4f}, '
@@ -1643,6 +1741,12 @@ class Trainer(object):
                         morph_center_edge_range=morph_center_edge_range,
                         edge_dark_frac=edge_dark_frac,
                         code_proto_corr=code_proto_corr,
+                        proto_angle_spread=proto_angle_spread,
+                        nuc_cell_ratio_range=nuc_cell_ratio_range,
+                        nuc_eccentricity_range=nuc_eccentricity_range,
+                        cell_circularity=cell_circularity,
+                        cell_area_var=cell_area_var,
+                        nucleus_offset=nucleus_offset,
                         norm_pen=norm_pen,
                         safety_ratios=safety_ratios,
                         spreads=spreads,

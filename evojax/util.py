@@ -355,10 +355,11 @@ def load_checkpoint(
     solver_hn._opt_state = _to_jax(ckpt['pgpe_opt_state'])
     belief_space = _to_jax(ckpt['belief_space'])
 
-    # Migrate older checkpoints: metric_history (element [6]) may have
-    # fewer buffers than the current code expects (e.g., 9 → 10 after
-    # adding code_spread buffer). Pad with zeros to match current schema.
-    EXPECTED_METRIC_HISTORY_LEN = 10
+    # Migrate older checkpoints: metric_history (element [6]), history_ks
+    # (element [3]), and normative_ks (element [5]) may have fewer buffers
+    # than the current code expects. Pad with sensible defaults to match the
+    # current schema.
+    EXPECTED_METRIC_HISTORY_LEN = 18
     metric_history = belief_space[6]
     if isinstance(metric_history, (tuple, list)) and len(metric_history) < EXPECTED_METRIC_HISTORY_LEN:
         old_len = len(metric_history)
@@ -368,6 +369,32 @@ def load_checkpoint(
         belief_space = belief_space[:6] + (metric_history,)
         if logger:
             logger.info('Migrated metric_history: padded %d -> %d elements', old_len, EXPECTED_METRIC_HISTORY_LEN)
+
+    EXPECTED_HISTORY_KS_LEN = 8
+    history_ks = belief_space[3]
+    if isinstance(history_ks, (tuple, list)) and len(history_ks) < EXPECTED_HISTORY_KS_LEN:
+        old_len = len(history_ks)
+        history_len = history_ks[0].shape[0]
+        padding = tuple(jnp.zeros((history_len,)) for _ in range(EXPECTED_HISTORY_KS_LEN - old_len))
+        history_ks = tuple(history_ks) + padding
+        belief_space = belief_space[:3] + (history_ks,) + belief_space[4:]
+        if logger:
+            logger.info('Migrated history_ks: padded %d -> %d elements', old_len, EXPECTED_HISTORY_KS_LEN)
+
+    EXPECTED_NORMATIVE_KS_LEN = 6
+    normative_ks = belief_space[5]
+    if isinstance(normative_ks, (tuple, list)) and len(normative_ks) < EXPECTED_NORMATIVE_KS_LEN:
+        old_len = len(normative_ks)
+        padding = (
+            jnp.float32(0.55),
+            jnp.float32(0.0040),
+            jnp.float32(0.10),
+            jnp.float32(0.35),
+        )
+        normative_ks = tuple(normative_ks) + padding[:EXPECTED_NORMATIVE_KS_LEN - old_len]
+        belief_space = belief_space[:5] + (normative_ks,) + belief_space[6:]
+        if logger:
+            logger.info('Migrated normative_ks: padded %d -> %d elements', old_len, EXPECTED_NORMATIVE_KS_LEN)
 
     solver_hn.belief_space = belief_space
 
