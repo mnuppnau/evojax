@@ -951,9 +951,31 @@ def sample_latent(key, shape_noise, shape_cat, n_disc: int = 10, n_cont: int = 2
 def sample_batch(key: jnp.ndarray,
                  data: jnp.ndarray,
                  labels: jnp.ndarray,
-                 batch_size: int) -> Tuple:
-    ix = jax.random.choice(
-        key=key, a=data.shape[0], shape=(batch_size,), replace=False)
+                 batch_size: int,
+                 class_indices: list = None) -> Tuple:
+    """Sample a batch of real images, optionally class-balanced.
+
+    Args:
+        class_indices: list of 1-D arrays, one per class, holding row indices
+                       into *data*.  When provided, each class contributes an
+                       equal share of the batch (remainder filled round-robin).
+    """
+    if class_indices is None:
+        ix = jax.random.choice(
+            key=key, a=data.shape[0], shape=(batch_size,), replace=False)
+    else:
+        n_classes = len(class_indices)
+        per_class = batch_size // n_classes
+        remainder = batch_size - per_class * n_classes
+        parts = []
+        for c in range(n_classes):
+            key, subkey = jax.random.split(key)
+            n_pick = per_class + (1 if c < remainder else 0)
+            cls_ix = class_indices[c]
+            chosen = jax.random.choice(
+                subkey, a=cls_ix, shape=(n_pick,), replace=cls_ix.shape[0] < n_pick)
+            parts.append(chosen)
+        ix = jnp.concatenate(parts)
     return (jnp.take(data, indices=ix, axis=0),
             jnp.take(labels, indices=ix, axis=0))
 
@@ -1145,6 +1167,16 @@ class Trainer(object):
                 data_raw = np.expand_dims(data_raw, axis=-1)
             self.data = data_raw / 255.0
             self.labels = np.array(dataset.targets, dtype=np.int32).flatten()
+
+        unique_classes = np.unique(self.labels)
+        self.class_indices = [
+            jnp.asarray(np.where(self.labels == c)[0])
+            for c in range(int(unique_classes.max()) + 1)
+        ]
+        counts = [len(ci) for ci in self.class_indices]
+        self._logger.info(
+            'Class-balanced sampling enabled: %d classes, counts %s',
+            len(self.class_indices), counts)
 
         self._key, subkey = jax.random.split(self._key)
 
@@ -1498,7 +1530,7 @@ class Trainer(object):
                         self._key, subkey_latent, subkey_mnist, subkey_noise, subkey_shift_x, subkey_shift_y = jax.random.split(self._key,6)
 
 
-                        data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size)
+                        data, labels = sample_batch(subkey_mnist, self.data, self.labels, self.mini_batch_size, self.class_indices)
                         #data = np.expand_dims(data / 255.0, axis=-1)
 
                         latent, cat_codes, cont_codes = sample_latent(

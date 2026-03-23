@@ -580,6 +580,30 @@ Current ablation conclusion
   - controller-only generic signals are not enough to break BloodMNIST shortcuts
 - the next meaningful step is `BLD-A04e`, not more generic controller tuning
 
+--------------------------------------------------------------------------------
+Trial BLD-A05 - Class-balanced D-step sampling
+--------------------------------------------------------------------------------
+Status
+- Implemented, ready to run.
+
+Purpose
+- Fix upstream signal quality by giving the discriminator a balanced real distribution.
+- BloodMNIST is imbalanced: class 6 (19.5%) is sampled 2.7x more than class 4 (7.1%).
+- The D-step sampled uniformly from the full dataset, so the discriminator's feature space
+  over-represents common classes and under-represents rare ones.
+- MI and r_sense both depend on D's features, so the imbalance degrades signal quality
+  for all downstream components.
+
+What changes relative to BLD-B00 / A04d
+- `sample_batch()` in trainer.py now accepts per-class index arrays
+- Each D-step batch draws an equal number of images from each class (8 per class for batch=64)
+- No CA changes, no new metrics, no architecture changes
+- Uses the A04d codebase (reverted from A04e/A04f)
+
+Question
+- Does balanced D-step sampling improve disentanglement quality or adversarial health
+  relative to A04d, without any CA changes?
+
 A04a checklist
 - [x] Keep objective fixed
 - [x] Keep Normative KS fixed
@@ -599,3 +623,6 @@ A04a checklist
 - [x] Record A04d result
 - [x] Implement A04e asymmetric-ratchet Normative KS
 - [ ] Run the first A04e ablation
+- [x] Implement A05 class-balanced D-step sampling
+- [ ] Run the first A05 ablation
+- [ ] Record A05 result
