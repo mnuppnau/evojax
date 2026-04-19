@@ -824,8 +824,7 @@ class GenPolicy(PolicyNetwork):
             (fake_data) = self.model_gen.apply({'params': params_g}, latent_input) 
            
             fake_data_with_noise = fake_data + noise
-          
-            
+
             (preds, q_cat, q_cont_mu, q_cont_logsigma, q_flat) = self.model_disc.apply(
                 {'params': params_d, 'batch_stats': vars_d_batch_stats},
                 fake_data_with_noise,

@@ -88,6 +88,9 @@ def parse_args():
         '--static-fitness-weights', action='store_true',
         help='Disable adaptive fitness reweighting and use fixed weights (baseline mode).')
     parser.add_argument(
+        '--hybrid-fitness-weights', action='store_true',
+        help='Keep w_mi static while allowing w_adv, w_intra, w_div, w_sense, w_shape to adapt dynamically.')
+    parser.add_argument(
         '--static-mi-sense-ramp', action='store_true',
         help='With static weights, keep legacy MI base ramp over training.')
     parser.add_argument(
@@ -283,6 +286,7 @@ def main(config):
         ca_blend_rfl_hi=config.ca_blend_rfl_hi,
         shape_div_weight=config.shape_div_weight,
         static_fitness_weights=config.static_fitness_weights,
+        hybrid_fitness_weights=config.hybrid_fitness_weights,
         static_mi_sense_ramp=config.static_mi_sense_ramp,
         static_w_adv=config.static_w_adv,
         static_w_mi=config.static_w_mi,

@@ -257,6 +257,7 @@ class PGPE(NEAlgorithm):
         ca_blend_rfl_hi: float = -1.0,
         shape_div_weight: float = 0.12,
         static_fitness_weights: bool = False,
+        hybrid_fitness_weights: bool = False,
         static_mi_sense_ramp: bool = False,
         static_w_adv: Optional[float] = None,
         static_w_mi: Optional[float] = None,
@@ -346,6 +347,7 @@ class PGPE(NEAlgorithm):
         self._ca_blend_rfl_hi = float(ca_blend_rfl_hi)
         self._shape_div_weight = float(max(shape_div_weight, 0.0))
         self._static_fitness_weights = bool(static_fitness_weights)
+        self._hybrid_fitness_weights = bool(hybrid_fitness_weights)
         self._static_mi_sense_ramp = bool(static_mi_sense_ramp)
         self._static_w_adv = None if static_w_adv is None else float(static_w_adv)
         self._static_w_mi = None if static_w_mi is None else float(static_w_mi)
@@ -923,7 +925,7 @@ class PGPE(NEAlgorithm):
         # CA adaptation: adjust weights based on detected trends.
         # Positive slope = metric improving, Negative = metric declining.
         # Each adjustment is clamped to prevent runaway weight changes.
-        if self._static_fitness_weights:
+        if self._static_fitness_weights and not self._hybrid_fitness_weights:
             # Post-fix baseline mode: fixed weights, no adaptive modulation.
             w_adv = jnp.float32(w_adv_base)
             w_mi = jnp.float32(w_mi_base)
@@ -1002,6 +1004,13 @@ class PGPE(NEAlgorithm):
             mi_guard = jnp.clip((shape_min_target - shape_min_pop) * 3.0, 0.0, 0.12)
             w_mi = jnp.clip(w_mi - mi_guard, 0.05, w_mi_clip_max)
             w_shape = jnp.clip(w_shape + (mi_guard * 0.5), 0.02, 0.20)
+
+            # Hybrid mode: override w_mi back to its static value.
+            # All other weights keep their dynamic adaptations.
+            if self._hybrid_fitness_weights:
+                w_mi = jnp.float32(w_mi_base)
+                mi_distress = jnp.float32(0.0)
+                mi_guard = jnp.float32(0.0)
 
         # Normative: keep low
         w_norm = w_norm_base * ca_weight
@@ -1350,7 +1359,7 @@ class PGPE(NEAlgorithm):
             "d_health": d_health,
             "shape_health": shape_health,
             "objective_health": objective_health,
-            "static_fitness_weights": jnp.float32(1.0 if self._static_fitness_weights else 0.0),
+            "static_fitness_weights": jnp.float32(1.0 if (self._static_fitness_weights and not self._hybrid_fitness_weights) else 0.0),
             "ca_blend": ca_blend,
             "ca_has_data": jnp.float32(has_ca_data),
             "ca_rfl_gate": rfl_gate,

@@ -193,8 +193,9 @@ Purpose:
 - anchor run for all BloodMNIST comparisons
 
 Status:
-- restored / reference baseline
-- rerun at `~165k` matches the original `BLD-B00` behavior closely
+- reference baseline, rerun with class-balanced D-step sampling at `~290k`
+- balanced sampling is a strict improvement: r_sense `0.155` (was `0.140`), r_intra `0.839` (was `0.749`)
+- all future runs include class-balanced sampling as standard
 
 Question:
 - how far can the fixed phased-weight baseline go without CA?
@@ -211,21 +212,17 @@ Configuration change:
 Question:
 - does adaptive weighting improve late morphology separation, or does it mostly improve health / exploration timing?
 
-Result:
+Original result (without balanced sampling):
 - stable, but negative as a disentanglement ablation
-- by `~100k`, the run remained behind the static baseline on morphology separation
-- main behavior:
-  - good adversarial health
-  - clean cells
-  - persistent one-template / size-orientation coding
-- observed controller tendency:
-  - `w_adv` stayed high
-  - `w_mi` stayed too low
-  - `w_div` stayed suppressed
-  - `w_intra` stayed too high
-- conclusion:
-  - dynamic weighting alone acts as a conservative stability controller
-  - it does not adequately prioritize BloodMNIST disentanglement
+- dynamic weighting alone acts as a conservative stability controller
+
+Rerun result (with class-balanced sampling, `~290k`):
+- best image quality of any run: clear cell bodies, distinct cytoplasm/nucleus differentiation
+- best adversarial health: `rfl=0.629` (vs B00's `0.593`)
+- best within-code consistency: `r_intra=0.935` (vs B00's `0.839`)
+- weaker MI/disentanglement: `mi=0.062` (vs B00's `0.089`), `r_sense=0.088` (vs `0.155`)
+- dynamic controller halves w_mi (0.15 vs 0.30) and triples w_intra (0.12 vs 0.04)
+- key insight: trades disentanglement for image quality; static MI + dynamic adv/intra may be optimal
 
 ### BLD-A02 — CA gradient blend only
 Purpose:
@@ -243,17 +240,17 @@ Status:
 - completed
 - negative ablation
 
-Result:
+Original result (without balanced sampling):
 - CA blend alone did not improve BloodMNIST disentanglement over `BLD-B00`
-- typical late-window behavior (`~100k-119k`):
-  - `mi_avg ~ 0.003`
-  - `r_sense_avg ~ 0.114`
-  - `r_intra_avg ~ 0.660`
-  - `real_fake_loss ~ 0.518`
-  - `code_proto_corr_avg ~ 0.612`
-- interpretation:
-  - the lower prototype correlation was misleading because the model still used the orientation / clock-face shortcut
-  - CA blend alone was semantically ineffective even when image quality remained usable
+- CA blend alone was semantically ineffective even when image quality remained usable
+
+Rerun result (with class-balanced sampling, `~290k`):
+- weakest of the three balanced runs
+- MI negative (`-0.034`), rfl D-dominant at `0.478`, stdev never converged (`0.034`)
+- highest cell_circ (`0.505`) but produces biologically incorrect sharp outlines
+- run destabilized after 200k instead of converging
+- CA blend actively hurts adversarial health without compensating MI benefit
+- key observation: real blood cells have subtle cytoplasm gradients, not the hard black outlines CA circularity pressure produces — A01's softer appearance is more biologically accurate
 
 ### BLD-A03 — Full current CA
 Purpose:
@@ -271,24 +268,23 @@ Status:
 - completed
 - negative ablation
 
-Result:
-- full current CA performed worse than `BLD-B00`, `BLD-A01`, and `BLD-A02`
-- typical late-window behavior (`~120k-128k`):
-  - `mi_avg ~ -0.101`
-  - `r_sense_avg ~ 0.069`
-  - `r_intra_avg ~ 0.850`
-  - `real_fake_loss ~ 0.443`
-  - `code_proto_corr_avg ~ 0.632`
-  - `stdev_mean ~ 0.032`
-- observed controller behavior:
-  - `w_adv` remained high (`~0.62`)
-  - `w_mi` remained too low (`~0.27`)
-  - `w_div` stayed suppressed (`~0.12`)
-  - `w_intra` stayed too high (`~0.10`)
-  - `ca_grad_norm` dominated `reinforce_grad_norm`
-- interpretation:
-  - the current CA signal is too strong relative to the semantic usefulness of its inputs
-  - full current CA amplifies the wrong controller priors instead of helping PGPE escape the BloodMNIST shortcut
+Original result (without balanced sampling):
+- full current CA performed worse than all other runs
+- CA signal too strong relative to semantic usefulness of its inputs
+
+Rerun result (with class-balanced sampling, `~290k`):
+- worst MI of all four balanced runs (`-0.078`), trending worse at end
+- rfl at `0.553` — dynamic weights partially compensate CA's adversarial damage (vs A02's `0.478`)
+- r_intra strong (`0.913`) — dynamic weights help consistency regardless of CA
+- stdev never converged (`0.033`) — CA blend prevents PGPE commitment
+- visual: crisp dark shapes but no cytoplasm structure, high cross-code similarity
+- confirms 2x2 matrix conclusion: CA blend is net negative, dynamic weights trade MI for image quality
+
+Complete 2x2 ablation matrix (all with balanced sampling):
+- B00 (static, no CA): best MI (`0.089`), best disentanglement
+- A01 (dynamic, no CA): best image quality, best rfl (`0.629`), best r_intra (`0.935`)
+- A02 (static, CA): weakest rfl (`0.478`), highest circularity but artificial
+- A03 (dynamic, CA): worst MI (`-0.078`), CA gradient fights MI signal
 
 ### BLD-A04 — Morphology-aware CA
 Purpose:
@@ -473,14 +469,21 @@ Failure criterion:
    - slightly healthier than `A04c`
    - but still not competitive with `BLD-B00`
    - learned Normative KS bounds were too permissive
-7. Run `BLD-A04e` next:
-   - same A04d configuration
-   - stricter Normative KS learning via warmup-gated asymmetric ratchet
-   - no new fitness terms
-8. If BloodMNIST CA work continues beyond `A04e`, the next change should be stricter Normative KS priors or elite selection:
-   - tighter elite selection or stronger priors for `cell_circularity` / `nucleus_offset`
-   - possibly per-code norms only after a cleaner global morphology controller exists
-9. Preserve the same CA design principle for future IMDb hard-attention work:
+7. `BLD-A01` rerun completed: best image quality, weaker MI — tradeoff confirmed
+8. `BLD-A02` rerun completed: weakest of three balanced runs, CA blend hurts adversarial health
+9. `BLD-A03` rerun completed: worst MI, confirms CA blend is net negative
+10. 2x2 ablation matrix complete — CA blend hurts in both rows, dynamic weights trade MI for image quality
+11. `BLD-A04-hybrid` completed: best combined MI (0.091) + r_intra (0.914), confirms hybrid design
+    - static w_mi preserves B00-level disentanglement, dynamic w_adv/w_intra gives A01-level consistency
+    - remaining gap: rfl (0.572) below B00 (0.593) — w_adv base too low against higher MI pressure
+12. `BLD-A04-hybrid-v2` completed: w_adv 0.53→0.60 marginal, within noise of A04-hybrid.
+13. `hybrid+low-CA` completed: CA blend at 0.005 still suppresses MI (0.070 vs 0.091) despite hybrid protection. Confirms CA gradient blend conflicts with REINFORCE at any tested dose.
+14. BloodMNIST ablation study complete. Key conclusions:
+    - balanced sampling is a strict improvement (standard for all runs)
+    - CA gradient blend hurts MI at every dose and configuration
+    - hybrid (static MI + dynamic rest) is the best combined configuration
+    - the CA's value is diagnostic: reveals why disentanglement fails and informs transformer architecture
+15. Preserve the same CA design principle for future IMDb hard-attention work:
    - general controller framework
    - task-specific semantic interface
 
