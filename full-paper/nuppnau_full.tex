@@ -1,0 +1,347 @@
+%File: full-paper outline for the Evolutionary HyperNet-InfoGAN CA ablation study
+%Extends the short paper (short-paper/nuppnau.tex) with the full Cultural Algorithms ablation analysis
+%Template: AAAI 2026 to match the short paper
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+\usepackage{aaai2026}  % DO NOT CHANGE THIS
+\usepackage{times}  % DO NOT CHANGE THIS
+\usepackage{helvet}  % DO NOT CHANGE THIS
+\usepackage{courier}  % DO NOT CHANGE THIS
+\usepackage[hyphens]{url}  % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm}  % DO NOT CHANGE THIS
+\usepackage{natbib}  % DO NOT CHANGE THIS
+\usepackage{caption} % DO NOT CHANGE THIS
+\frenchspacing  % DO NOT CHANGE THIS
+\setlength{\pdfpagewidth}{8.5in}  % DO NOT CHANGE THIS
+\setlength{\pdfpageheight}{11in}  % DO NOT CHANGE THIS
+
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{tikz}
+\usetikzlibrary{positioning, shapes.geometric, arrows.meta, fit, backgrounds}
+
+\pdfinfo{
+/TemplateVersion (2026.1)
+}
+
+\setcounter{secnumdepth}{0}
+
+% ======================================================================
+% Title and authors (mirror the short paper)
+% ======================================================================
+\title{Cultural-Algorithm-Guided Evolutionary HyperNet-InfoGAN for Controllable Medical Image Generation: A Diagnostic Ablation Study}
+
+\author{
+    Mark Nuppnau\textsuperscript{\rm 1},
+    Khalid Kattan\textsuperscript{\rm 2},
+    R.G. Reynolds\textsuperscript{\rm 1}\\
+}
+\affiliations{
+    \textsuperscript{\rm 1}Wayne State University \\
+    robert.reynolds@wayne.edu
+
+    \textsuperscript{\rm 2} University of Michigan - Dearborn\\
+    kkattan@umich.edu
+}
+
+\begin{document}
+\renewcommand{\bottomfraction}{0.5}
+\maketitle
+
+% ======================================================================
+% Abstract
+% ======================================================================
+\begin{abstract}
+%OUTLINE: One paragraph. Summarize:
+% - The short-paper result: HyperNet-InfoGAN + PGPE baseline on MNIST and BloodMNIST
+% - The open question it left: can a Cultural Algorithms controller push BloodMNIST beyond geometric shortcuts into biologically meaningful disentanglement?
+% - The contribution of this paper: systematic CA ablation study across two intervention axes (gradient blend, dynamic fitness weighting) plus a dataset-specific morphology-aware controller series
+% - Headline findings: CA gradient blend is net-negative against PGPE's REINFORCE signal at every tested dose; dynamic fitness weighting is a stability controller rather than a disentanglement driver; a hybrid (static $w_{mi}$ + dynamic $w_{adv}/w_{intra}$) is Pareto-dominant; class-balanced D-step sampling is a strict improvement
+% - Reframed value: the CA's role is diagnostic, not corrective, and that framing shapes the architectural proposal for an InfoGAN-style hard-attention transformer where the intervention surface is discrete rather than continuous
+\end{abstract}
+
+% ======================================================================
+% 1. Introduction
+% ======================================================================
+\section{Introduction}
+%OUTLINE:
+% - Anchor paragraph: InfoGAN is attractive for controllable generation but has historically failed to converge on complex distributions with backpropagation; this motivates replacing backprop on the generator with evolutionary search.
+% - Recap the short-paper result in two sentences: HyperNet-InfoGAN + PGPE yields a stable non-backprop InfoGAN baseline on MNIST and BloodMNIST (cite short paper / \cite{b1}).
+% - Name the open problem the short paper exposed: on BloodMNIST, discrete codes separate on geometric shortcuts (size, orientation, nucleus placement) rather than hematologic morphology.
+% - Frame the Cultural Algorithms proposal: a framework-general optimization controller with dataset-specific semantic signals can, in principle, push the search off shortcut attractors.
+% - Preview the contributions:
+%   1. First systematic ablation of a PGPE-evolved HyperNet-InfoGAN with an integrated Cultural Algorithms controller.
+%   2. A 2x2 ablation matrix (static/dynamic fitness weights x CA gradient blend on/off) plus hybrid and low-dose variants.
+%   3. A morphology-aware A04 series instantiating Domain, Normative, Historical, and Topographic KS with biological signals.
+%   4. Evidence that CA gradient blend conflicts with the REINFORCE signal at every dose; the CA's useful contribution is diagnostic rather than corrective.
+%   5. An architectural pivot to InfoGAN-style hard-attention transformers, where the intervention surface (discrete attention masks) matches CA's controller logic.
+
+% TODO: Figure 1 — high-level pipeline diagram (HyperNet + Generator + Discriminator + Q-head + CA belief space feeding logit priors / fitness weights). Reuse TikZ style from short-paper Figure 1 and add a CA block.
+
+% ======================================================================
+% 2. Related Work
+% ======================================================================
+\section{Related Work}
+%OUTLINE:
+% - InfoGAN family \cite{b2}: mutual information disentanglement; known convergence issues for complex distributions.
+% - Non-backprop training of generative models: PGPE \cite{b4}, CMA-ES, OpenAI ES; prior evolutionary generator work \cite{b1}.
+% - HyperNetworks \cite{b6} as indirect encoding and parameter-space compression.
+% - Cultural Algorithms \cite{b5}: belief-space structure, Knowledge Sources, prior applications in constrained optimization and meta-control.
+% - Disentangled representation learning: $\beta$-VAE, FactorVAE, DCI; why these do not address evolutionary training dynamics.
+% - Medical image generation and controllability: BloodMNIST benchmark, auditability requirements.
+% - Hard attention precedents: Xu et al. image captioning; REINFORCE-trained attention; why discrete attention benefits from non-gradient optimizers.
+% (Short section; aim for 0.5 column.)
+
+% ======================================================================
+% 3. Background
+% ======================================================================
+\section{Background}
+
+\subsection{HyperNet-InfoGAN with PGPE}
+%OUTLINE:
+% - Summarize the short-paper setup in one paragraph:
+%   - Latent: $z = [\text{noise}(62), \text{discrete}(8), \text{continuous}(2)]$
+%   - Generator: convolutional, sigmoid output
+%   - Discriminator / Q-head: shared backbone, trained with backpropagation
+%   - HyperNetwork: chunked per-layer weight synthesis, $\sim$32k parameters
+%   - PGPE optimizes HyperNetwork parameters against adversarial + mutual-information fitness
+% - Note the D/G asymmetry: D uses fast backprop; G uses slow evolutionary search.
+
+\subsection{Cultural Algorithms}
+%OUTLINE:
+% - Reynolds' Cultural Algorithms framework: population space + belief space + influence functions.
+% - Knowledge Sources (KS) used in this work:
+%   - Domain KS: learned regularities / shortcut detectors
+%   - Normative KS: soft bounds on acceptable regions
+%   - Historical KS: archive of elite configurations for rescue
+%   - Situational KS: current-run state
+%   - Topographic KS: output-geometry tracking
+% - Explain the design stance used here: framework-general at the optimization layer, dataset-instantiated at the semantic layer.
+
+\subsection{Rank-Normalized Multi-Objective Fitness}
+%OUTLINE:
+% - Define $\mathrm{rank\_normalize}(\cdot)$ and motivate it over z-scoring (standardize).
+% - Composition: $f_{total} = w_{adv} \tilde{f}_{adv} + w_{mi} \tilde{f}_{mi} + w_{div} \tilde{f}_{div} + w_{sense} \tilde{f}_{sense} + w_{intra} \tilde{f}_{intra} + w_{shape} \tilde{f}_{shape}$
+% - Why every component passes through rank normalization: prevents scale domination by any single term and keeps the composite meaningful under PGPE's rank-based update.
+
+% ======================================================================
+% 4. Method
+% ======================================================================
+\section{Method}
+
+\subsection{Integrating Cultural Algorithms into PGPE}
+%OUTLINE:
+% - Two distinct intervention axes:
+%   (a) Fitness-weight modulation: the CA adjusts $w_{adv}, w_{mi}, \dots$ based on adversarial health, MI slope, and KS state.
+%   (b) Gradient blend: the PGPE parameter-update gradient is blended with a KS-derived direction, gated by real/fake loss.
+% - Present the blending formula explicitly:
+%   $\theta \leftarrow \theta + \eta \bigl[(1 - \alpha) \cdot g_{\mathrm{PGPE}} + \alpha \cdot g_{\mathrm{CA}}\bigr]$
+%   with $\alpha$ ramped and gated by adversarial health.
+% - Describe KS update rules at a high level: Normative ratchet, Historical archive scoring, Domain confidence.
+
+\subsection{Fitness Weight Schedules}
+%OUTLINE:
+% - Static schedule (\texttt{--static-fitness-weights}): fixed base weights with linear ramps over a prescribed iteration window. This was the short-paper default.
+% - Dynamic schedule: weights react to running signals (adversarial health via \texttt{real\_fake\_loss}, MI slope, diversity, sense/intra spreads).
+% - Hybrid schedule (\texttt{--hybrid-fitness-weights}): $w_{mi}$ is held static; $w_{adv}, w_{div}, w_{sense}, w_{intra}, w_{shape}$ adapt dynamically. Motivated by an a priori 2x2 result that showed MI pressure benefits from constancy while adversarial balance benefits from reactivity.
+
+\subsection{Morphology-Aware Cultural Algorithm Instantiation}
+%OUTLINE:
+% - The A04 series instantiates the CA with BloodMNIST-specific semantic signals. Each A04 sub-variant adds one layer of semantics:
+%   - A04a: shortcut detection. New metric \texttt{proto\_angle\_spread}; trap fires when MI present + high prototype correlation + high angle spread + low morphology diversity. Rescue action: downweight Domain KS confidence, boost Historical and Topographic KS, apply stdev exploration bump.
+%   - A04b: constructive biology. Adds \texttt{nuc\_cell\_ratio\_range} and \texttt{nuc\_eccentricity\_range}; Historical rescue scoring switches from entropy to biology score.
+%   - A04c: whole-cell integrity. Adds \texttt{cell\_circularity}, \texttt{cell\_area\_var}, \texttt{nucleus\_offset}; Historical rescue favors cell-body compactness and nucleus-inside-cell behavior.
+%   - A04d: Normative soft bounds. Normative KS tracks soft bounds on the A04c signals; bound violations penalize Domain confidence and damp stdev guidance.
+%   - A04e: asymmetric ratchet. Normative KS uses a warmup-gated ratchet that tightens fast on elite improvement and relaxes slowly, with deadbands to avoid quantile-noise-driven updates.
+% - Emphasize the design stance: the A04 series does not change the base fitness terms; it only changes the controller's perception and intervention regions. That keeps the framework-level CA general and the dataset-level instantiation isolable.
+
+\subsection{Class-Balanced Discriminator Sampling}
+%OUTLINE:
+% - BloodMNIST is imbalanced: class 6 (19.5\%) is 2.7$\times$ more common than class 4 (7.1\%).
+% - The D-step originally sampled uniformly over the full dataset, so D features over-represented common classes.
+% - Fix: \texttt{sample\_batch()} draws an equal count from each class per D-step.
+% - Why this matters for InfoGAN: $r_{sense}$, $r_{intra}$, and MI all depend on D feature quality; imbalanced D features cap downstream disentanglement quality.
+
+% TODO: Figure 2 — CA controller block diagram (belief space, KS roles, dual intervention path into fitness weights and gradient direction).
+
+% TODO: Algorithm 1 — one iteration of the CA-extended PGPE loop, showing D-step, G-step (ask/evaluate/tell), and CA update (metric history, KS update, intervention computation).
+
+% ======================================================================
+% 5. Experimental Setup
+% ======================================================================
+\section{Experimental Setup}
+%OUTLINE:
+% - Dataset: grayscale-converted BloodMNIST, 28x28, 8 classes. $[0, 1]$ pixel range, sigmoid generator output.
+% - Architecture: fixed across all runs (SAME-padded D backbone, spatial Q head without GAP, brightness guard before Q, HyperNetwork with hidden widths 48$\to$48, \texttt{code\_seed\_scale}=3.0).
+% - Training regime: pop\_size=512, batch\_size=64, checkpoint every 5k iterations, target 290k iterations.
+% - Compute: two-GPU data-parallel setup (\texttt{--gpu-id='0,1'}), typical wall-clock per run.
+% - Metrics recorded at every checkpoint:
+%   - Disentanglement: $mi_{avg}$, $mi_{max}$, $r_{sense}$, $r_{intra}$, code\_proto\_corr
+%   - Adversarial health: \texttt{real\_fake\_loss} (RFL)
+%   - PGPE state: \texttt{stdev\_mean}
+%   - Morphology: \texttt{cell\_circularity}, \texttt{cell\_area\_var}, \texttt{nucleus\_offset}, \texttt{nuc\_cell\_ratio\_range}, \texttt{nuc\_eccentricity\_range}
+%   - Controller diagnostics: CA blend level, fitness weights (dynamic runs), Normative bounds, semantic-trap activity
+% - Evaluation protocol: fixed checkpoints (20k, 60k, 100k, 150k, 290k) plus late-window averages (240k--290k, 280k--290k).
+
+% ======================================================================
+% 6. Results
+% ======================================================================
+\section{Results: BloodMNIST Ablation Study}
+
+\subsection{Class-Balanced Sampling as a Strict Improvement}
+%OUTLINE:
+% - First finding: class-balanced D-step sampling strictly improves the B00 baseline.
+%   - $r_{sense}$: $0.140 \to 0.155$
+%   - $r_{intra}$: $0.749 \to 0.839$
+%   - RFL: $0.582 \to 0.593$
+%   - MI and code\_proto\_corr within noise.
+% - Class-balanced sampling is therefore adopted as the standard for all subsequent runs. The B00, A01, A02, A03 values reported below are all balanced-sampling reruns.
+
+\subsection{2x2 Matrix: Fitness Weighting $\times$ CA Gradient Blend}
+%OUTLINE:
+% - Describe the 2x2 design:
+%   - Rows: static fitness weights vs. dynamic fitness weights
+%   - Columns: CA gradient blend OFF (\texttt{--ca-blend-coeff=0.0}) vs. ON (0.015)
+% - Report Table~\ref{tab:ablation_2x2}.
+% - Key reads:
+%   - B00 (static, no CA) wins on MI and $r_{sense}$ (disentanglement).
+%   - A01 (dynamic, no CA) wins on RFL and $r_{intra}$ (image quality / within-code consistency).
+%   - A02 (static + CA) produces the weakest RFL (D-dominant at 0.478) and MI goes negative.
+%   - A03 (dynamic + CA) produces the worst MI ($-0.078$); CA and dynamic weights compound MI degradation.
+% - Note the \texttt{stdev\_mean} signature: CA-on runs (A02, A03) never converge ($\sim$0.033), indicating PGPE cannot commit under the blend.
+
+\begin{table*}[t]
+\centering
+\caption{2x2 ablation matrix on BloodMNIST (all runs use class-balanced D-step sampling; metrics averaged over iterations 240k--290k). B00 is the static non-CA baseline; A01 replaces static weights with dynamic; A02 adds CA gradient blend to the static baseline; A03 combines dynamic weights with CA blend. The hybrid variants fix $w_{mi}$ at its static base while letting other weights adapt. Key reads: CA blend hurts MI in both rows; dynamic weights trade MI for RFL; the hybrid recovers both.}
+\label{tab:ablation_2x2}
+\small
+\begin{tabular}{lcccccc}
+\toprule
+Run & $mi_{avg}$ & $r_{sense}$ & $r_{intra}$ & RFL & ProtoCorr & $\overline{\sigma}$ \\
+\midrule
+B00 (static, no CA)       &  0.089 & 0.155 & 0.839 & 0.593 & 0.703 & 0.022 \\
+A01 (dynamic, no CA)      &  0.062 & 0.088 & 0.935 & 0.629 & 0.739 & 0.025 \\
+A02 (static + CA)         & -0.034 & 0.105 & 0.619 & 0.478 & 0.707 & 0.034 \\
+A03 (dynamic + CA)        & -0.078 & 0.067 & 0.913 & 0.553 & 0.748 & 0.033 \\
+\midrule
+A04-hybrid                &  0.091 & 0.148 & 0.894 & 0.571 & 0.729 & 0.021 \\
+A04-hybrid-v2             &  0.084 & 0.136 & 0.911 & 0.607 & 0.746 & 0.022 \\
+hybrid + low-CA (0.005)   &  0.070 & 0.105 & 0.741 & 0.617 & 0.773 & 0.029 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Hybrid Fitness Weighting}
+%OUTLINE:
+% - Motivation: the 2x2 matrix shows MI benefits from constant pressure (B00) while adversarial/intra-code consistency benefit from reactive pressure (A01). Combine the strengths.
+% - Mechanism: hybrid fixes $w_{mi}$ at the static base value (0.30) and lets $w_{adv}, w_{div}, w_{sense}, w_{intra}, w_{shape}$ adapt.
+% - Result: A04-hybrid achieves MI=$0.091$ (matching B00) and $r_{intra}=0.894$ (close to A01's $0.935$), with $r_{sense}=0.148$ (near B00). It is the Pareto-dominant configuration.
+% - Remaining gap: RFL=$0.572$ is below B00's $0.593$; MI pressure and adversarial budget compete. A04-hybrid-v2 (w\_adv base raised 0.53$\to$0.60) recovered RFL to $0.607$ but dropped MI to $0.084$. The tradeoff is a budget constraint, not a tuning problem.
+
+\subsection{CA Gradient Blend Is Net-Negative at Every Tested Dose}
+%OUTLINE:
+% - Three CA-blend doses were tested: 0.005 (\texttt{hybrid+low-CA}), 0.015 (A02, A03), 0.03 (original A03 before reduction).
+% - Even the lowest dose (0.005) with hybrid MI protection drops MI from 0.091 to 0.070.
+% - The PGPE \texttt{stdev\_mean} never converges under CA blend, indicating the controller gradient keeps shifting the local landscape faster than PGPE can commit.
+% - Interpretation: CA blend is a deterministic prior on a continuous parameter update; PGPE's REINFORCE signal for MI is a weak stochastic gradient; the two do not add constructively.
+
+\subsection{Morphology-Aware A04 Series}
+%OUTLINE: (These runs predate class-balanced sampling; they are retained for their diagnostic value on the CA instantiation.)
+% - A04a (shortcut detection alone): trap detector fires correctly; orientation pressure reduced; run drifts toward smoother shared-template cells. Conclusion: detection without constructive targets is not enough.
+% - A04b (constructive biology): nucleus metrics improve; whole-cell integrity regresses.
+% - A04c (whole-cell integrity signals): partial positive; nuclei visibly more distinct; semantic trap effectively suppressed; prototype correlation below B00; but MI weak and RFL lags B00.
+% - A04d (Normative soft bounds): controller stabilizes slightly over A04c; learned bounds are too permissive and ratify the mediocre elite pool.
+% - A04e (asymmetric-ratchet Normative KS): implemented; first run pending; intended to force the bounds upward when elite morphology improves while relaxing slowly.
+
+\subsection{Qualitative Reads and Visual Evidence}
+%OUTLINE:
+% - B00: clean circular cells; partial disentanglement via size/orientation.
+% - A01: best image quality; distinct cytoplasm/nucleus contrast; weaker code separation.
+% - A02: sharp, biologically-incorrect outlines from Normative circularity pressure; late destabilization.
+% - A03: crisp dark blobs with diverse nucleus shapes but no cytoplasm structure; high cross-code similarity.
+% - A04-hybrid: natural cell morphology without hard borders; consistent cell sizing; matches B00 MI with near-A01 consistency.
+
+% TODO: Figure 3 — 4-column grid of representative generations at iteration 290k for B00, A01, A02, A03. Include one column per discrete code.
+% TODO: Figure 4 — A04-hybrid vs B00 side-by-side at 290k with matching latent draws.
+% TODO: Figure 5 — A04 morphology-series progression (A04a, A04b, A04c, A04d) showing the cost/benefit of each added signal.
+% TODO: Figure 6 — CA controller trace: Normative bounds, semantic-trap activity, dynamic weights, RFL over training.
+
+% ======================================================================
+% 7. Discussion
+% ======================================================================
+\section{Discussion}
+
+\subsection{Dynamic Fitness Weighting as a Stability Controller}
+%OUTLINE:
+% - The dynamic controller halves $w_{mi}$ ($\sim$0.15) and triples $w_{intra}$ ($\sim$0.12) relative to B00. The resulting behavior optimizes for adversarial health and within-code consistency, not for code separation.
+% - This explains why A01 has the best image quality and worst MI: the controller's reactive logic treats MI pressure as destabilizing and suppresses it.
+% - The hybrid design is the operational response: hold MI constant so disentanglement pressure is not suppressible; let the rest of the objective react to local training health.
+
+\subsection{CA Gradient Blend vs. REINFORCE}
+%OUTLINE:
+% - PGPE's MI gradient is a weak REINFORCE signal estimated from population statistics; it is both low-magnitude and high-variance.
+% - The CA gradient is a deterministic prior derived from KS state; it points toward controller-preferred regions, not toward MI gain.
+% - Blending biases the parameter update away from MI direction; as a fraction of the total update, even a small $\alpha$ overwrites the MI signal in expectation.
+% - The \texttt{stdev\_mean} non-convergence under CA is the diagnostic: PGPE cannot commit because the blended target keeps moving.
+% - This is a fundamental intervention-surface mismatch: continuous pixel-space gradients do not admit a discrete controller prior without collapsing the search.
+
+\subsection{CA's Value Is Diagnostic}
+%OUTLINE:
+% - The CA framework's mechanics worked as designed:
+%   - Semantic trap detectors fired on real shortcuts.
+%   - Normative ratchets, Historical archives, and KS updates produced sensible belief-space state.
+%   - Rescue actions selected reasonable history states.
+% - What failed is intervention, not perception. The CA reliably \emph{identified} the BloodMNIST failure modes (geometric shortcuts, premature template hardening, nucleus-ignorance). It could not \emph{correct} them through a continuous-pixel intervention surface.
+% - This reframes the CA as a diagnostic instrument: its most useful contribution for this paper is the empirical characterization of why HyperNet-InfoGAN disentanglement plateaus on BloodMNIST.
+
+% ======================================================================
+% 8. From Medical Images to Transformer Hard Attention
+% ======================================================================
+\section{From Continuous Pixels to Discrete Attention}
+%OUTLINE:
+% - State the architectural lesson: CA controller logic is discrete and categorical; continuous pixel gradients are not a natural intervention surface. Discrete hard-attention masks are.
+% - Propose the next architecture: encoder-only transformer backbone (e.g., DistilBERT, frozen) feeding a HyperNet-driven attention-mask generator; classifier head replaces the image Discriminator.
+% - Latent structure retained: $z = [\text{noise}, \text{discrete}, \text{continuous}]$; masks are Bernoulli samples from attention logits parameterized by HyperNet(z).
+% - CA re-instantiation for IMDb:
+%   - Domain KS: punctuation/position/frequency shortcut detectors.
+%   - Normative KS: soft bounds on sparsity, span continuity, POS-distribution diversity.
+%   - Historical KS: archive of pre-collapse attention policies.
+%   - Topographic KS: attention geometry (coverage, entropy, span lengths).
+% - Crucial change: CA intervention becomes additive logit priors on the attention sampler, not gradient blending on HyperNet weights. This matches the BloodMNIST finding that CA's strength is categorical and its failure mode is gradient-fighting.
+% - Note transferable findings independent of dataset: hybrid weighting, class-balanced sampling, rank-normalized fitness composition.
+
+% TODO: Figure 7 — comparative intervention-surface diagram: continuous pixel gradient (BloodMNIST) vs. discrete attention logit prior (IMDb).
+
+% ======================================================================
+% 9. Limitations and Future Work
+% ======================================================================
+\section{Limitations and Future Work}
+%OUTLINE:
+% - Single dataset at single resolution (BloodMNIST 28x28). Scaling to higher-resolution medical imagery is unexplored.
+% - Pop\_size=512 is modest; the gradient-blend / REINFORCE interaction may differ at larger populations.
+% - The A04e run is implemented but pending execution; its outcome will refine the Normative KS design.
+% - Principal next work: the IMDb hard-attention transformer. Goal: validate that the CA intervention surface mismatch thesis holds and that discrete attention masks admit constructive CA guidance.
+% - Longer-term: extend to multi-aspect attention tasks (HotpotQA, rationale extraction) where disentangled codes can correspond to distinct reasoning axes.
+
+% ======================================================================
+% 10. Conclusion
+% ======================================================================
+\section{Conclusion}
+%OUTLINE:
+% - Restate the core empirical result: across a 2x2 ablation matrix, a morphology-aware controller series, and hybrid variants, the CA gradient blend is net-negative and dynamic fitness weighting trades disentanglement for image quality; a hybrid (static $w_{mi}$ + dynamic rest) is Pareto-dominant.
+% - The CA's intervention surface is mismatched to continuous pixel gradients; its contribution in this regime is diagnostic.
+% - The architectural implication is the InfoGAN-style hard-attention transformer, where discrete masks give the CA a native intervention surface.
+% - The paper's contribution is therefore two-fold: a rigorous empirical characterization of what the current CA integration does and does not do on BloodMNIST, and a principled architectural proposal motivated by that characterization.
+
+% ======================================================================
+% Bibliography (reuse the short-paper .bib; new entries will be added for CA, hard attention, disentanglement measures)
+% ======================================================================
+\bibliography{aaai2026}
+
+\end{document}
