@@ -52,6 +52,11 @@ setup(
     ],
     extras_require={
         "extra": ['evosax', 'torchvision', 'pandas', 'procgen', 'brax'],
+        "nlp": [
+            "transformers>=4.40,<5.0",
+            "datasets>=2.16,<4.0",
+            "tokenizers>=0.15,<1.0",
+        ],
     },
     dependency_links=[JAX_URL],
     python_requires=">=3.8",

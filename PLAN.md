@@ -165,6 +165,8 @@ For BloodMNIST specifically:
 
 ## 4.2 Future Transfer To IMDb Hard-Attention
 
+> **Status update (2026-05-31):** This transfer is no longer hypothetical. Work is in progress on a parallel branch (`claude/evolve-infogan-hypernetworks-s3r6d-67132f2-imdb-baseline`). **Phases 1–8 are complete; the IMDB-B00 baseline ran for 290k iterations on 2026-05-23 (~17h, stable end-to-end).** Late-window metrics: `f_adv = 0.588` (chance 0.5; Phase-3.5 ceiling 0.83), `f_mi = -1.873` (chance −2.079; ~0.30 bits captured of a possible 3 bits). The documented IMDB-B00 failure mode is a **density-tier shortcut**: the 8 discrete codes collapsed into 3 stable per-code density tiers by iter ~20k and held that structure for the remaining 270k iters. The Q-head recovers tier identity rather than aspect-level semantic content — the direct IMDb analog of BLD-B00's "size/orientation shortcut," and exactly the structural starting point that motivated the BloodMNIST ablation ladder. Phase 9 (analysis) is in progress; Phase 10 ablations (IMDB-A04-hybrid first, then A01/A02/A03/A05 series) are defined in `IMDB_ABLATION_TRIAL_LOG.txt`. See `IMDB_PLAN.md` for the detailed task tracker and `IMDB_ABLATION_TRIAL_LOG.txt` for the IMDB-B00 entry.
+
 The same CA principle should transfer to a future HyperNetwork / PGPE hard-attention system for IMDb, but again only at the framework level.
 
 What should transfer unchanged:
@@ -486,6 +488,7 @@ Failure criterion:
 15. Preserve the same CA design principle for future IMDb hard-attention work:
    - general controller framework
    - task-specific semantic interface
+16. IMDb hard-attention implementation started on a parallel branch. Phases 1–8 complete as of 2026-05-23. IMDB-B00 baseline ran 290k iters in ~17h; late-window `f_adv=0.588`, `f_mi=-1.873`. Documented failure mode is a **density-tier shortcut**: the 8 codes collapsed into 3 stable density clusters by iter ~20k and held throughout. Direct IMDb analog of BLD-B00's geometric shortcut. Phase 9 (analysis) in progress; Phase 10 ablation ladder defined — IMDB-A04-hybrid is the first ablation, parallel to BLD-A04-hybrid being the BloodMNIST winner. See `IMDB_PLAN.md` and `IMDB_ABLATION_TRIAL_LOG.txt` on the IMDb branch.
 
 ## 8. Working Discipline
 

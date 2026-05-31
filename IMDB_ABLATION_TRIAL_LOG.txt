@@ -1,0 +1,329 @@
+IMDb Hyper-InfoGAN Hard-Attention
+Ablation Trial Log
+Last updated: 2026-05-31
+
+Purpose
+- Track IMDb baseline characterization and the planned ablation ladder.
+- Document the per-run failure modes that motivate subsequent ablations.
+- Keep this file aligned with `IMDB_PLAN.md`.
+
+Current branch
+- `claude/evolve-infogan-hypernetworks-s3r6d-67132f2-imdb-baseline`
+
+Locked architecture for this IMDb phase
+- Dataset: IMDb (25k train / 25k test), perfectly 12500/12500 balanced.
+- Tokenization: `DistilBertTokenizerFast`, `seq_len = 256`, on-disk `.npz` cache.
+- Encoder: `FlaxDistilBertModel('distilbert-base-uncased')`, 6 layers, 768-dim,
+  12 heads, vocab 30522. FROZEN. Output passes through `jax.lax.stop_gradient`
+  so the encoder is unreachable by backprop by construction.
+- Latent: `z = [noise(62), discrete(8), continuous(2)]`.
+  - Actual latent fed into the IMDb task is `[noise, cat_one_hot]` (dim 70);
+    continuous codes are configured but NOT yet wired into the task or the
+    MaskGen forward path. Documented in `IMDB_PLAN.md` Phase 6 review.
+- HyperNetwork: chunk-embed + 2-layer 48-wide MLP, mirrors `convnet.py` HN.
+  PGPE-evolved. ~30k params (search space).
+- AttentionMaskGenerator: per-token 2-layer MLP, `score_hidden=64`.
+  `__call__(hidden_states, z)` — `z` is broadcast across positions and
+  concatenated before the first Dense (Phase 6 z-conditioning fix).
+  Target params ~49.8k, emitted by the HyperNet.
+- Classifier head: 2-layer MLP, hidden=128, n_classes=2. Trained via backprop.
+- Q-head: 2-layer MLP, hidden=128, n_codes=8. Trained via backprop.
+- Mask sampling: hard Bernoulli, no straight-through. CLS fallback
+  (force-attend position 0) when sampling produces an all-zero mask.
+- Pooling: `mean_pool_masked` over attended tokens, length-normalized.
+- Class-balanced D-step sampling is standard from day one (50/50 pos/neg via
+  pre-built `class_indices`).
+
+Solver
+- `PGPE_CA_Text` (fork of BloodMNIST `pgpe_ca.py`), Adam optimizer.
+- Fitness composition (rank_normalized for scale parity):
+    w_adv = 0.53,  w_mi  = 0.30,  w_div = 0.16, w_sense = 0.14, w_intra = 0.05
+    w_sparsity_band = 0.25 (peaked at [0.05, 0.20])
+    w_span_continuity = 0.10
+    w_disjoint = 0.04 (uses `code_disjointness = 1 - per_code_attention_overlap`)
+- Re-tuning history:
+    Initial weights (2026-05-16): w_sparsity_band=0.10, w_span_continuity=0.06,
+    w_disjoint=0.10. 200-iter smoke showed sparsity collapse to ~0.014 with
+    `disjoint` rising to 0.83 — the trivial "each code picks one different
+    token" solution. Re-tuned 2026-05-17 to the current values; 3k-iter
+    re-smoke confirmed sparsity holds in band.
+- CA OFF for baseline (`ca_blend_coeff = 0.0`).
+
+What the current CA framework is expected to help with (when re-enabled)
+- detect punctuation / position / stopword shortcuts on attention masks
+- preserve pre-collapse mask policies via Historical KS
+- nudge attention logit priors via the future logit-prior CA intervention
+  surface (NOT gradient blending — see Phase 5 design)
+
+What the baseline IS NOT expected to solve alone
+- semantic aspect disentanglement (plot vs acting vs pacing).
+- breaking out of the density-tier shortcut (see IMDB-B00 finding below).
+- competing with soft-attention baselines on raw classifier accuracy.
+
+CA design stance carried over from the BloodMNIST study
+- Framework-general at the optimization layer.
+- Dataset-instantiated at the semantic interface.
+- Intervention surface for IMDb is logit priors on the attention sampler,
+  NOT gradient blending. (BloodMNIST proved gradient blend fights REINFORCE
+  at every dose; discrete attention masks give the CA a native discrete
+  intervention point.)
+
+Current shortcut concern to monitor on IMDb
+- A likely failure mode is "density-tier disentanglement": codes differ by
+  HOW MANY tokens they attend to rather than WHICH tokens. The MaskGen can
+  satisfy the disjointness reward by making code k consistently sparser or
+  denser than code j, without ever learning aspect-aware token selection.
+  `code_disjointness` rises, `f_mi` improves modestly, but the recovered
+  information is "which density tier was this mask drawn from?" not
+  "which aspect of the review did this mask focus on?".
+
+Working KS interpretation for IMDb (pre-instantiation, deferred to later
+ablations)
+- Domain KS: shortcut detectors for punctuation-only, position-bias,
+  stopword-fraction, and DENSITY-TIER masks.
+- Normative KS: soft acceptable ranges for sparsity, span continuity, POS
+  distribution diversity, per-code density variance.
+- Historical KS: archive of pre-collapse attention policies, with rescue
+  scored by the attention-quality `best_bio_score`.
+- Topographic KS: attention geometry (coverage, span profile, position
+  histogram), informational only.
+
+--------------------------------------------------------------------------------
+Trial IMDB-B00 - Locked non-CA IMDb baseline
+--------------------------------------------------------------------------------
+Status
+- Completed 2026-05-23, 290000 iterations, ~17h wall-clock on single GPU.
+- Reference baseline for all IMDb ablations.
+
+Command
+```bash
+python examples/train_imdb.py \
+  --gpu-id=0 \
+  --render-interval=20000 \
+  --render-n-reviews=8 \
+  2>&1 | tee log/imdb/imdb_b00.log
+```
+All other flags use IMDB-B00 defaults: pop_size=512, batch_size=64,
+seq_len=256, max_iter=290000, ca_blend_coeff=0.0, static_fitness_weights=True,
+checkpoint_interval=5000.
+
+Late-window metrics (iter 289900)
+- `f_adv         = 0.5881`   (classifier accuracy on masked pool;
+                              chance 0.5; Phase-3.5 capacity ceiling 0.8317)
+- `f_mi          = -1.873`   (Q-head negative cross-entropy; chance -log(8) = -2.079)
+- `sparsity      = 0.038`    (target band [0.05, 0.20] — just below the band)
+- `span          = 1.88`     (coherent runs ~2 tokens)
+- `disjoint      = 0.783`    (codes pick disjoint subsets — but see density-tier note)
+- `pos_ent       = 0.942`    (attention spread across positions, no position shortcut)
+- `pos_neg       = 0.521`    (mask differs between pos/neg sentiment, no label leakage)
+- `cls_loss      = 0.130`    (down from 0.69 at init — classifier learned the mapping)
+- `q_loss        = 0.380`    (down from 2.08 at init — Q-head learned mask -> code)
+- `stdev_mean    = 0.0271`   (smooth controlled decay from 0.032 init; healthy)
+- `ca_blend      = 0.0000`   (CA dormant, as configured)
+
+Trajectory at 50k strides
+```
+iter      f_adv   f_mi    sparsity  span  disjoint  cls_loss  q_loss
+ 10000    0.627   -1.844  0.037     1.79  0.807     0.300     0.265
+ 50000    0.546   -1.832  0.039     1.82  0.806     0.336     0.184
+100000    0.597   -1.861  0.035     1.85  0.810     0.341     0.276
+150000    0.598   -1.858  0.039     1.93  0.799     0.236     0.328
+200000    0.639   -1.845  0.043     2.35  0.784     0.281     0.327
+250000    0.608   -1.843  0.043     2.03  0.783     0.193     0.381
+290000    0.588   -1.873  0.038     1.88  0.783     0.130     0.380
+```
+Reading the table: **everything stabilized by ~10k iters**. The remaining
+280k iterations were the model holding its plateau, not progressing. f_adv,
+f_mi, sparsity, span, disjoint all oscillate around stable means for the
+entire 280k-iter tail.
+
+Per-code density trajectory (from 17 render snapshots, iter 20k -> 290k)
+```
+             c0     c1     c2     c3     c4     c5     c6     c7
+iter 20000:  0.072  0.069  0.041  0.016  0.023  0.048  0.036  0.018
+iter 100000: 0.061  0.068  0.042  0.014  0.013  0.048  0.037  0.015
+iter 200000: 0.078  0.082  0.042  0.015  0.014  0.048  0.040  0.021
+iter 290000: 0.079  0.093  0.041  0.016  0.013  0.044  0.040  0.016
+```
+Differences between iter-20k and iter-290k are within sampling noise. The
+density-tier structure diagnosed in the 3k smoke became the long-run attractor:
+- Dense tier  (c0, c1):       density ~0.07-0.09
+- Mid tier    (c2, c5, c6):   density ~0.04
+- Sparse tier (c3, c4, c7):   density ~0.015
+
+Information-theoretic read
+- Modest disentanglement gain: f_mi improvement of 0.21 nats above chance
+  (-1.873 - (-2.079) = 0.206), about 0.30 bits. With K=8 codes the maximum
+  possible MI is log(8) = 2.08 nats = 3 bits. Q-head recovers ~10% of the
+  available code-level information.
+- With 3 stable density tiers, the achievable MI for tier-identity alone is
+  log2(3) = 1.58 bits. We're capturing about 0.30 / 1.58 = 19% of the
+  tier-identity signal, suggesting Q can roughly separate tiers but not
+  resolve codes within a tier.
+
+Interpretation
+- The architecture works end-to-end (no NaN, no divergence, JIT stable at
+  0.21s/iter for 290k iters).
+- Classifier learned the mapping from masked-pool to sentiment
+  (cls_loss 0.69 -> 0.13).
+- Q-head learned to recover code identity from mask (q_loss 2.08 -> 0.38,
+  a 5x drop).
+- The recovered code information is DENSITY-TIER, NOT aspect-level. The
+  HyperNet found the easy disentanglement axis (per-code count of attended
+  tokens) and locked in by iter ~20k.
+- f_adv plateau of ~0.60 is well above chance (0.5) but well below the
+  Phase-3.5 capacity-check ceiling (0.83) measured by training the same
+  classifier head on dense rule-based masks. The 23-point accuracy gap is
+  the cost of running the policy at ~3-5% sparsity instead of the [5-20%]
+  band the band reward was meant to enforce — sparsity stabilized at the
+  LOW edge (0.04 vs band low 0.05).
+- pos_neg_attention_overlap stayed near 0.5, confirming no sentiment-label
+  leakage into the mask pattern (codes do not split into "pos-mask" vs
+  "neg-mask" groupings).
+
+Use
+- IMDB-B00 is the reference baseline for all subsequent IMDb ablations.
+- All future runs should include class-balanced sampling (already standard).
+- All future runs should use the re-tuned attention-fitness weights as the
+  shared starting point, modifying only what the specific ablation tests.
+
+Archive checkpoints to compare
+- iter 20000 (first crystallized snapshot)
+- iter 100000
+- iter 200000
+- iter 290000 (final)
+- HTML renders for these 4 iters live in
+  `log/imdb/checkpoints/render_iter-*.html`.
+
+Documented failure mode (the IMDb analog of BLD-B00's "size/orientation
+shortcut")
+- "Density-tier disentanglement": the HyperNet maps the 8 discrete codes
+  into 3 stable density clusters and lets Q recover tier identity by
+  counting attended tokens. No genuine aspect-level (plot/acting/pacing)
+  semantic separation emerges.
+- This failure mode is the structural motivation for the planned IMDB
+  ablation ladder, exactly parallel to how BLD-B00's geometric shortcut
+  motivated the BloodMNIST ladder.
+
+--------------------------------------------------------------------------------
+Planned IMDb ablation ladder (post IMDB-B00)
+--------------------------------------------------------------------------------
+
+The same one-controller-layer-at-a-time discipline the BloodMNIST study
+followed. Each run keeps the IMDB-B00 architecture fixed and the same
+class-balanced sampling; only the named controller layer changes.
+
+IMDB-A01 - Dynamic fitness weighting only
+- Purpose: isolate adaptive fitness reweighting from any CA gradient/logit
+  intervention.
+- Change vs IMDB-B00:
+  - Remove `--static-fitness-weights` (opt into adaptive reweighting)
+  - Keep `--ca-blend-coeff=0.0`
+- Question: does dynamic adv/mi/div/sense/intra reweighting break out of
+  the density-tier shortcut, or does it just stabilize whatever attractor
+  the HyperNet finds first?
+- BloodMNIST analog: BLD-A01 (was a stability controller, not a
+  disentanglement driver; expect similar profile here).
+
+IMDB-A02 - CA logit prior only (NOT gradient blend)
+- Purpose: validate the architectural lesson from the BloodMNIST CA study —
+  that the CA's intervention surface for IMDb is logit priors on the
+  attention sampler, not gradient blending on HyperNet weights.
+- Change vs IMDB-B00:
+  - Keep static fitness weights
+  - Enable CA logit prior at a low coefficient (analog of low-dose blend)
+- Required code work:
+  - Add a logit-prior intervention hook in the policy / sampler
+  - Wire `belief_space.get_logit_prior(...)` into `mask_logits`
+- Question: does Domain KS detecting "this code is just a density tier"
+  trigger a useful per-token logit nudge?
+- BloodMNIST analog: there is none — BloodMNIST's CA used gradient blend
+  exclusively and the IMDb paper makes the case that logit prior is the
+  natural intervention for discrete masks.
+
+IMDB-A03 - Dynamic weighting + CA logit prior (full controller)
+- Purpose: combined controller, parallel to BLD-A03.
+- Change vs IMDB-B00:
+  - Remove `--static-fitness-weights`
+  - Enable CA logit prior at the IMDB-A02 coefficient
+- Question: does the combination outperform either component alone, or just
+  add variance? (BloodMNIST equivalent was a negative ablation.)
+
+IMDB-A04-hybrid - Static w_mi + dynamic remainder
+- Purpose: directly test whether the BloodMNIST hybrid winner transfers.
+- Change vs IMDB-B00:
+  - `--hybrid-fitness-weights`: w_mi pinned to its static base, w_adv /
+    w_div / w_sense / w_intra adapt dynamically.
+  - Keep CA off.
+- Question: was the hybrid's edge on BloodMNIST a general InfoGAN finding
+  or a BloodMNIST-specific one?
+- BloodMNIST analog: BLD-A04-hybrid was the Pareto-dominant configuration.
+  Highest-leverage single experiment.
+
+IMDB-A05 series - Shortcut-aware CA (analog of BLD-A04a-e)
+- Once IMDB-A02 establishes the logit-prior intervention surface, instantiate
+  the CA Domain KS with IMDb-specific shortcut detectors:
+  - A05a: punctuation-fraction shortcut detector
+  - A05b: position-bias shortcut detector
+  - A05c: stopword-fraction shortcut detector
+  - A05d: DENSITY-TIER shortcut detector (the IMDB-B00 failure mode)
+  - A05e: Normative KS soft bounds on per-code density variance
+- Order is "shortcut detection first, then constructive bounds" mirroring
+  the BloodMNIST A04 series.
+
+--------------------------------------------------------------------------------
+Evaluation protocol for all IMDb ablations
+--------------------------------------------------------------------------------
+Compare each run at:
+- iter 20000   (first stable snapshot)
+- iter 100000
+- iter 200000
+- iter 290000  (final)
+
+Record side-by-side:
+- f_adv
+- f_mi
+- sparsity_density (mean)
+- span_continuity (mean)
+- code_disjointness (mean)
+- position_entropy (mean)
+- pos_neg_attention_overlap (mean)
+- cls_loss (current)
+- q_loss (current)
+- stdev_mean
+- per-code density (from render snapshot)
+
+Visual checklist (from HTML render at the matched checkpoints)
+- Are codes within a density tier picking the same tokens, or just the same
+  COUNT of tokens?
+- Are dense-tier codes (analog of IMDB-B00's c0, c1) picking content words,
+  stopwords, or punctuation?
+- Are sparse-tier codes (analog of IMDB-B00's c3, c4, c7) collapsed to a
+  single anchor token (e.g. [CLS])?
+- Does any code show a per-review consistent "aspect" pattern? (acting words
+  in some reviews, plot words in others, etc.)
+
+Success criteria
+- IMDB-A04-hybrid breaks the density-tier shortcut: per-code densities
+  cluster more tightly (no 3-tier separation), f_mi rises noticeably above
+  IMDB-B00, AND visual inspection shows codes picking different token
+  TYPES rather than different token COUNTS.
+- f_adv approaches the Phase 3.5 capacity-check ceiling (0.83).
+
+Failure criteria
+- The trajectory plateau by iter 10-20k (same as IMDB-B00) with no
+  density-tier dissolution, OR
+- Sparsity collapse (sparsity < 0.02 with span collapsing toward 1.0).
+
+--------------------------------------------------------------------------------
+Current ablation conclusion
+--------------------------------------------------------------------------------
+- IMDB-B00 is the restored IMDb reference baseline.
+- The density-tier shortcut is the documented baseline failure mode.
+- The Phase-3.5 capacity check confirmed the mask space CAN carry
+  aspect-level signal (92-98% accuracy preservation under rule-based aspect
+  masks); the baseline's failure to find that signal is a SEARCH problem
+  (PGPE finding the easy axis first), not an architectural-capacity problem.
+- The next meaningful step is IMDB-A04-hybrid (highest-leverage single
+  experiment), followed by IMDB-A02 (validating the logit-prior intervention
+  surface) once the hybrid baseline is characterized.
