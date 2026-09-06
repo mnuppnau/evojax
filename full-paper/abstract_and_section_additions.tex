@@ -1,0 +1,63 @@
+% Revised four-paragraph abstract and section-ready additions.
+
+% ----------------------------------------------------------------------
+% Abstract
+% ----------------------------------------------------------------------
+\begin{abstract}
+We develop an Evolutionary HyperNet-InfoGAN in which Policy Gradients with Parameter-Based Exploration (PGPE) evolves a compact HyperNetwork that parameterizes a convolutional generator, while a discriminator with an embedded Q-network is trained by backpropagation. The indirect encoding places evolutionary generator search in a smaller, structured parameter space while retaining non-stationary adversarial training.
+
+On grayscale BloodMNIST, a controlled matrix compares baseline scheduled and dynamically adapted fitness weights with Cultural Algorithm (CA) gradient blending disabled or enabled, supplemented by hybrid configurations. Evaluation combines a co-adapted Q-objective proxy and feature-space code metrics with fixed pixel-space morphology diagnostics.
+
+Every blend-enabled configuration reduced the Q proxy relative to its no-blend counterpart. Inactive CA standard-deviation targets favored wider exploration in successful blend-off runs, whereas active blending coincided with stalled PGPE annealing. A post hoc audit identified an indexing defect in center guidance; we therefore treat the standard-deviation interaction as the leading explanation, not an isolated cause. The unaffected hybrid configuration produced the best combined performance observed ($\text{Q proxy}=0.091$, $r_{\text{intra}}=0.894$) by retaining scheduled code-recovery pressure while adapting other fitness weights.
+
+These findings support CA-mediated fitness adaptation and diagnostic monitoring in this implementation, but not the implemented gradient blend as a BloodMNIST trainer. They motivate a methodological boundary: co-adapted adversarial and Q signals may train the model, whereas semantic shaping, auditing, and cultural memory should use frozen or externally validated observables. For transformer extensions, we hypothesize that cultural influence should act through selection over deterministic, auditable hard-attention structures whose commitment remains governed by PGPE; this transfer remains untested.
+\end{abstract}
+
+% ----------------------------------------------------------------------
+% Introduction addition
+% Place immediately before the contributions paragraph.
+% ----------------------------------------------------------------------
+The present study distinguishes two channels of cultural influence. In the fitness-weighting channel, online metric-history slopes and health gates alter the scalar objective through which PGPE selects parameter perturbations. In the gradient-blending channel, parameter-space knowledge sources propose center and standard-deviation targets that are mixed directly into the PGPE update. Separating these channels allows the study to ask not only whether cultural information is useful, but also where it can enter an evolutionary optimizer without disrupting the optimizer's own convergence dynamics.
+
+A post hoc implementation audit qualifies the second comparison: an antithetic-indexing defect affected archived parameter vectors used for CA center guidance. The core PGPE update, the adaptive fitness-weighting path, and archived standard-deviation snapshots are unaffected. Accordingly, we interpret the blend runs as diagnostic evidence about the implemented controller and treat the observed standard-deviation interaction as a leading explanation, not a mechanism established in isolation.
+
+% ----------------------------------------------------------------------
+% Methodology additions
+% Add the first paragraph after the selection metrics. Add the remaining
+% paragraphs after the CA blend and instrumentation description.
+% ----------------------------------------------------------------------
+The adversarial score, Q-objective proxy, and feature-space code metrics are computed through the co-adapted discriminator/Q-network. They serve as training and monitoring signals and show whether the latent code remains recoverable, but they are not sufficient evidence that the recovered structure is hematologically semantic. Prototype correlation and the morphology diagnostics are instead computed through fixed pixel-space operations. These quantities cannot co-adapt with the generator, although they can still be exploited when placed under selection pressure.
+
+Post hoc source inspection identified an indexing mismatch in the parameter-record path. PGPE emits antithetic samples in interleaved order, $[\boldsymbol{\mu}+\boldsymbol{\epsilon}_0,\boldsymbol{\mu}-\boldsymbol{\epsilon}_0,\ldots]$, but archive ingestion decoded the selected index as though all positive perturbations preceded all negative perturbations. Fitness values therefore correspond to the selected individual, while the archived HyperNetwork vector can correspond to a different perturbation.
+
+This mismatch affects the center-guidance component of blend-enabled runs. It does not affect PGPE's score-function update, which uses the correct interleaved pairing, or adaptive fitness weighting, which uses population metrics and metric-history slopes rather than archived parameter vectors. Archived standard deviations also remain valid because the PGPE standard deviation is shared across the population. Blend comparisons are therefore reported as implementation-specific diagnostic evidence; they do not isolate standard-deviation guidance as the sole cause of the observed performance differences.
+
+% ----------------------------------------------------------------------
+% Results additions
+% ----------------------------------------------------------------------
+\paragraph{Class-balanced discriminator sampling.}
+A preliminary comparison favored class-balanced real-image sampling over proportional sampling. Code separation increased from $0.140$ to $0.155$, the within-code spread score increased from $0.749$ to $0.839$, and real-fake loss moved from $0.582$ to $0.593$; the Q-objective proxy and prototype correlation were approximately unchanged. Balanced sampling was therefore adopted for the controlled matrix. Because the preliminary conditions were each run once and summarized over different late-training windows, this comparison is treated as a setup decision rather than a seed-replicated treatment effect.
+
+\paragraph{Weighting and blend channels.}
+Without gradient blending, the baseline schedule favored the Q-objective proxy and code separation ($0.089$ and $0.155$), while dynamic weighting favored adversarial health and the within-code spread score ($0.629$ and $0.935$). The hybrid configuration retained the baseline Q-pressure trajectory while adapting the other active weights and produced the best combined result observed in the study ($\text{Q proxy}=0.091$, $r_{\text{sense}}=0.148$, $r_{\text{intra}}=0.894$). Raising its adversarial base weight improved real-fake loss from $0.571$ to $0.607$ but reduced the Q proxy from $0.091$ to $0.084$, exposing a tradeoff between adversarial health and code recovery under a fixed fitness budget.
+
+Every tested blend comparison moved the Q proxy in the same adverse direction: B00 to A02 ($0.089$ to $-0.034$), A01 to A03 ($0.062$ to $-0.078$), and A04-hybrid to its low-dose blend variant ($0.091$ to $0.070$). These comparisons describe the implemented blend and are subject to the center-guidance qualification reported in the Methodology section.
+
+\paragraph{Standard-deviation diagnostics.}
+The widening tendency exists independently of blend-altered trajectories. Across the four blend-off configurations, the full-run mean sign of $\boldsymbol{\sigma}_{\mathrm{CA}}-\boldsymbol{\sigma}$ ranges from $+0.428$ to $+0.611$ even though the target is computed but discarded; in the late window it ranges from $+0.595$ to $+0.721$. Successful no-blend runs reduce \texttt{stdev\_mean} from approximately $0.032$ to $0.0205$--$0.0244$. By contrast, the nominal $0.015$ blend runs finish near $0.0327$--$0.0339$, and the nominal $0.005$ hybrid blend finishes at $0.0286$. Thus cultural standard-deviation guidance consistently opposes the contraction seen in successful runs and, when activated, coincides with incomplete annealing. Because center guidance was also active and was affected by the indexing defect, this evidence supports a leading mechanism rather than an isolated causal attribution.
+
+% ----------------------------------------------------------------------
+% Conclusion addition/replacement
+% ----------------------------------------------------------------------
+The ablation shows that the channel through which cultural information enters PGPE matters at least as much as the information itself. The best observed configuration retained a prescribed, health-gated Q-pressure trajectory while allowing CA-mediated adaptation of the remaining fitness weights. Direct blending into the implemented PGPE update was consistently associated with weaker code recovery and incomplete standard-deviation annealing, although a post hoc indexing defect prevents attribution of that outcome solely to standard-deviation guidance or generalization to a correctly indexed blend.
+
+The defensible conclusion is therefore narrower than a rejection of Cultural Algorithms as trainers. In this system, cultural monitoring and fitness-level adaptation were useful, while direct update-rule intervention was fragile and harder to audit. This distinction motivates selection-mediated cultural influence in future discrete architectures, but it does not establish the behavior of those architectures in advance.
+
+% ----------------------------------------------------------------------
+% Limitations and future-work additions
+% ----------------------------------------------------------------------
+Each configuration was run once with a common seed, so between-seed variance is not characterized; temporal standard deviations measure within-run fluctuation only. Most selection metrics are computed in the co-adapted discriminator/Q space, and no frozen classifier or clinically validated morphology encoder is used. Consequently, code recovery and geometric separation should not be interpreted as established separation of BloodMNIST cell classes. The class-balancing comparison is also preliminary, and the archive-indexing defect confounds the center-guidance component of every blend-enabled run.
+
+Before subsequent experiments, archive ingestion will be corrected to store the sampled solution at the selected population index directly, with regression tests verifying antithetic ordering and score-to-parameter correspondence. The BloodMNIST experiment revision will remain tagged separately so that the reported results remain reproducible.
+
+Future work will test the transfer hypothesis in a transformer setting rather than treating it as a conclusion of the present study. The proposed design freezes a pretrained language model and uses PGPE to optimize compact code-conditioned modulators and deterministic top-$k$ attention gates. Cultural priors will influence the discrete structures through rank-normalized fitness or one-sided constraints, without access to PGPE's standard deviation or a separately annealed mask temperature. Frozen external evaluators will provide semantic shaping and auditing, and direct payload evolution will be compared with HyperNetwork encoding so that the value of indirect encoding remains an empirical question.

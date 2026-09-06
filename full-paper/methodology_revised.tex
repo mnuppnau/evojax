@@ -1,0 +1,350 @@
+\section{Methodology}
+\label{sec:methodology}
+
+The Evolutionary HyperNet-InfoGAN framework consists of three trainable components: a HyperNetwork that parameterizes a convolutional image generator, the generator emitted by that HyperNetwork, and a discriminator with an embedded Q-network (Figure~\ref{fig:architecture}). The discriminator and Q-network are trained via backpropagation in the D-step, while Policy Gradients with Parameter-Based Exploration (PGPE) evolves the HyperNetwork parameters in the G-step. A Cultural Algorithm (CA) meta-level controller is maintained in every run for consistent diagnostics and, depending on the ablation configuration, influences either the fitness weights, the PGPE update, or both. The controlled matrix isolates these two intervention channels; it does not constitute an ablation of each knowledge source individually.
+
+\subsection{HyperNetwork Indirect Encoding}
+
+Rather than evolving the generator parameters $\theta_G$ directly, PGPE optimizes a compact parameter vector $\theta_{HN}$ for a HyperNetwork that emits $\theta_G$ from static structural context. The HyperNetwork has 32,608 parameters and emits a generator with 225,161 parameters, reducing the dimensionality searched by PGPE by approximately $6.9\times$.
+
+A parameter adapter maps the initialized generator parameter tree to a chunked representation. Each parameter tensor is flattened independently and divided into chunks of 512 values. The final chunk for a tensor is padded implicitly by the HyperNetwork output and truncated during reconstruction. This per-tensor reconstruction prevents padding from one tensor from shifting the parameters assigned to later tensors.
+
+For each chunk, the HyperNetwork receives a within-tensor chunk index and a static context vector. The chunk index is mapped through a learned embedding of dimension 16. The context vector concatenates a one-hot identifier for the parameter tensor with two heuristic geometric coordinates: depth, which increases linearly from $0$ to $1$ over the ordered parameter tensors, and scale, which increases linearly from $0.25$ to $1$. These coordinates describe position in the generator parameter tree; they are not inferred from the data. The concatenated representation is processed by a two-layer MLP with 48 hidden units per layer and GELU activation. Its output contains 512 values for each requested chunk. The full reconstruction can be written as
+
+\begin{equation}
+\theta_G = \mathcal{A}\!\left(
+H_{\theta_{HN}}(\mathbf{i},\mathbf{s})
+\right),
+\label{eq:hypernet_reconstruction}
+\end{equation}
+
+where $\mathbf{i}$ contains the within-tensor chunk indices, $\mathbf{s}$ contains the static structural contexts, and $\mathcal{A}$ denotes the adapter's per-tensor truncation, reshaping, and tree-reconstruction map. The HyperNetwork does not receive the sample-level latent code; it emits one generator parameterization for all samples evaluated under a PGPE individual.
+
+\subsection{Generator and Latent Representation}
+
+The generator accepts a composite latent vector $\mathbf{z} \in \mathbb{R}^{72}$,
+
+\begin{equation}
+\mathbf{z} = [\mathbf{z}_{\text{noise}},\mathbf{c}_{\text{cat}},\mathbf{c}_{\text{cont}}],
+\end{equation}
+
+where $\mathbf{z}_{\text{noise}} \in \mathbb{R}^{62}$ is Gaussian noise, $\mathbf{c}_{\text{cat}} \in \{0,1\}^{8}$ is an 8-way one-hot code, and $\mathbf{c}_{\text{cont}} \in [-1,1]^2$ contains two continuous codes. The cardinality of $\mathbf{c}_{\text{cat}}$ is matched to the eight BloodMNIST classes, but the code values are unsupervised and are not assigned to class labels.
+
+The three latent components enter separate projection paths. The noise vector is projected through a dense layer (\texttt{seed\_dense}), the categorical code through a bias-free dense layer (\texttt{seed\_code\_dense}), and the continuous code through a second bias-free dense layer (\texttt{seed\_cont\_dense}). The paths are combined as
+
+\begin{equation}
+\mathbf{x} = \mathbf{x}_{\text{noise}}
++ 3.0\,\mathbf{x}_{\text{cat}}
++ 1.0\,\mathbf{x}_{\text{cont}}.
+\end{equation}
+
+The resulting vector is reshaped to $7 \times 7 \times 8$ and passed through a convolution with 64 output channels, GroupNorm, and a $\tanh$ activation. Linear resize followed by convolution, GroupNorm, and $\tanh$ expands the representation first to $14 \times 14$ and then to $28 \times 28$; an additional convolutional refinement block is applied at $14 \times 14$. A final convolution and sigmoid activation produce a single-channel image in $[0,1]$.
+
+\subsection{Discriminator and Q-Network}
+
+The discriminator and Q-network share a spectral-normalized convolutional backbone and use no batch normalization. For the reported BloodMNIST runs, the discriminator base width is 48. Two $4 \times 4$ convolutions with stride 2 and SAME padding map
+
+\begin{equation}
+28 \times 28 \times 1
+\rightarrow 14 \times 14 \times 48
+\rightarrow 7 \times 7 \times 96,
+\end{equation}
+
+with LeakyReLU slope $0.2$ after each convolution. The discriminator head applies a $4 \times 4$ stride-2 convolution with SAME padding, followed by a $4 \times 4$ VALID convolution that produces one logit per image.
+
+The Q branch first subtracts the spatial mean of each shared-backbone feature channel. This brightness guard reduces the ability of Q to recover the code from a global-intensity shortcut. A spectral-normalized $1 \times 1$ convolution with 48 outputs and a $7 \times 7$ VALID convolution with 96 outputs preserve spatial information while reducing the feature map to a 96-dimensional vector $\mathbf{q}$. Separate spectral-normalized heads output eight categorical logits and Gaussian parameters $\boldsymbol{\mu},\log\boldsymbol{\sigma} \in \mathbb{R}^{2}$ for the continuous codes.
+
+\subsection{Training Procedure}
+
+BloodMNIST RGB images are converted to grayscale using
+$0.2989R+0.5870G+0.1140B$ and scaled to $[0,1]$. Each eligible D-step draws a class-balanced batch of 64 real images, with eight images from each supervised BloodMNIST class. Class labels are used only for this real-data sampling procedure and not to supervise the generator's discrete codes.
+
+The discriminator and Q-network are optimized jointly with Adam
+($\text{lr}=10^{-4}$, $\beta_1=0.5$, $\beta_2=0.999$). A Gaussian instance-noise tensor with standard deviation $0.1$ is added to both the real and generated batches. With smoothed targets of $0.9$ for real images and $0.05$ for generated images, the D/Q objective is
+
+\begin{equation}
+\mathcal{L}_{D/Q}
+= \frac{1}{2}\left(
+\mathcal{L}_{\text{BCE}}^{\text{real}}
++ \mathcal{L}_{\text{BCE}}^{\text{fake}}
+\right)
++ 0.4\,\mathcal{L}_{\text{MI}}^{\text{cat}}
++ 0.1\,\mathcal{L}_{\text{MI}}^{\text{cont}},
+\label{eq:dq_loss}
+\end{equation}
+
+where
+
+\begin{equation}
+\mathcal{L}_{\text{MI}}^{\text{cat}}
+= -\mathbb{E}\!\left[
+\log Q(c_{\text{cat}}\mid G(\mathbf{z}))
+\right].
+\end{equation}
+
+For the continuous term, $\log\sigma$ is clipped to $[-2,2]$ and the Gaussian negative log-likelihood is computed without its additive normalization constant:
+
+\begin{equation}
+\mathcal{L}_{\text{MI}}^{\text{cont}}
+= \mathbb{E}\!\left[
+\log\sigma
++ \frac{1}{2}
+\left(\frac{c_{\text{cont}}-\mu}{\exp(\log\sigma)}\right)^2
+\right].
+\end{equation}
+
+Each element of this loss is capped at 10 before averaging. The candidate D/Q update is accepted only when the pre-update adversarial term
+$\frac{1}{2}(\mathcal{L}_{\text{BCE}}^{\text{real}}+
+\mathcal{L}_{\text{BCE}}^{\text{fake}})$ exceeds $0.3$. When it is at or below $0.3$, the candidate update is discarded because the discriminator is already highly confident. During iterations $0$--$999$, an eligible D-step occurs every second iteration; from iteration $1000$ onward, one D-step is attempted per iteration. Generated images for the D-step are produced by the current PGPE center $\boldsymbol{\mu}_{\text{PGPE}}$, rather than by a sampled population member.
+
+Each iteration also performs one PGPE update of the HyperNetwork. The population size is 512, corresponding to 256 antithetic perturbation directions. For direction $i$,
+
+\begin{equation}
+\boldsymbol{\epsilon}_i
+\sim \mathcal{N}\!\left(\mathbf{0},
+\operatorname{diag}(\boldsymbol{\sigma}^2)\right),
+\qquad
+\boldsymbol{\theta}_i^{\pm}
+= \boldsymbol{\mu}_{\text{PGPE}} \pm \boldsymbol{\epsilon}_i.
+\end{equation}
+
+Let $F_i^+$ and $F_i^-$ denote the composite fitnesses of an antithetic pair, let
+$\overline{F}_i=(F_i^++F_i^-)/2$, and let $b$ be the mean fitness over the full population. The implementation computes the score-function directions
+
+\begin{equation}
+\nabla^{\mu}_{\text{RE}}
+= \frac{1}{2N}\sum_{i=1}^{N}
+(F_i^+-F_i^-)\boldsymbol{\epsilon}_i,
+\end{equation}
+
+\begin{equation}
+\nabla^{\sigma}_{\text{RE}}
+= \frac{1}{N}\sum_{i=1}^{N}
+(\overline{F}_i-b)
+\frac{\boldsymbol{\epsilon}_i^2-\boldsymbol{\sigma}^2}
+{\boldsymbol{\sigma}},
+\label{eq:pgpe_sigma_gradient}
+\end{equation}
+
+where all operations in Equation~\ref{eq:pgpe_sigma_gradient} are element-wise and $N=256$. The center is updated with Adam using learning rate $0.0048$, $\beta_1=0.9$, and $\beta_2=0.999$; the learning-rate decay coefficient is $1.0$, so no center decay is applied. The standard-deviation vector is initialized to $0.032$ and updated directly with learning rate $0.062$. Each coordinate is limited to a maximum relative change of 10\% per iteration and clipped to $[0.005,10]$ after the update. There is no separate standard-deviation decay schedule: the observed annealing of $\boldsymbol{\sigma}$ is produced by Equation~\ref{eq:pgpe_sigma_gradient}. We report
+
+\begin{equation}
+\texttt{stdev\_mean}
+= \frac{1}{d}\sum_{j=1}^{d}\sigma_j
+\end{equation}
+
+as the population's mean exploration scale over the $d=32{,}608$ HyperNetwork dimensions.
+
+\subsection{Shared-$z$ Protocol and Selection Metrics}
+
+Population evaluation uses common random numbers: within an iteration, every PGPE individual receives the same latent and instance-noise batch. This reduces between-individual evaluation variance and makes population ranks reflect parameter perturbations rather than different latent draws. The PGPE population itself remains antithetic in parameter space.
+
+The latent batch follows a shared-$z$ protocol that isolates the effect of the discrete code. A batch of 64 contains eight groups of eight samples. Within each group, all samples share $\mathbf{z}_{\text{noise}}$ and $\mathbf{c}_{\text{cont}}$ and differ only in the eight values of $\mathbf{c}_{\text{cat}}$. Thus all 64 samples are controlled, and each code value is represented by eight samples per individual. The groups contain one sample per code value, not one sample per supervised class.
+
+The Q-trunk features $\mathbf{q}_i\in\mathbb{R}^{96}$ are $L_2$-normalized. For samples $S_k$ assigned latent code $k$, a raw centroid is first computed and then normalized again:
+
+\begin{equation}
+\overline{\boldsymbol{\mu}}_k
+= \frac{1}{|S_k|}\sum_{i\in S_k}\mathbf{q}_i,
+\qquad
+\widehat{\boldsymbol{\mu}}_k
+= \frac{\overline{\boldsymbol{\mu}}_k}
+{\max(\|\overline{\boldsymbol{\mu}}_k\|_2,\epsilon)}.
+\label{eq:normalized_centroid}
+\end{equation}
+
+The second normalization in Equation~\ref{eq:normalized_centroid} ensures that code separation measures angular separation rather than centroid magnitude.
+
+\paragraph{Historical code drift ($r_{\text{cons}}$).}
+The distance between controlled samples and the historical centroid associated with the same code is
+
+\begin{equation}
+r_{\text{cons}}
+= \mathbb{E}_{i\in\text{ctrl}}
+\left[1-\mathbf{q}_i\cdot
+\widehat{\boldsymbol{\mu}}_{\text{hist},c_i}\right].
+\end{equation}
+
+Lower values indicate greater consistency with the historical code geometry. Historical centroids are population-level code means maintained by the Topographic KS. The first update adopts the current means directly. Subsequent updates use an exponential moving average whose momentum increases from $0.70$ to $0.97$ between iterations 500 and 2500; centroid velocity is smoothed separately with momentum $0.80$. The metric is monitored and supplied to the belief space but does not enter the active scalar fitness.
+
+\paragraph{Code separation ($r_{\text{sense}}$).}
+Let
+$d_{kj}=1-\widehat{\boldsymbol{\mu}}_k\cdot
+\widehat{\boldsymbol{\mu}}_j$. The separation score emphasizes the worst-separated pair while retaining the mean nearest-neighbor distance:
+
+\begin{equation}
+r_{\text{sense}}
+= 0.7\min_{k\neq j}d_{kj}
++ 0.3\,\mathbb{E}_k\!\left[\min_{j\neq k}d_{kj}\right].
+\end{equation}
+
+\paragraph{Within-code spread score ($r_{\text{intra}}$).}
+For code $k$, define
+
+\begin{equation}
+s_k = \frac{1}{|S_k|}\sum_{i\in S_k}
+\left(1-\mathbf{q}_i\cdot
+\widehat{\boldsymbol{\mu}}_k\right).
+\end{equation}
+
+The score rewards spread within the target window $[0.03,0.12]$ and penalizes both near-identical samples and diffuse code clusters:
+
+\begin{equation}
+r_{\text{intra}}
+= \mathbb{E}_k\!\left[
+\min\!\left(
+\operatorname{clip}(s_k/0.03,0,1),
+1-\operatorname{clip}((s_k-0.12)/0.12,0,1)
+\right)
+\right].
+\end{equation}
+
+The population-averaged raw spread is logged separately as \texttt{spread\_avg}, so that a high $r_{\text{intra}}$ is not mistaken for maximal cluster tightness.
+
+For each PGPE individual, the active scalar fitness contains five components. The adversarial score is
+
+\begin{equation}
+f_{\text{adv}}
+= -\mathbb{E}\!\left[
+\operatorname{BCE}(D(G(\mathbf{z})),1)
+\right].
+\end{equation}
+
+The Q-based score combines categorical and continuous code recovery:
+
+\begin{equation}
+f_{\text{mi}}
+= 0.2\,\mathbb{E}\!\left[
+\log Q(c_{\text{cat}}\mid G(\mathbf{z}))
+\right]
+-0.05\,\mathcal{L}_{\text{MI}}^{\text{cont}}.
+\label{eq:mi_proxy}
+\end{equation}
+
+This corrects the sign convention required by maximization: larger $f_{\text{mi}}$ indicates better recovery under the Q objective. The logged quantity \texttt{mi\_avg} is the population mean of Equation~\ref{eq:mi_proxy}. Because the categorical and continuous terms are weighted and the continuous Gaussian normalization constant is omitted, \texttt{mi\_avg} is a comparative Q-objective proxy rather than a calibrated estimate of mutual information in nats; it can also take positive values.
+
+The pixel-diversity component $r_{\text{div}}$ measures variance across the eight codes under shared $z$ after a $3\times3$ mean blur and per-image brightness centering. It therefore rewards code-dependent spatial differences while reducing sensitivity to high-frequency and global-intensity shortcuts. Together with $r_{\text{sense}}$ and $r_{\text{intra}}$, the composite fitness is
+
+\begin{equation}
+\begin{aligned}
+F = {} & w_{\text{adv}}\,R(f_{\text{adv}})
++ w_{\text{mi}}\,R(f_{\text{mi}})
++ w_{\text{sense}}\,R(r_{\text{sense}}) \\
+& + w_{\text{div}}\,R(r_{\text{div}})
++ w_{\text{intra}}\,R(r_{\text{intra}}),
+\end{aligned}
+\label{eq:composite_fitness}
+\end{equation}
+
+where each component is independently rank-normalized across the population as
+
+\begin{equation}
+R(v_i)=2\frac{\operatorname{rank}_{\uparrow}(v_i)}{P-1}-1,
+\qquad P=512.
+\end{equation}
+
+Thus a component's direct influence is determined by its weight and population ordering rather than its raw scale. Conditional feature-space diversity, $r_{\text{cons}}$, normative penalties, prototype correlation, and morphology scores are monitored and may inform the CA belief space, but their direct coefficients in Equation~\ref{eq:composite_fitness} are zero for the reported matrix.
+
+\subsection{Metric Provenance and Fixed Diagnostics}
+
+The adversarial score, Q-objective proxy, $r_{\text{sense}}$, $r_{\text{intra}}$, and $r_{\text{cons}}$ depend on the discriminator/Q-network, which is co-adapted with the generator. They are therefore used as training or monitoring signals and as evidence that the latent code carries recoverable structure, but they are not sufficient evidence that this structure is hematologically semantic. The pixel-diversity term and morphology diagnostics use fixed, non-learned image-space calculations and cannot move through co-adaptation, although they remain vulnerable to optimization shortcuts if used under selection pressure.
+
+Prototype correlation is computed in pixel space. Generated images are grouped by code under shared $z$, brightness-centered per image, and averaged to form eight code prototypes. Each flattened prototype is centered and $L_2$-normalized, and \texttt{code\_proto\_corr} is the mean off-diagonal pairwise correlation; higher values indicate greater cross-code template similarity. Fixed morphology diagnostics are computed from code prototypes using a cell mask $x<0.82$ and a nucleus mask $x<0.45$. Cell circularity is $4\pi A/P^2$ using a four-neighbor perimeter estimate, cell-area variance is the variance of normalized mask area across codes, and nucleus offset is the cell-to-nucleus centroid distance normalized by the equivalent cell radius. Nucleus-to-cell area range, nucleus-eccentricity range, global-darkness range, center-edge contrast range, edge-dark fraction, and prototype-angle spread are also logged.
+
+These fixed diagnostics describe image geometry, not clinical class identity. No independently trained frozen classifier or externally validated morphology encoder is used in the present experiments. Accordingly, semantic interpretations are based on converging quantitative diagnostics and fixed-latent visual inspection and are presented as candidate failure modes rather than established class-level disentanglement.
+
+\subsection{Cultural Algorithm Controller}
+
+The CA belief space contains five knowledge sources and a rolling metric history:
+
+\paragraph{Domain KS.}
+Maintains a 20-member non-dominated archive of HyperNetwork parameter records, associated PGPE standard deviations and perturbations, and adversarial, Q-proxy, entropy, separation, consistency, and shape-diversity diagnostics.
+
+\paragraph{Situational KS.}
+Retains a single parameter record and its associated exploration state as the most exploitative reference.
+
+\paragraph{Historical KS.}
+Maintains a 40-record archive for rescue. Under ordinary conditions, the archive favors high-entropy records; when a morphology trap or Normative violation is active, it can favor a fixed pixel-space morphology score instead.
+
+\paragraph{Topographic KS.}
+Maintains the population-level code centroids and their smoothed velocities in the co-adapted Q-feature space. These statistics support the historical-drift, predicted-collision, and spread diagnostics described above.
+
+\paragraph{Normative KS.}
+Uses the top 32 individuals under the current composite fitness to maintain acceptable spread and predicted safety statistics. The morphology-aware implementation also tracks soft bounds for cell circularity, cell-area variance, and nucleus offset. These bounds are updated from elite quantiles, with a 20,000-iteration warmup followed by an asymmetric rule that tightens faster than it relaxes.
+
+The rolling metric history stores 100 generations. Least-squares slopes are computed over short (20-generation), medium (50-generation), and long (100-generation) windows. The history includes co-adapted adversarial, Q-proxy, entropy, separation, consistency, and shape-diversity signals together with fixed pixel-space morphology diagnostics. This mixture is part of the limitation identified by the study: the current belief space is useful diagnostically, but future semantic guidance should be based on frozen or externally validated observables.
+
+The CA has two distinct intervention channels. The first is adaptive fitness weighting. In dynamic mode, short- and medium-window slopes from the belief-space history, together with discriminator and shape-health gates, adjust $w_{\text{adv}}$, $w_{\text{mi}}$, $w_{\text{div}}$, $w_{\text{sense}}$, and $w_{\text{intra}}$ within fixed bounds. These weights are not the softmax scores used to combine the parameter-space knowledge sources; they are a separate CA-mediated control path derived from online metric history.
+
+The baseline weighting mode disables this slope-driven adaptation. Its adversarial weight is $w_{\text{adv}}=0.53$. Between iterations 12,000 and 28,000, $w_{\text{div}}$ moves from $0.18$ to $0.16$, $w_{\text{sense}}$ from $0.08$ to $0.14$, and $w_{\text{intra}}$ from $0.03$ to $0.04$. The MI weight begins at $0.30$ and receives a scheduled increment of at most $0.20$ beginning at iteration 10,000 and reaching its maximum after 50,000 additional iterations. This increment is multiplied by a pre-specified discriminator/shape-health gate. Therefore, ``static'' denotes the absence of slope-driven CA adaptation, not complete independence from run state. Hybrid mode retains this pre-specified, health-gated MI trajectory while allowing the other active weights to adapt from the belief-space history.
+
+The second intervention channel is CA gradient blending. Domain, Situational, Historical, and Topographic scores are computed from the metric-history slopes and converted to softmax weights with temperature 2.0. The Domain and Historical KSs select archive states according to the detected regime, the Situational KS supplies its elite state, and the Topographic KS conservatively supplies the current PGPE state because its native representation is in output space rather than parameter space. Their weighted averages define target values $\boldsymbol{\mu}_{\text{CA}}$ and $\boldsymbol{\sigma}_{\text{CA}}$. Normative and morphology-trap states modify the KS scores and can scale the standard-deviation target.
+
+Directions from the current PGPE state toward these targets are
+
+\begin{equation}
+\nabla^{\mu}_{\text{CA}}
+= \boldsymbol{\mu}_{\text{CA}}-\boldsymbol{\mu}_{\text{PGPE}},
+\qquad
+\nabla^{\sigma}_{\text{CA}}
+= \boldsymbol{\sigma}_{\text{CA}}-\boldsymbol{\sigma}.
+\end{equation}
+
+Each CA direction is rescaled to match the $L_2$ norm of its corresponding PGPE score-function direction. With realized blend coefficient $\alpha_t$, the update directions are
+
+\begin{equation}
+\begin{aligned}
+\nabla^{\mu}
+&=(1-\alpha_t)\,\nabla^{\mu}_{\text{RE}}
++\alpha_t\,\nabla^{\mu}_{\text{CA}},\\
+\nabla^{\sigma}
+&=(1-\alpha_t)\,\nabla^{\sigma}_{\text{RE}}
++\alpha_t\,\nabla^{\sigma}_{\text{CA}}.
+\end{aligned}
+\label{eq:ca_blend}
+\end{equation}
+
+The nominal blend is zero through iteration 3000 and then ramps linearly to its configured value over 2000 iterations. It is multiplied by an availability indicator for valid belief-space data and by a discriminator-health gate. The health gate is one inside the real-fake-loss interval $[0.40,0.58]$, decreases linearly over shoulders of width $0.05$, and is zero outside $[0.35,0.63]$. The realized $\alpha_t$ can therefore be substantially smaller than the nominal coefficient.
+
+To diagnose Equation~\ref{eq:ca_blend}, the implementation logs the realized blend and health gate; the pre-blend norms of the PGPE and CA center and standard-deviation directions; the mean sign of the PGPE standard-deviation direction; the mean sign and relative magnitude of $\boldsymbol{\sigma}_{\text{CA}}-\boldsymbol{\sigma}$; the mean, standard deviation, minimum, and maximum of the PGPE standard-deviation vector; and the occupancy, range, and diversity of standard deviations in the Domain archive. These measurements are declared here because they support the mechanism analysis in the Results section.
+
+\paragraph{Post hoc implementation audit.}
+Source inspection after completion of the experiments identified an indexing mismatch in the parameter-record path used by the three parameter-space archives. The PGPE sampler stores antithetic individuals in interleaved order,
+$[\boldsymbol{\mu}+\boldsymbol{\epsilon}_0,
+\boldsymbol{\mu}-\boldsymbol{\epsilon}_0,\ldots]$, whereas archive ingestion decoded the selected population index as if all positive perturbations preceded all negative perturbations. Consequently, the fitness and diagnostic values attached to an archive record correspond to the selected individual, but its reconstructed HyperNetwork parameter vector can correspond to a different sampled perturbation. The PGPE score-function update is unaffected because Equation~\ref{eq:pgpe_sigma_gradient} uses the correct interleaved pairing. The weighting-only pathway is also unaffected because it is computed from population metrics and metric-history slopes rather than archived parameter vectors.
+
+This mismatch directly confounds the center-guidance component of runs with blending enabled. The archived standard deviation records remain valid iteration-level snapshots because $\boldsymbol{\sigma}$ is shared by the entire population, so the logged tendency of $\boldsymbol{\sigma}_{\text{CA}}-\boldsymbol{\sigma}$ and the associated failure of annealing remain observations of the implemented controller. They do not, however, isolate standard deviation guidance as the sole cause of the performance change or establish the behavior of a correctly indexed CA center blend. We therefore report blend comparisons as implementation-specific diagnostic evidence and reserve a clean causal test of corrected center guidance for subsequent validation.
+
+The morphology-aware CA sequence that preceded the final matrix progressively added prototype-angle, nucleus, whole-cell, and Normative-bound signals. Those runs predated class-balanced discriminator sampling and are treated as exploratory diagnostics rather than controlled matrix evidence. In the final matrix, the fixed morphology quantities remain logged and available to belief-space target construction, but they do not enter Equation~\ref{eq:composite_fitness} directly.
+
+\subsection{Experimental Design}
+
+The principal ablation uses a $2\times2$ matrix that independently varies the fitness-weighting mode (baseline schedule or dynamic adaptation) and CA gradient blending (off or nominal $\alpha=0.015$). Hybrid runs retain the baseline MI trajectory while adapting the remaining fitness weights. A low-dose hybrid run tests $\alpha=0.005$, and a second no-blend hybrid raises the adversarial base weight from $0.53$ to $0.60$. All matrix runs use the same architecture, learning rates, population size (512), batch size (64), class-balanced real-image sampling, and 290,000 iterations.
+
+\begin{table*}[t]
+\centering
+\caption{BloodMNIST ablation design. The blend coefficient is nominal; the realized coefficient is reduced by the runtime gate.}
+\label{tab:ablation}
+\small
+\begin{tabular}{lcccl}
+\toprule
+\textbf{Run} & \textbf{Weights} & \textbf{CA blend} & \textbf{$\alpha$} & \textbf{Purpose} \\
+\midrule
+B00 & Baseline schedule & Off & 0.000 & Reference configuration \\
+A01 & Dynamic & Off & 0.000 & Isolate adaptive weighting \\
+A02 & Baseline schedule & On & 0.015 & Isolate CA gradient blending \\
+A03 & Dynamic & On & 0.015 & Combine both CA channels \\
+A04-hybrid & Hybrid & Off & 0.000 & Preserve scheduled MI pressure \\
+A04-hybrid-v2 & Hybrid ($w_{\text{adv}}=0.60$) & Off & 0.000 & Adversarial-weight sensitivity \\
+hybrid+CA & Hybrid & On & 0.005 & Low-dose blend test \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Class-balanced sampling was selected before the matrix through a preliminary comparison between the earlier proportional-sampling B00 baseline and a balanced B00 rerun. This comparison is reported separately from the factorial matrix because it uses one run per condition and different late-training windows. It supports adopting balanced sampling as a controlled setup choice, but it is not treated as a seed-replicated estimate of its effect.
+
+Metrics are written every 100 iterations. Primary summaries use the late window from iteration 240,000 through 289,900 (500 logged observations); the final window from 280,000 through 289,900 contains 100 observations. We report the temporal mean and standard deviation within each window. These standard deviations quantify within-run fluctuation, not uncertainty over random initialization, and the logged observations are temporally correlated. Fixed-latent image panels are generated every 1000 iterations for qualitative comparison.
+
+Each configuration was run once using the same seed setting (42) and deterministic model initialization, so between-seed variance is not characterized and configuration rankings should be read as indicative rather than definitive. The blend result is evaluated separately for directional consistency across the two nominal doses and multiple weighting configurations.
+
+Experiments were executed on a workstation with an AMD Ryzen 5800X CPU, 128~GB DDR4-3600 RAM, and two NVIDIA RTX 3090 GPUs with 24~GB memory each. The software environment used Arch Linux (kernel 6.13.1), Python 3.11.5, JAX 0.4.31, Flax 0.8.4, CUDA 12.8, and NVIDIA driver 570.86.

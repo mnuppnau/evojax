@@ -1,0 +1,22 @@
+% Targeted replacements for the current Introduction.
+
+% ----------------------------------------------------------------------
+% Replace the final sentence of the InfoGAN objective paragraph beginning
+% "Throughout this paper..."
+% ----------------------------------------------------------------------
+Throughout this paper, we use the term \textit{Q-objective proxy} for the weighted categorical and continuous code-recovery objective used in generator fitness. This quantity measures recoverability under the co-adapted Q-network; it is neither the mutual information itself nor a calibrated estimate in nats. Its exact form is defined in Section~\ref{sec:methodology}.
+
+% ----------------------------------------------------------------------
+% Replace the paragraph beginning "We evaluate this Evolutionary..."
+% and the following two channel/audit paragraphs with these three paragraphs.
+% ----------------------------------------------------------------------
+We evaluate this Evolutionary HyperNet-InfoGAN framework on grayscale-converted BloodMNIST, building on MNIST baselines from our prior work that established the HyperNetwork formulation's advantages over direct parameter search. We then conduct a controlled ablation of CA integration in the PGPE training loop. The study independently varies fitness-weight adaptation and CA gradient blending and supplements the resulting $2\times2$ matrix with hybrid configurations that retain a prescribed code-recovery trajectory while adapting the remaining fitness weights.
+
+The study distinguishes two channels of cultural influence. In the fitness-weighting channel, online metric-history slopes and health gates alter the scalar objective through which PGPE selects parameter perturbations. In the gradient-blending channel, parameter-space knowledge sources propose center and standard-deviation targets that are mixed directly into the PGPE update. The hybrid weighting policy produced the best combined configuration observed in our runs. By contrast, every implemented blend-enabled configuration reduced the Q-objective proxy relative to its no-blend counterpart and was associated with incomplete annealing of PGPE's search distribution.
+
+A post hoc implementation audit qualifies the blend comparison: an antithetic-indexing defect affected archived parameter vectors used for CA center guidance. The core PGPE update, adaptive fitness weighting, and archived standard-deviation snapshots are unaffected. Independent diagnostics show that the CA standard-deviation targets retain a persistent widening tendency even when computed but inactive in successful blend-off runs. We therefore treat the interaction between this widening pressure and PGPE annealing as the leading explanation for the implemented blend's degradation, not as a mechanism established in isolation. This distinction motivates, as a hypothesis to be tested in subsequent work, selection-mediated cultural priors over discrete hard-attention structures in Transformer architectures.
+
+% ----------------------------------------------------------------------
+% Replace the contributions paragraph.
+% ----------------------------------------------------------------------
+The contributions of this paper are: (1) a controlled ablation of Cultural Algorithm integration for evolutionary medical image generation, independently varying fitness-weight adaptation and gradient blending on BloodMNIST and adopting class-balanced discriminator sampling following a preliminary comparison; (2) evidence that CA-mediated fitness adaptation and direct update-rule blending produce different training behavior, with a hybrid weighting policy yielding the best combined configuration observed while every implemented blend comparison reduces the Q-objective proxy; (3) a diagnostic account of the blend behavior in which persistent CA pressure toward wider exploration coincides with incomplete PGPE annealing, qualified by a post hoc center-guidance indexing defect that prevents isolated causal attribution; and (4) a methodological boundary and transfer hypothesis: co-adapted adversarial and Q signals may train the system, but semantic shaping, auditing, and cultural memory should rely on frozen or externally validated observables, and cultural influence on Transformer hard-attention mechanisms should enter through selection over discrete structures whose commitment remains governed by PGPE.
