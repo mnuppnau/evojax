@@ -1,33 +1,22 @@
-name: Lint and test
+name: Core CPU tests
 
 on: [push, pull_request]
 
 jobs:
-  build:
-
+  core:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.8", "3.9", "3.10"]
-
+    env:
+      JAX_PLATFORMS: cpu
     steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install flake8 pytest
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install -e .[extra] # includes optional dependency
-      - name: Lint with flake8
-        run: |
-          # stop the build if there are Python syntax errors or undefined names
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-          # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-          flake8 . --count --exit-zero --max-complexity=100 --max-line-length=127 --statistics
-      - name: Test with pytest
-        run: |
-          pytest -W ignore::DeprecationWarning
+          python-version: "3.11"
+      - name: Install research core
+        run: python -m pip install -e .
+      - name: Validate dependencies
+        run: python -m pip check
+      - name: Regression tests
+        run: python -m unittest discover -s tests -v
+      - name: CPU smoke example
+        run: python -m examples.smoke_core

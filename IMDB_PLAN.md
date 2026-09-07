@@ -1,162 +1,135 @@
-# IMDb Hard-Attention Transformer Plan
+# Next study: evolutionary code-conditioned hard attention
 
-Branch: `claude/evolve-infogan-hypernetworks-s3r6d-67132f2-imdb-baseline`
-Created: 2026-04-19
-Parent: `claude/evolve-infogan-hypernetworks-s3r6d-67132f2-blood-baseline` at commit `cf37ef7`
+Status: core cleanup complete; transformer experiment **not implemented**.
+Branch: `research/imdb-hard-attention`, based on BloodMNIST commit `ee1bf0a`.
+Planning horizon: approximately five months, with a sixth month only as buffer.
 
-This document tracks the setup tasks for porting the HyperNet-InfoGAN architecture from BloodMNIST to IMDb hard-attention. The near-term goal is to mirror the BloodMNIST workflow: establish a non-CA baseline first, then layer CA integration on top once the architecture is validated.
+## Research question and scope
 
-## Design Decisions (Resolved)
+Test whether PGPE can learn useful, code-dependent **discrete routing** over a
+frozen pretrained representation, and whether cultural influence through
+selection improves that routing. This addresses the learning-rule/architecture
+question without claiming to evolve language competence from scratch.
 
-### Core architectural shift
-- Generator no longer produces pixels. It produces a **binary attention mask** over tokens of an input review.
-- Downstream task is sentiment classification. The "Discriminator" analog is a supervised classifier, not a real/fake discriminator.
-- Intervention surface for any future CA integration is **logit priors on the attention sampler**, not gradient blending on HyperNet weights. This is the direct architectural lesson from the BloodMNIST ablation study.
+The repository's earlier IMDb plan already selected frozen-encoder sentiment
+classification. Keep that as the bounded first study; autoregressive review
+generation, LoRA, multiple semantic code factors and content-dependent
+internal head gating are separate extensions, not prerequisites for this paper.
 
-### Latent structure (preserved from BloodMNIST)
-- `z = [noise(62), discrete(K), continuous(2)]`
-- `K` is an open question — see Open Questions below.
+Use a small frozen pretrained encoder, initially on IMDb sentiment. Pin the
+exact model/tokenizer revision and data splits when the pipeline is built.
+The particular encoder and feature-cache design still need a short feasibility
+check; do not add/download an ecosystem of model dependencies preemptively.
 
-### Encoder choice
-- **Pretrained DistilBERT (6 layers), frozen.** Isolates the research variable (the attention mechanism) from encoder representation quality. Saves PGPE rollout compute. Keeps the paper's contribution legible.
+## Proposed baseline
 
-### Carried-over findings from BloodMNIST
-- Class-balanced sampling is standard from day one (50/50 positive/negative).
-- All fitness components pass through `rank_normalize`, never `standardize`.
-- D/G asymmetry: classifier trains via backprop, HyperNet evolves via PGPE.
-- Hybrid fitness weighting (static `w_mi` + dynamic `w_adv`/`w_intra`/etc.) is the default once dynamic weights are enabled.
-- Baseline runs use static fitness weights with CA disabled.
+1. Precompute or cache frozen token representations in inference mode. Keep
+   token IDs, padding masks and split provenance alongside features. Benchmark
+   cache size, I/O, sequence length and population microbatching before choosing
+   a training budget.
+2. Evolve a small code-conditioned scoring module, directly and through the
+   retained HyperNetwork adapter. Compare measured search dimensions; indirect
+   encoding is not automatically a compression when the target is tiny.
+3. Apply deterministic top-k selection to eligible token positions, with a
+   declared tie-break, no padding/special-token selection, and explicit handling
+   of reviews with fewer than k eligible tokens. Start with one small
+   categorical code (provisional K=4) and a fixed sparsity budget. Do not inherit
+   image noise dimensions or continuous codes without a testable use.
+4. Pool selected representations for sentiment prediction. Establish a
+   supervised classifier baseline first; if classifier or Q heads subsequently
+   co-adapt with the router, label their scores as training signals and retain
+   independent frozen/held-out semantic audits.
+5. Train an auxiliary Q head only on information available through the routed
+   representation, not the code or gate logits themselves. Test code recovery
+   after token/position shortcut interventions.
+6. Evaluate every population member on the same minibatch and random draws,
+   with fresh generation-level randomness and separate held-out audit keys.
+   Save all head optimizers, RNG streams, split/model IDs and cultural state.
 
-### Out-of-scope anti-goals (lessons applied)
-- No gradient blend at any dose in the first CA integration. Logit priors only.
-- No imbalanced sampling at any phase.
-- No from-scratch encoder for the baseline (reserved for a later sensitivity study if needed).
-- No dynamic weighting without hybrid MI protection.
+This is hard **token selection over contextual features**, not a replacement
+of the encoder's internal self-attention. Selected contextual vectors may
+already encode information from unselected tokens. Token highlights alone
+therefore do not establish faithful rationales: evaluate masked-input
+re-encoding or equivalent deletion/sufficiency interventions separately.
+An internal attention-head intervention would prevent straightforward reuse
+of cached full-encoder features and needs a separate compute budget.
 
-## Open Questions (decide before Phase 3)
+## Controls and metrics
 
-1. **Discrete code count `K`.** Options:
-   - `K = 2` — matches the binary sentiment task directly; MI target is clean but disentanglement claim is weak.
-   - `K = 4-8` — lets codes disentangle aspect (plot, acting, pacing, emotional intensity) within each polarity; matches BloodMNIST `K=8` and gives a richer disentanglement signal.
-   - Recommended default: `K = 8` (same as BloodMNIST) for methodological continuity.
+Keep the first question small enough to replicate:
 
-2. **Mask sampling strategy.**
-   - Bernoulli with straight-through estimator — simplest, gradients are biased but the classifier head absorbs it.
-   - Concrete / Gumbel-Sigmoid relaxation — differentiable, but we rely on PGPE for the HyperNet gradient anyway.
-   - Hard Bernoulli + REINFORCE gradient for the attention layer — matches Ben Goertzel framing but complicates the D-step.
-   - Recommended default: Bernoulli with straight-through estimator. HyperNet is evolved (no gradient needed); classifier sees a valid masked-hidden-state vector.
+- Full-feature/soft-attention supervised baseline: establish representation
+  quality and the task ceiling for this setup.
+- Matched hard-routing architecture trained with a differentiable relaxation
+  or straight-through estimator, versus PGPE. Match parameterization, data,
+  sparsity and tuning budgets; report wall time and evaluations as well.
+- Direct-encoding versus HyperNetwork PGPE only after both can solve a short
+  pilot. This isolates encoding from optimization.
+- No-CA versus a single selection-mediated cultural intervention after the
+  baseline passes checks. Do not begin with a large controller matrix.
 
-3. **HyperNet target parameterization.** The HyperNet can produce:
-   - Per-token query vectors that attend to encoder hidden states.
-   - Full attention-layer weights (Q/K/V projections + output projection).
-   - Parameters of a small MLP that takes `h_t` and outputs a logit per token.
-   - Recommended default: a small MLP per head (scores each token from its encoder hidden state). Fewer params, easier chunked generation, analogous to conv layers in BloodMNIST.
+Primary task metric: held-out sentiment accuracy and its control/sparsity
+tradeoff. Separately measure Q recovery, code redundancy, mask overlap,
+position/frequency shortcuts and mask stability. A code is not a clinical,
+topic, style or sentiment category merely because Q can recover it. Sentiment
+labels support the classification task; they do not make latent-code discovery
+fully unsupervised if used to shape code semantics.
 
-4. **Encoder depth used.**
-   - Full DistilBERT (6 layers, 768-dim hidden).
-   - Truncated first 2-3 layers to reduce compute.
-   - Recommended default: full frozen DistilBERT; compute is dominated by PGPE rollouts, encoder pass is amortized.
+Reserve independent held-out evaluation from the start. If a frozen evaluator
+is used for fitness, it is a training judge, not an independent final audit.
+Use additional held-out protocols/interventions to assess gaming.
 
-5. **Pooling strategy for the classifier head.**
-   - Mean-pool over masked tokens (only attended positions contribute).
-   - Sum-pool (preserves magnitude signal about how much was attended).
-   - Attention-weighted pool using the same logits.
-   - Recommended default: mean-pool over attended tokens with length normalization (guards against length confound).
+## Cultural influence: after the baseline
 
-## Task List
+The retained `ParetoArchive` and `MetricHistory` supply storage, not a
+ready-made controller. Implement one small, explicit fitness-weighting or
+mask-prior term first. Define its update/acceptance rule and ablate it.
 
-### Phase 1 — Environment and dependencies
-- [ ] Add `transformers`, `datasets`, `tokenizers` to `setup.py` or equivalent extras
-- [ ] Verify JAX/Flax compatibility path for DistilBERT (use `FlaxDistilBertModel`)
-- [ ] Cache pretrained DistilBERT weights locally to avoid download during training
-- [ ] Confirm tokenizer and model version pinning
+- No direct center/sigma blend, cultural sigma floor, automatic archive reset,
+  or separate mask temperature. A floor can also obstruct contraction; a
+  one-sided intervention is not automatically harmless.
+- A cultural prior may change fitness/selection, not add directly to routing
+  logits or mutate PGPE state.
+- Retain raw metrics evaluated under the same fixed model AND data protocol.
+  A frozen encoder alone does not make scores from changing minibatches or
+  changing heads comparable across generations.
+- Wrong priors can still dominate selection or entrench early mistakes. Bound
+  their weight and assess diversity rather than asserting they self-correct.
+- Measure actual mask-change frequencies and emitted logit margins. Shrinking
+  parameter-space sigma does not guarantee monotonic circuit commitment
+  through a nonlinear HyperNetwork.
 
-### Phase 2 — Dataset task
-- [ ] Create `evojax/task/imdb.py` implementing `VectorizedTask`
-  - [ ] Load IMDb (HuggingFace `datasets.load_dataset('imdb')`)
-  - [ ] Pre-tokenize entire dataset at init (fixed length, e.g., 256 tokens) to avoid per-step tokenization cost
-  - [ ] Cache token_ids + attention_mask + labels as JAX arrays
-  - [ ] `reset(key)` returns token_ids + attention_mask + label for a batch
-  - [ ] Class-balanced batch construction (50/50 pos/neg) exposed via task state
-  - [ ] Optional: pre-compute POS tags per token (once, cached) for the eventual CA metric `pos_diversity`
+The old five-source controller and morphology-specific schedules were retired.
+Do not describe the generic replacement as an already validated transfer of
+A04-hybrid, or make a predicted failure of CA blending a required outcome.
 
-### Phase 3 — Policy: encoder + HyperNet + attention + heads
-- [ ] Create `evojax/policy/attention_transformer.py`
-  - [ ] `FrozenEncoder` wrapper around `FlaxDistilBertModel` (no parameters exposed to PGPE)
-  - [ ] `LayerHyperNetwork` adapted: reuse chunk-embedding design from `convnet.py`, target attention-MLP weights instead of conv weights
-  - [ ] `AttentionMaskGenerator`: takes encoder hidden states `h_t` and HyperNet-generated MLP weights, produces per-token logits, Bernoulli sampling with straight-through
-  - [ ] `ClassifierHead`: mean-pool over masked tokens + 2-layer MLP + sigmoid/softmax for sentiment
-  - [ ] `QHead`: predicts `z_discrete` from the pooled masked feature vector; use cross-entropy for MI estimation
+## Milestones and stopping rules
 
-### Phase 4 — Attention-specific fitness metrics
-- [ ] Create `evojax/task/attention_metrics.py` or extend `latent.py`
-  - [ ] `sparsity`: mean mask density per sample (target range soft bound, e.g., 5-20%)
-  - [ ] `span_continuity`: mean contiguous run length of attended tokens
-  - [ ] `position_entropy`: entropy of attended-token positions (detects position-biased attention)
-  - [ ] `per_class_attention_overlap`: mask overlap between positive-class and negative-class centroids
-  - [ ] `pos_diversity` (deferred to CA phase): entropy over POS tags of attended tokens
-  - [ ] Remove BloodMNIST morphology metrics (`cell_circularity`, `nucleus_offset`, etc.) from the fitness composition
-
-### Phase 5 — Solver adaptation
-- [ ] Fork: copy `evojax/algo/pgpe_ca.py` to `evojax/algo/pgpe_ca_text.py`, or refactor to support task-specific metric registries
-  - [ ] Strip BloodMNIST-specific CA instantiation (A04a-e morphology signals)
-  - [ ] Keep framework-general mechanics: belief space, KS roles, `rank_normalize`, hybrid weighting
-  - [ ] Gradient blend entry points exist but are disabled for baseline
-  - [ ] Future CA integration will add logit-prior outputs (not gradient outputs) — leave structural hooks but not logic
-
-### Phase 6 — Training entry point
-- [ ] Create `examples/train_imdb.py` (mirror `train_bloodmnist.py`)
-  - [ ] CLI flags: `--gpu-id`, `--pop-size`, `--batch-size`, `--max-iter`, `--ca-blend-coeff` (default 0.0), `--static-fitness-weights` (default True), `--hybrid-fitness-weights`, `--encoder-name` (default `distilbert-base-uncased`), `--seq-len`, `--K` (discrete code count)
-  - [ ] Wire task, policy, solver, trainer
-  - [ ] Class-balanced sampling enabled by default
-
-### Phase 7 — Trainer adjustments
-- [ ] Audit `evojax/trainer.py` for image-specific assumptions
-  - [ ] D-step: replace GAN real/fake loss with classifier cross-entropy
-  - [ ] Rename `real_fake_loss` diagnostic to `classifier_loss` (or keep RFL name as a health proxy alias)
-  - [ ] Preserve D-freeze threshold logic but re-tune for classifier dynamics (classifier converges faster than GAN D)
-  - [ ] Log-line order: `fitness_adv`, `fitness_mi`, `sparsity`, `span_continuity`, `position_entropy`, `per_class_overlap`, `classifier_loss`
-  - [ ] Keep `rank_normalize` discipline in fitness composition
-
-### Phase 8 — Baseline run (IMDB-B00, no CA)
-- [ ] Small-scale smoke test: `pop_size=32`, 5k iterations, verify no NaNs, sparsity stays in range, classifier loss decreases
-- [ ] Full baseline: `pop_size=512`, `batch_size=64`, `--ca-blend-coeff=0.0`, `--static-fitness-weights`, class-balanced, target 290k iterations
-- [ ] Checkpoint every 5k iterations
-- [ ] Define this run as `IMDB-B00` reference baseline
-
-### Phase 9 — Baseline analysis and success criteria
-- [ ] Record metrics at 20k, 60k, 100k, 150k, 290k
-- [ ] Qualitative inspection: render attended spans per discrete code across 10-20 sample reviews
-- [ ] Success criteria for IMDB-B00:
-  - Classifier accuracy within 2-3 points of a standard soft-attention baseline on the same frozen encoder
-  - Attention masks pass the "readable" bar: attended tokens form coherent spans, not stop-words or punctuation only
-  - `Q`-head recovers `z_discrete` above chance (accuracy > 1/K + margin)
-  - `sparsity` stays inside the target range through training
-  - Training is stable (no mode collapse to all-ones or all-zeros masks)
-- [ ] Document failure modes observed, as BloodMNIST's analog of "size/orientation shortcut" — these will seed the Domain KS for the eventual CA integration
-
-## Reference Files (from BloodMNIST, to mirror)
-
-| Purpose | BloodMNIST file | IMDb file (to create) |
+| Window | Deliverable | Gate before expanding |
 |---|---|---|
-| Task / dataset | `evojax/task/bloodmnist.py` | `evojax/task/imdb.py` |
-| Latent / shared-z metric | `evojax/task/latent.py` | extend for attention metrics |
-| Policy (G + D + Q + HyperNet) | `evojax/policy/convnet.py` | `evojax/policy/attention_transformer.py` |
-| Solver | `evojax/algo/pgpe_ca.py` | `evojax/algo/pgpe_ca_text.py` |
-| Entry point | `examples/train_bloodmnist.py` | `examples/train_imdb.py` |
-| Main loop | `evojax/trainer.py` (modified) | same file, adjusted for text |
+| Month 1 | Prospectus, fixed data/model protocol, encoder cache, supervised baseline, runtime pilot | Fits hardware and solves sentiment |
+| Month 2 | Small code-conditioned deterministic router, Q and shortcut diagnostics | Nontrivial code-dependent routing on held-out examples |
+| Month 3 | Matched optimizer/encoding comparisons | Short replicated runs establish what is worth scaling |
+| Month 4 | One selection-mediated CA intervention and targeted replications | Added effect survives the chosen controls |
+| Month 5 | Final evaluation, figures, paper and dissertation integration | Freeze scope and report negative results honestly |
+| Month 6, if available | Buffer and only decisive follow-ups | No new architectural dependency |
 
-## Post-Baseline (Deferred to After IMDB-B00)
+Do not inherit 512 individuals or 290,000 iterations from BloodMNIST. Set
+population size, budget and replication count using measured pilot cost and
+variance. No further BloodMNIST training is required for this code-cleanup
+task. The new optimizer corrections mean old and new trajectories are not
+interchangeable.
 
-- IMDB-A01: dynamic fitness weighting only
-- IMDB-A02: CA logit-prior controller only (shortcut detectors, no gradient blend)
-- IMDB-A03: hybrid weighting + CA logit prior
-- IMDB-A04 series: attention-shortcut-aware CA with Domain KS detectors for punctuation, position, token frequency
-- Each run includes class-balanced sampling (standard)
+## Implementation queue
 
-## Working Discipline
+- [x] Separate reusable PGPE, rank shaping, HyperNetwork, archive/history.
+- [x] Fix indexing/sign/counter defects and add CPU regression tests.
+- [x] Replace legacy checkpointing; remove image/RL and direct-blend paths.
+- [ ] Decide encoder revision, sequence length and feature-cache schema.
+- [ ] Implement and test data splits, feature extraction and pad-safe top-k.
+- [ ] Establish supervised task baseline and benchmark population evaluation.
+- [ ] Add code injection/Q with leakage and shortcut tests.
+- [ ] Run small matched controls before any full research run.
+- [ ] Add one CA selection channel and complete the bounded ablation.
 
-- Match BloodMNIST discipline: one controller layer at a time, keep architecture fixed during ablations
-- Update this file after each phase completes
-- After IMDB-B00 runs, establish an `IMDB_ABLATION_TRIAL_LOG.txt` analogous to `ABLATION_TRIAL_LOG.txt`
-- Commit phase work as discrete commits on the IMDb branch
+See [docs/CODE_REVIEW.md](docs/CODE_REVIEW.md) for the audit and limitations.

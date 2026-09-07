@@ -1,296 +1,261 @@
-# Copyright 2022 The EvoJAX Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Copyright 2022 The EvoJAX Authors. Licensed under Apache-2.0.
+"""Antithetic PGPE with optimizer-owned exploration and resumable state.
 
-"""Implementation of the PGPE algorithm in JAX.
-
-Ref: https://github.com/nnaisense/pgpelib/blob/release/pgpelib/pgpe.py
+The scaled score-function directions retain the EvoJAX PGPE formulation.
+Cultural control belongs in scalar fitness, never in this update rule.
 """
 
-import numpy as np
-import logging
-from typing import Optional
-from typing import Union
-from typing import Tuple
 from functools import partial
 
+from flax import serialization
 import jax
 import jax.numpy as jnp
-from jax import random
+import numpy as np
+import optax
 
-try:
-    from jax.example_libraries import optimizers
-except ModuleNotFoundError:
-    from jax.experimental import optimizers
-
-from evojax.algo.base import NEAlgorithm
-from evojax.util import create_logger
-
-
-@partial(jax.jit, static_argnums=(1,))
-def process_scores(
-    x: Union[np.ndarray, jnp.ndarray], use_ranking: bool
-) -> jnp.ndarray:
-    """Convert fitness scores to rank if necessary."""
-
-    x = jnp.array(x)
-    if use_ranking:
-        ranks = jnp.zeros(x.size, dtype=int)
-        ranks = ranks.at[x.argsort()].set(jnp.arange(x.size)).reshape(x.shape)
-        return ranks / ranks.max() - 0.5
-    else:
-        return x
-
-
-@jax.jit
-def compute_reinforce_update(
-    fitness_scores: jnp.ndarray, scaled_noises: jnp.ndarray, stdev: jnp.ndarray
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """Compute the updates for the center and the standard deviation."""
-
-    fitness_scores = fitness_scores.reshape((-1, 2))
-    baseline = jnp.mean(fitness_scores)
-    all_scores = (fitness_scores[:, 0] - fitness_scores[:, 1]).squeeze()
-    all_avg_scores = fitness_scores.sum(axis=-1) / 2
-    stdev_sq = stdev ** 2.0
-    total_mu = scaled_noises * jnp.expand_dims(all_scores, axis=1) * 0.5
-    total_sigma = (
-        (jnp.expand_dims(all_avg_scores, axis=1) - baseline)
-        * (scaled_noises ** 2 - jnp.expand_dims(stdev_sq, axis=0))
-        / stdev
-    )
-    return total_mu.mean(axis=0), total_sigma.mean(axis=0)
-
-
-@jax.jit
-def update_stdev(
-    stdev: jnp.ndarray, lr: float, grad: jnp.ndarray, max_change: float
-) -> jnp.ndarray:
-    """Update (and clip) the standard deviation."""
-
-    allowed_delta = jnp.abs(stdev) * max_change
-    min_allowed = stdev - allowed_delta
-    max_allowed = stdev + allowed_delta
-    return jnp.clip(stdev + lr * grad, min_allowed, max_allowed)
+from .base import NEAlgorithm
+from evojax.fitness import rank_normalize
 
 
 @partial(jax.jit, static_argnums=(3, 4))
-def ask_func(
-    key: jnp.ndarray,
-    stdev: jnp.ndarray,
-    center: jnp.ndarray,
-    num_directions: int,
-    solution_size: int,
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """A function that samples a population of parameters from Gaussian."""
+def ask_func(key, stdev, center, num_directions, solution_size):
+    """Return [mu+eps_0, mu-eps_0, mu+eps_1, mu-eps_1, ...]."""
+    next_key, sample_key = jax.random.split(key)
+    noises = jax.random.normal(sample_key, (num_directions, solution_size)) * stdev
+    population = jnp.stack((center + noises, center - noises), axis=1)
+    return next_key, noises, population.reshape(2 * num_directions, solution_size)
 
-    next_key, key = random.split(key)
-    scaled_noises = random.normal(key, [num_directions, solution_size]) * stdev
-    solutions = jnp.hstack(
-        [center + scaled_noises, center - scaled_noises]
-    ).reshape(-1, solution_size)
-    return next_key, scaled_noises, solutions
+
+@jax.jit
+def compute_reinforce_update(fitness_scores, scaled_noises, stdev):
+    """Compute variance-scaled PGPE directions from interleaved pairs."""
+    pairs = fitness_scores.reshape((-1, 2))
+    difference = pairs[:, 0] - pairs[:, 1]
+    pair_mean = pairs.mean(axis=1)
+    center_direction = jnp.mean(0.5 * difference[:, None] * scaled_noises, axis=0)
+    stdev_direction = jnp.mean(
+        (pair_mean - pairs.mean())[:, None]
+        * (scaled_noises ** 2 - stdev ** 2) / stdev,
+        axis=0,
+    )
+    return center_direction, stdev_direction
+
+
+@jax.jit
+def update_stdev(stdev, lr, grad, max_change, minimum, maximum):
+    allowed = stdev * max_change
+    delta = jnp.clip(lr * grad, -allowed, allowed)
+    return jnp.clip(stdev + delta, minimum, maximum)
+
+
+def _positive_int(value, name):
+    if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < 1:
+        raise ValueError(f"{name} must be a positive integer")
+    return int(value)
+
+
+def _vector(value, size, name):
+    if not np.isrealobj(value):
+        raise ValueError(f"{name} must be real-valued")
+    value = np.asarray(value, dtype=np.float32)
+    if value.shape != (size,) or not np.isfinite(value).all():
+        raise ValueError(f"{name} must be a finite vector of shape ({size},)")
+    return jnp.asarray(value)
 
 
 class PGPE(NEAlgorithm):
-    """Policy Gradient with Parameter-based Exploration (PGPE) algorithm.
+    """Maximizing PGPE optimizer, using Adam or SGD for its center.
 
-    Ref: https://people.idsia.ch/~juergen/icann2008sehnke.pdf
+    Set solution_ranking=False for an already rank-shaped composite fitness.
+    Sigma limits are fixed optimizer configuration, with no CA override.
+    Calls to ask/tell alternate; checkpoint only after tell.
     """
 
     def __init__(
-        self,
-        pop_size: int,
-        param_size: int,
-        init_params: Optional[Union[jnp.ndarray, np.ndarray]] = None,
-        optimizer: Optional[str] = None,
-        optimizer_config: Optional[dict] = None,
-        center_learning_rate: float = 0.15,
-        stdev_learning_rate: float = 0.1,
-        init_stdev: Union[float, jnp.ndarray, np.ndarray] = 0.1,
-        stdev_max_change: float = 0.2,
-        solution_ranking: bool = True,
-        seed: int = 0,
-        logger: logging.Logger = None,
+        self, pop_size, param_size, init_params=None, *, optimizer="adam",
+        optimizer_config=None, center_learning_rate=0.0048,
+        stdev_learning_rate=0.062, init_stdev=0.032, stdev_max_change=0.1,
+        stdev_min=0.005, stdev_max=10.0, solution_ranking=True, seed=0,
     ):
-        """Initialization function.
-
-        Args:
-            pop_size - Population size.
-            param_size - Parameter size.
-            init_params - Initial parameters, all zeros if not given.
-            optimizer - Possible values are {None, 'adam', 'clipup'}.
-            optimizer_config - Configurations specific to the optimizer.
-                               For None: No configuration is required.
-                               For Adam: {'epsilon', 'beta1', 'beta2'}.
-                               For ClipUp: {'momentum', 'max_speed'}.
-            center_learning_rate - Learning rate for the Gaussian mean.
-            stdev_learning_rate - Learning rate for the Gaussian stdev.
-            init_stdev - Initial stdev for the Gaussian distribution.
-            stdev_max_change - Maximum allowed change for stdev in abs values.
-            solution_ranking - Should we treat the fitness as rankings or not.
-            seed - Random seed for parameters sampling.
-        """
-
-        if logger is None:
-            self._logger = create_logger(name="PGPE")
-        else:
-            self._logger = logger
-
-        self.pop_size = abs(pop_size)
-        if self.pop_size % 2 == 1:
-            self.pop_size += 1
-            self._logger.info(
-                "Population size should be an even number, set to {}".format(
-                    self.pop_size
-                )
-            )
-        self._num_directions = self.pop_size // 2
-
-        jax.debug.print('init params in PGPE before array {} : ', init_params)
-        if init_params is None:
-            self._center = np.zeros(abs(param_size))
-        else:
-            self._center = init_params
-        self._center = jnp.array(self._center)
-        print('init params in PGPE after array {} : ', self._center)
-        if isinstance(init_stdev, float):
-            self._stdev = np.ones(abs(param_size)) * abs(init_stdev)
-        self._stdev = jnp.array(self._stdev)
-
-        self._center_lr = abs(center_learning_rate)
-        self._stdev_lr = abs(stdev_learning_rate)
-        self._stdev_max_change = abs(stdev_max_change)
-        self._solution_ranking = solution_ranking
-
-        if optimizer_config is None:
-            optimizer_config = {}
-        decay_coef = optimizer_config.get("center_lr_decay_coef", 1.0)
-        self._lr_decay_steps = optimizer_config.get(
-            "center_lr_decay_steps", 1000
+        self.pop_size = _positive_int(pop_size, "pop_size")
+        self.param_size = _positive_int(param_size, "param_size")
+        if self.pop_size % 2:
+            raise ValueError("pop_size must be even for antithetic sampling")
+        optimizer = "sgd" if optimizer is None else optimizer
+        if optimizer not in ("adam", "sgd"):
+            raise ValueError("optimizer must be 'adam' or 'sgd'")
+        options = dict(optimizer_config or {})
+        defaults = dict(beta1=0.9, beta2=0.999, epsilon=1e-8,
+                        center_lr_decay_coef=1.0, center_lr_decay_steps=100000)
+        if options.keys() - defaults.keys():
+            raise ValueError(f"unknown optimizer options: {options.keys() - defaults.keys()}")
+        defaults.update(options)
+        interval = _positive_int(defaults["center_lr_decay_steps"], "center_lr_decay_steps")
+        defaults["center_lr_decay_steps"] = interval
+        for name in ("beta1", "beta2", "epsilon", "center_lr_decay_coef"):
+            defaults[name] = float(defaults[name])
+            if not np.isfinite(defaults[name]):
+                raise ValueError(f"{name} must be finite")
+        if not (0 <= defaults["beta1"] < 1 and 0 <= defaults["beta2"] < 1):
+            raise ValueError("Adam beta values must be in [0, 1)")
+        if defaults["epsilon"] <= 0 or not 0 < defaults["center_lr_decay_coef"] <= 1:
+            raise ValueError("epsilon must be positive and decay coefficient in (0, 1]")
+        scalars = dict(center_learning_rate=center_learning_rate,
+                       stdev_learning_rate=stdev_learning_rate,
+                       stdev_max_change=stdev_max_change,
+                       stdev_min=stdev_min, stdev_max=stdev_max)
+        scalars = {k: float(v) for k, v in scalars.items()}
+        if not all(np.isfinite(v) for v in scalars.values()):
+            raise ValueError("optimizer hyperparameters must be finite")
+        if scalars["center_learning_rate"] < 0 or scalars["stdev_learning_rate"] < 0:
+            raise ValueError("learning rates must be nonnegative")
+        if not 0 <= scalars["stdev_max_change"] <= 1:
+            raise ValueError("stdev_max_change must be in [0, 1]")
+        if not 0 < scalars["stdev_min"] <= scalars["stdev_max"]:
+            raise ValueError("sigma bounds must satisfy 0 < min <= max")
+        if (not all(np.isfinite(np.float32(v)) for v in scalars.values())
+                or np.float32(scalars["stdev_min"]) <= 0):
+            raise ValueError("optimizer bounds/rates must be representable in float32")
+        if (np.float32(defaults["beta1"]) >= 1 or np.float32(defaults["beta2"]) >= 1
+                or not 0 < np.float32(defaults["epsilon"]) < np.inf):
+            raise ValueError("Adam hyperparameters must be valid in float32")
+        if not isinstance(solution_ranking, (bool, np.bool_)):
+            raise ValueError("solution_ranking must be a boolean")
+        if isinstance(seed, bool) or not isinstance(seed, (int, np.integer)) or not 0 <= seed < 2 ** 32:
+            raise ValueError("seed must be an integer in [0, 2**32)")
+        self._config = dict(pop_size=self.pop_size, param_size=self.param_size,
+                            optimizer=optimizer, solution_ranking=bool(solution_ranking),
+                            optimizer_config=defaults, **scalars)
+        self._center = _vector(
+            np.zeros(self.param_size) if init_params is None else init_params,
+            self.param_size, "init_params",
         )
-
-        if optimizer == "adam":
-            opt_init, opt_update, get_params = optimizers.adam(
-                step_size=lambda x: self._center_lr * jnp.power(decay_coef, x),
-                b1=optimizer_config.get("beta1", 0.9),
-                b2=optimizer_config.get("beta2", 0.999),
-                eps=optimizer_config.get("epsilon", 1e-8),
-            )
-        elif optimizer == "clipup":
-            opt_init, opt_update, get_params = clipup(
-                step_size=lambda x: self._center_lr * jnp.power(decay_coef, x),
-                momentum=optimizer_config.get("momentum", 0.99),
-                max_speed=optimizer_config.get("max_speed", 0.55),
-                fix_gradient_size=optimizer_config.get(
-                    "fix_gradient_size", True
-                ),
-            )
-        else:
-            opt_init, opt_update, get_params = optimizers.sgd(
-                step_size=lambda x: self._center_lr * jnp.power(decay_coef, x),
-            )
+        if not np.isrealobj(init_stdev):
+            raise ValueError("init_stdev must be real-valued")
+        sigma = np.asarray(init_stdev, dtype=np.float32)
+        if sigma.ndim == 0:
+            sigma = np.full(self.param_size, sigma, dtype=np.float32)
+        self._stdev = _vector(sigma, self.param_size, "init_stdev")
+        self._validate_stdev(self._stdev)
+        rate = scalars["center_learning_rate"]
+        decay = defaults["center_lr_decay_coef"]
+        # Only the learning-rate schedule uses interval division. Optax's
+        # Adam counter advances on EVERY update for correct bias correction.
+        schedule = lambda count: rate * decay ** (count // interval)
+        self._optimizer = (
+            optax.adam(schedule, b1=defaults["beta1"], b2=defaults["beta2"], eps=defaults["epsilon"])
+            if optimizer == "adam" else optax.sgd(schedule)
+        )
+        self._opt_state = self._optimizer.init(self._center)
+        self._update_center = jax.jit(self._optimizer.update)
+        self._key = jax.random.PRNGKey(int(seed))
         self._t = 0
-        self._opt_state = jax.jit(opt_init)(self._center)
-        self._opt_update = jax.jit(opt_update)
-        self._get_params = jax.jit(get_params)
-
-        self._key = random.PRNGKey(seed=seed)
         self._solutions = None
         self._scaled_noises = None
 
-    def ask(self) -> jnp.ndarray:
-        
-        center, stdev = self._center, self._stdev
+    def _validate_stdev(self, value):
+        value = np.asarray(value)
+        lo = np.float32(self._config["stdev_min"])
+        hi = np.float32(self._config["stdev_max"])
+        if np.any(value < lo) or np.any(value > hi):
+            raise ValueError("standard deviations must be within configured bounds")
 
-        self._key, self._scaled_noises, self._solutions = ask_func(
-            self._key,
-            stdev,
-            center,
-            self._num_directions,
-            self._center.size,
+    def ask(self):
+        if self._solutions is not None:
+            raise RuntimeError("tell must consume the pending population before another ask")
+        key, noises, population = ask_func(
+            self._key, self._stdev, self._center, self.pop_size // 2, self.param_size,
         )
+        if not np.isfinite(np.asarray(population)).all():
+            raise FloatingPointError("sampling overflowed; optimizer state was not changed")
+        self._key, self._scaled_noises, self._solutions = key, noises, population
+        return population
 
-        return self._solutions
-
-
-    def tell(self, fitness: Union[np.ndarray, jnp.ndarray]) -> None:
-        fitness_scores = process_scores(fitness, self._solution_ranking)
-        
-        grad_center, grad_stdev = compute_reinforce_update(
-            fitness_scores=fitness_scores,
-            scaled_noises=self._scaled_noises,
-            stdev=self._stdev,
+    def tell(self, fitness):
+        if self._solutions is None:
+            raise RuntimeError("ask must precede tell")
+        scores = _vector(fitness, self.pop_size, "fitness")
+        if self._config["solution_ranking"]:
+            scores = 0.5 * rank_normalize(scores)
+        center_grad, sigma_grad = compute_reinforce_update(scores, self._scaled_noises, self._stdev)
+        updates, opt_state = self._update_center(-center_grad, self._opt_state, self._center)
+        center = optax.apply_updates(self._center, updates)
+        sigma = update_stdev(
+            self._stdev, self._config["stdev_learning_rate"], sigma_grad,
+            self._config["stdev_max_change"], self._config["stdev_min"], self._config["stdev_max"],
         )
-        
-        self._opt_state = self._opt_update(
-            self._t // self._lr_decay_steps, -grad_center, self._opt_state
-        )
-        
+        leaves = jax.tree_util.tree_leaves((center, sigma, opt_state))
+        if not all(np.isfinite(np.asarray(leaf)).all() for leaf in leaves):
+            raise FloatingPointError("nonfinite PGPE update; pending population is unchanged")
+        self._center, self._stdev, self._opt_state = center, sigma, opt_state
         self._t += 1
-        
-        #if (self._t % 100) < 90:  
-        self._center = self._get_params(self._opt_state)
-        self._stdev = update_stdev(
-                stdev=self._stdev,
-                lr=self._stdev_lr,
-                max_change=self._stdev_max_change,
-                grad=grad_stdev,
-            )
+        self._solutions = self._scaled_noises = None
 
     @property
-    def best_params(self) -> jnp.ndarray:
-        return jnp.array(self._center, copy=True)
+    def center(self):
+        return self._center
+
+    @property
+    def stdev(self):
+        return self._stdev
+
+    @property
+    def iteration(self):
+        return self._t
+
+    @property
+    def best_params(self):
+        """Compatibility name for the distribution center, not a best sample."""
+        return self.center
 
     @best_params.setter
-    def best_params(self, params: Union[np.ndarray, jnp.ndarray]) -> None:
-        self._center = jnp.array(params, copy=True)
+    def best_params(self, params):
+        """Start a fresh center-optimizer run, retaining sigma and RNG state."""
+        if self._solutions is not None:
+            raise RuntimeError("cannot replace the center with a population pending")
+        center = _vector(params, self.param_size, "params")
+        self._center = center
+        self._opt_state = self._optimizer.init(center)
+        self._t = 0
 
-
-@optimizers.optimizer
-def clipup(
-    step_size: float,
-    momentum: float = 0.9,
-    max_speed: float = 0.15,
-    fix_gradient_size: bool = True,
-):
-    """Construct optimizer triple for ClipUp."""
-
-    step_size = optimizers.make_schedule(step_size)
-
-    def init(x0):
-        v0 = jnp.zeros_like(x0)
-        return x0, v0
-
-    def update(i, g, state):
-        x, v = state
-        g = jax.lax.cond(
-            fix_gradient_size,
-            lambda p: p / jnp.sqrt(jnp.sum(p * p)),
-            lambda p: p,
-            g,
+    def save_state(self):
+        if self._solutions is not None:
+            raise RuntimeError("checkpoint only at a generation boundary, after tell")
+        state = dict(version=1, config=self._config, center=self._center,
+                     stdev=self._stdev, iteration=self._t, key=self._key,
+                     opt_state=serialization.to_state_dict(self._opt_state))
+        return jax.tree_util.tree_map(
+            lambda x: np.array(x, copy=True) if isinstance(x, jax.Array) else x, state,
         )
-        step = g * step_size(i)
-        v = momentum * v + step
-        # Clip.
-        length = jnp.sqrt(jnp.sum(v * v))
-        v = jax.lax.cond(
-            length > max_speed, lambda p: p * max_speed / length, lambda p: p, v
-        )
-        return x - v, v
 
-    def get_params(state):
-        x, _ = state
-        return x
-
-    return init, update, get_params
+    def load_state(self, state):
+        if self._solutions is not None:
+            raise RuntimeError("cannot restore with a population pending")
+        expected = {"version", "config", "center", "stdev", "iteration", "key", "opt_state"}
+        if set(state) != expected or state["version"] != 1 or state["config"] != self._config:
+            raise ValueError("incompatible PGPE checkpoint schema or configuration")
+        center = _vector(state["center"], self.param_size, "checkpoint center")
+        sigma = _vector(state["stdev"], self.param_size, "checkpoint sigma")
+        self._validate_stdev(sigma)
+        iteration = state["iteration"]
+        if isinstance(iteration, bool) or not isinstance(iteration, (int, np.integer)) or iteration < 0:
+            raise ValueError("invalid checkpoint iteration")
+        key = np.asarray(state["key"])
+        if key.shape != (2,) or key.dtype != np.dtype("uint32"):
+            raise ValueError("invalid checkpoint random key")
+        reference = self._optimizer.init(center)
+        opt_state = serialization.from_state_dict(reference, state["opt_state"])
+        actual_leaves, actual_tree = jax.tree_util.tree_flatten(opt_state)
+        reference_leaves, reference_tree = jax.tree_util.tree_flatten(reference)
+        if actual_tree != reference_tree:
+            raise ValueError("incompatible optimizer state structure")
+        for actual, target in zip(actual_leaves, reference_leaves):
+            actual = np.asarray(actual)
+            if actual.shape != target.shape or actual.dtype != target.dtype or not np.isfinite(actual).all():
+                raise ValueError("invalid optimizer state array")
+            if np.issubdtype(actual.dtype, np.integer) and np.any(actual != iteration):
+                raise ValueError("optimizer counter does not match checkpoint iteration")
+        opt_state = jax.tree_util.tree_map(jnp.asarray, opt_state)
+        # Commit only after every field has been validated.
+        self._center, self._stdev, self._opt_state = center, sigma, opt_state
+        self._key, self._t = jnp.asarray(key), int(iteration)

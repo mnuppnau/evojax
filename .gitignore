@@ -4,6 +4,8 @@
 /new-env/
 /local/
 /test-images/
+/checkpoints/
+*.msgpack
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
